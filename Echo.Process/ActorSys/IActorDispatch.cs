@@ -26,5 +26,6 @@ namespace Echo
         Either<string, bool> CanAccept<T>();
         Either<string, bool> HasStateTypeOf<T>();
         IEnumerable<Type> GetValidMessageTypes();
+        bool Ping();
     }
 }

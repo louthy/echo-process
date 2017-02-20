@@ -120,5 +120,8 @@ namespace Echo
 
         public IEnumerable<Type> GetValidMessageTypes() =>
             Inbox.GetValidMessageTypes();
+
+        public bool Ping() =>
+            Exists;
     }
 }

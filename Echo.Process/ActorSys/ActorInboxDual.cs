@@ -156,7 +156,7 @@ namespace Echo
                                 {
                                     if (IsPaused)
                                     {
-                                        new ActorDispatchRemote(actor.Id, cluster, ActorContext.SessionId, false).Ask(message, sender);
+                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Ask(message, sender);
                                     }
                                     else
                                     {
@@ -184,7 +184,7 @@ namespace Echo
                                 {
                                     if (IsPaused)
                                     {
-                                        new ActorDispatchRemote(actor.Id, cluster, ActorContext.SessionId, false).Tell(message, sender, Message.TagSpec.User);
+                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Tell(message, sender, Message.TagSpec.User);
                                     }
                                     else
                                     {
@@ -227,7 +227,7 @@ namespace Echo
             {
                 if (IsPaused)
                 {
-                    new ActorDispatchRemote(actor.Id, cluster, ActorContext.SessionId, false).TellUserControl(msg, ProcessId.None);
+                    new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).TellUserControl(msg, ProcessId.None);
                 }
                 else
                 {

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
@@ -24,16 +24,17 @@
   <ItemGroup>
     <Compile Include="**\*.cs" />
     <EmbeddedResource Include="**\*.resx" />
+      <Compile Remove="obj\**" />
+      <Compile Remove="bin\**" />
+      <EmbeddedResource Remove="bin\**" />
+      <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
     <None Include="process.js" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.6'">
-    <PackageReference Include="NETStandard.Library" Version="1.6.1" />
-  </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.0.0-alpha" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.0-alpha" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.14-alpha" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.14-alpha" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

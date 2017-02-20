@@ -8,9 +8,62 @@ var unit = "(unit)";
 var failwith = function (err) {
     console.error(err);
     throw err;
-}
+};
+
+var PID = function (path) {
+    return {
+        Path: path
+    };
+};
+
+var ActorResponse = function (message, replyTo, replyFrom, requestId, isFaulted) {
+    return {
+        ReplyTo: PID(replyTo),
+        Message: message,
+        ReplyFrom: PID(replyFrom),
+        RequestId: requestId,
+        IsFaulted: isFaulted
+    };
+};
 
 var Process = (function () {
+
+    var messageId = 0;
+
+    var rnd2 = function (count) {
+        var buffer = [];
+        for (var i = 0; i < count; i++)
+            buffer.push(Math.floor(parseInt(Math.random() * 255)));
+        return buffer.join("");
+    };
+
+    var rnd = function (count) {
+        var crypto = window.crypto || window.msCrypto;
+        if (!crypto) return rnd2(count);
+        var buffer = new Uint8Array(count || 16);
+        crypto.getRandomValues(buffer);
+        return buffer.join("");
+    };
+
+    var Connect = "procsys:conn";
+    var Disconnect = function (id) {
+        return "procsys:diss|" + id;
+    };
+    var Ping = function (id) {
+        return "procsys:ping|" + id;
+    };
+    var Tell = function (id, msgid, to, sender, msg) {
+        return "procsys:tell|" + id + "|" + msgid + "|" + to + "|" + sender + "|" + JSON.stringify(msg);
+    };
+    var Ask = function (id, msgid, to, sender, msg) {
+        return "procsys:ask|" + id + "|" + msgid + "|" + to + "|" + sender + "|" + JSON.stringify(msg);
+    };
+    var Subscribe = function (id, pub, sub) {
+        return "procsys:sub|" + id + "|" + pub + "|" + sub;
+    };
+    var Unsubscribe = function (id, pub, sub) {
+        return "procsys:usub|" + id + "|" + pub + "|" + sub;
+    };
 
     var withContext = function (ctx, f) {
         var savedContext = context;
@@ -34,11 +87,21 @@ var Process = (function () {
         }
         context = savedContext;
         return res;
-    }
+    };
+
+    var secure = window.location.protocol === "https:";
+    var protocol = secure ? "wss://" : "ws://";
+    var uri = protocol + window.location.host + "/process-sys";
+    var connectionId = "";
+    var socket = null;
+    var doneFn = function () { };
+    var failFn = function (e) { };
+    var lastPong = new Date();
+    var requests = {};
 
     var actor = { "/": { children: {} } };
     var ignore = function () { };
-    var id = function (id) { return id };
+    var id = function (id) { return id; };
     var publish = null;
     var inboxStart = function (pid, parent, setup, inbox, stateless, shutdown) {
 
@@ -70,7 +133,7 @@ var Process = (function () {
         });
 
         return process;
-    }
+    };
     var Root = "/root-js";
     var System = "/root-js/system";
     var DeadLetters = "/root-js/system/dead-letters";
@@ -87,30 +150,30 @@ var Process = (function () {
     var context = null;
 
     var inloop = function () {
-        return context != null;
-    }
+        return context !== null;
+    };
 
     var isLocal = function (pid) {
         if (typeof pid === "undefined") failwith("isLocal: 'pid' not defined");
-        return pid.indexOf(Root) == 0;
-    }
+        return pid.indexOf(Root) === 0;
+    };
 
     var getSender = function (sender) {
         return sender || (inloop() ? context.self : NoSender);
-    }
+    };
 
     var spawn = function (name, setup, inbox, shutdown) {
         if (typeof name === "undefined") failwith("spawn: 'name' not defined");
         var stateless = false;
-        if (arguments.length == 2) {
+        if (arguments.length === 2) {
             inbox = setup;
-            setup = function () { return {} };
+            setup = function () { return {}; };
             stateless = true;
         }
         else {
             if (typeof setup !== "function") {
                 var val = setup;
-                setup = function () { return val };
+                setup = function () { return val; };
             }
         }
 
@@ -119,7 +182,7 @@ var Process = (function () {
             inboxStart(pid, context.self, setup, inbox, stateless, shutdown);
             return pid;
         });
-    }
+    };
 
     var tell = function (pid, msg, sender) {
         if (typeof pid === "undefined") failwith("tell: 'pid' not defined");
@@ -136,7 +199,7 @@ var Process = (function () {
             JSON.stringify({ processjs: "tell", pid: pid, msg: msg, ctx: ctx }),
             window.location.origin
         );
-    }
+    };
 
     var tellDelay = function (pid, msg, delay) {
         if (typeof pid === "undefined") failwith("tellDelay: 'pid' not defined");
@@ -144,25 +207,38 @@ var Process = (function () {
         if (typeof delay === "undefined") failwith("tellDelay: 'delay' not defined");
         var self = context.self;
         return setTimeout(function () { tell(pid, msg, self); }, delay);
-    }
+    };
 
-    var ask = function (pid, msg) {
-        if (typeof pid === "undefined") failwith("ask: 'pid' not defined");
-        if (typeof msg === "undefined") failwith("ask: 'msg' not defined");
-        var ctx = {
-            isAsk: true,
-            self: pid,
-            sender: getSender(),
-            currentMsg: msg,
-            currentReq: null
-        };
+    var askInternal = function (pid, msg, ctx) {
         var p = actor[pid];
         if (!p || !p.inbox) {
             if (isLocal(pid)) {
                 failwith("Process doesn't exist " + pid);
+                return null;
             }
             else {
-                failwith("'ask' is only available for intra-JS process calls.");
+                //failwith("'ask' is only available for intra-JS process calls.");
+                messageId++;
+                socket.send(Ask(connectionId, messageId, pid, ctx.sender, msg));
+
+                var thunk = {
+                    doneFn: function (msg) {
+                    },
+                    failFn: function (msg) {
+                    },
+                    done: function (f) {
+                        this.doneFn = f;
+                        return this;
+                    },
+                    fail: function (f) {
+                        this.failFn = f;
+                        return this;
+                    },
+                    ctx: ctx
+                };
+
+                requests[messageId] = thunk;
+                return thunk;
             }
         }
         else {
@@ -175,22 +251,35 @@ var Process = (function () {
             return withContext(ctx, function () {
                 context.reply = null;
                 if (p.stateless) {
-                    var state = p.inbox(msg);
-                    if (typeof state !== "undefined") p.state = state;
+                    var statea = p.inbox(msg);
+                    if (typeof statea !== "undefined") p.state = statea;
                 }
                 else {
-                    var state = p.inbox(p.state, msg);
-                    if (typeof state !== "undefined") p.state = state;
+                    var stateb = p.inbox(p.state, msg);
+                    if (typeof stateb !== "undefined") p.state = stateb;
                 }
                 return context.reply;
             });
         }
-    }
+    };
+
+    var ask = function (pid, msg) {
+        if (typeof pid === "undefined") failwith("ask: 'pid' not defined");
+        if (typeof msg === "undefined") failwith("ask: 'msg' not defined");
+        var ctx = {
+            isAsk: true,
+            self: pid,
+            sender: getSender(),
+            currentMsg: msg,
+            currentReq: null
+        };
+        return askInternal(pid, msg, ctx);
+    };
 
     var reply = function (msg) {
         if (typeof msg === "undefined") failwith("reply: 'msg' not defined");
         context.reply = msg;
-    }
+    };
 
     var subscribeAsync = function (pid) {
         if (typeof pid === "undefined") failwith("subscribeAsync: 'pid' not defined");
@@ -223,7 +312,7 @@ var Process = (function () {
             forall: function (f) { onNext = f; return this; },
             done: function (f) { onComplete = f; return this; }
         };
-    }
+    };
 
     var subscribeSync = function (pid) {
         if (typeof pid === "undefined") failwith("subscribeSync: 'pid' not defined");
@@ -237,31 +326,31 @@ var Process = (function () {
             var id = subscribeId;
             var ctx = {
                 unsubscribe: function () {
-                    $.connection.processHub.server.unsubscribe(pid, self);
+                    socket.send(Unsubscribe(connectionId, pid, self));
                     delete actor[self].obs[id];
                 },
                 next: function () { },
                 done: function () { }
-            }
+            };
             actor[self].obs[id] = ctx;
             subscribeId++;
-            $.connection.processHub.server.subscribe(pid, self);
+            socket.send(Subscribe(connectionId, pid, self));
             return ctx;
         }
-    }
+    };
 
     var subscribe = function (pid) {
         if (typeof pid === "undefined") failwith("subscribe: 'pid' not defined");
         return inloop()
             ? subscribeSync(pid)
             : subscribeAsync(pid);
-    }
+    };
 
     var unsubscribe = function (ctx) {
         if (typeof ctx === "undefined") failwith("unsubscribe: 'ctx' not defined");
         if (!ctx || ctx.unsubscribe) return;
         ctx.unsubscribe();
-    }
+    };
 
     publish = function (msg) {
         if (typeof msg === "undefined") failwith("publish: 'msg' not defined");
@@ -274,11 +363,11 @@ var Process = (function () {
         else {
             failwith("'publish' can only be called from within a process");
         }
-    }
+    };
 
     var kill = function (pid) {
         if (typeof pid === "undefined") failwith("kill: 'pid' not defined");
-        if (arguments.length == 0) {
+        if (arguments.length === 0) {
             if (inloop()) {
                 pid = context.pid;
             }
@@ -300,8 +389,8 @@ var Process = (function () {
             p.shutdown(p.state);
         }
 
-        for (var x in p.obs) {
-            p.obs[x].unsubscribe();
+        for (var ob in p.obs) {
+            p.obs[ob].unsubscribe();
         }
         p.obs = {};
 
@@ -322,16 +411,16 @@ var Process = (function () {
 
         delete actor[extractParent(pid)].children[pid];
         delete actor[pid];
-    }
+    };
 
     var deadLetter = function (to, msg, sender) {
         tell(DeadLetters, { to: to, msg: msg, sender: getSender(sender) });
-    }
+    };
 
     var error = function (e, to, msg, sender) {
         console.error(e);
         tell(Errors, { error: e, to: to, msg: msg, sender: getSender(sender) });
-    }
+    };
 
     var receiveTell = function (data) {
         var p = actor[data.pid];
@@ -340,10 +429,7 @@ var Process = (function () {
                 deadLetter(data.pid, data.msg, data.sender);
             }
             else {
-                var msg = typeof data.msg === "string"
-                    ? data.msg
-                    : JSON.stringify(data.msg);
-                $.connection.processHub.server.tell(data.pid, msg, data.ctx.sender);
+                socket.send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, data.msg));
             }
             return;
         }
@@ -351,12 +437,12 @@ var Process = (function () {
         try {
             withContext(data.ctx, function () {
                 if (p.stateless) {
-                    var state = p.inbox(data.msg);
-                    if (typeof state !== "undefined") p.state = state;
+                    var statea = p.inbox(data.msg);
+                    if (typeof statea !== "undefined") p.state = statea;
                 }
                 else {
-                    var state = p.inbox(p.state, data.msg);
-                    if (typeof state !== "undefined") p.state = state;
+                    var stateb = p.inbox(p.state, data.msg);
+                    if (typeof stateb !== "undefined") p.state = stateb;
                 }
             });
         }
@@ -365,7 +451,7 @@ var Process = (function () {
             deadLetter(data.pid, data.msg, data.sender);
             p.state = p.setup();
         }
-    }
+    };
 
     var receivePub = function (data) {
         var p = actor[data.pid];
@@ -386,7 +472,7 @@ var Process = (function () {
                 }
             }
         }
-    }
+    };
 
     var receive = function (event) {
         if (event.origin !== window.location.origin ||
@@ -404,53 +490,151 @@ var Process = (function () {
             case "tell": receiveTell(data); break;
             case "pub": receivePub(data); break;
         }
-    }
+    };
+
+    var disconnect = function () {
+        socket.send(Disconnect(connectionId));
+        socket.close();
+    };
+
+    var unload = function () {
+        socket.send(Disconnect(connectionId));
+    };
 
     var connect = function () {
-        var proxy = $.connection.processHub;
-        proxy.client.onMessage = function (data) {
-            var ctx = {
-                self: data.To,
-                sender: data.Sender,
-                replyTo: data.ReplyTo,
-                currentMsg: JSON.parse(data.Content),
-                currentReq: data.RequestId
-            };
-            postMessage(
-                JSON.stringify({ pid: data.To, msg: ctx.currentMsg, ctx: ctx, processjs: "tell" }),
-                window.location.origin
-            );
-        }
-        return {
-            done: function (f) {
-                $.connection.hub.start().done(f);
+        socket = new WebSocket(uri);
+
+        socket.onopen = function (e) {
+            console.log("opened " + uri);
+            socket.send(Connect);
+            window.addEventListener("beforeunload", unload);
+        };
+
+        socket.onclose = function (e) {
+            window.removeEventListener("beforeunload", unload);
+        };
+
+        socket.onmessage = function (e) {
+
+            try {
+                var obj = JSON.parse(e.data);
+
+                switch (obj.tag) {
+                    // Incoming ask
+                    case "ask":
+                        var ctx = {
+                            self: obj.to,
+                            sender: obj.sender,
+                            replyTo: obj.replyTo,
+                            requestId: obj.requestId,
+                            currentMsg: obj.content,
+                            isAsk: true
+                        };
+                        try {
+                            var res = askInternal(obj.to, obj.content, ctx);
+                            tell(obj.replyTo, ActorResponse(res, obj.replyTo, obj.to, obj.requestId, false), obj.to);
+                        }
+                        catch (e) {
+                            tell(obj.replyTo, ActorResponse(e, obj.replyTo, obj.to, obj.requestId, true), obj.to);
+                        }
+                        break;
+
+                    // Incoming tell
+                    case "tell":
+                        var ctx = {
+                            self: obj.to,
+                            sender: obj.sender,
+                            replyTo: obj.replyTo,
+                            currentMsg: obj.content,
+                            requestId: 0,
+                            isAsk: false
+                        };
+                        postMessage(
+                            JSON.stringify({ pid: ctx.self, msg: ctx.currentMsg, ctx: ctx, processjs: "tell" }),
+                            window.location.origin
+                        );
+                        break;
+
+                    // Remote ask response
+                    case "askr":
+                        var req = requests[obj.mid];
+                        if (!req) return;
+                        var done = req.doneFn;
+                        var fail = req.failFn;
+                        var ctx = req.ctx;
+                        delete requests[obj.mid];
+
+                        withContext(ctx, function () {
+                            if (typeof obj.done !== "undefined") {
+                                done(obj.done);
+                            }
+                            else if (typeof obj.fail !== "undefined") {
+                                fail(obj.fail);
+                            }
+                        });
+                        break;
+
+                    // Pong (reply of ping)
+                    case "pong":
+                        lastPong = new Date();
+                        break;
+
+                    // Disconnected
+                    case "disc":
+                        connectionId = obj.id === connectionId ? "" : connectionId;
+                        break;
+
+                    // Connected
+                    case "conn":
+                        connectionId = obj.id === "" ? connectionId : obj.id;
+                        doneFn();
+                        break;
+                }
+            }
+            catch (e) {
+                console.error(e);
             }
         };
-    }
+
+        socket.onerror = function (e) {
+            console.error(e.data);
+        };
+
+        return {
+            done: function (f) {
+                doneFn = f;
+                return this;
+            },
+            fail: function (f) {
+                failFn = f;
+                return this;
+            }
+        };
+    };
 
     var isAsk = function () {
         return context
             ? context.isAsk
-            : false
-    }
+            : false;
+    };
 
     var isTell = function () {
-        return !isAsk
-    }
+        return !isAsk;
+    };
 
     var formatItem = function (msg) {
         return "<div class='process-log-msg-row'>" +
-                "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
-                "<div class='log-time'>" + msg.DateDisplay + "</div>" +
-                "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
-                (msg.Message == null || !msg.Message.IsSome
-                    ? ""
-                    : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
-                "</div>" +
-                (msg.Exception == null || !msg.Exception.IsSome || !msg.Exception.Value == ""
-                    ? ""
-                    : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
-                "</div>";
+            "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
+            "<div class='log-time'>" + msg.DateDisplay + "</div>" +
+            "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
+            (msg.Message === null || !msg.Message.IsSome
+                ? ""
+                : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
+            "</div>" +
+            (msg.Exception === null || !msg.Exception.IsSome || !msg.Exception.Value === ""
+                ? ""
+                : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
+            "</div>";
     };
 
     var log = {
@@ -469,28 +653,28 @@ var Process = (function () {
         view: function (id, viewSize) {
             if (!id) failwith("Log.view: 'id' not defined");
             return Process.spawn("process-log",
-                    function () {
-                        Process.subscribe("/root/user/process-log");
-                        return [];
-                    },
-                    function (state, msg) {
-                        state.unshift(msg);
-                        $("#" + id).prepend(formatItem(msg));
-                        if (state.length > (viewSize || 50)) {
-                            state.pop();
-                            $('.process-log-msg-row:last').remove();
-                        }
-                        return state;
+                function () {
+                    Process.subscribe("/root/user/process-log");
+                    return [];
+                },
+                function (state, msg) {
+                    state.unshift(msg);
+                    $("#" + id).prepend(formatItem(msg));
+                    if (state.length > (viewSize || 50)) {
+                        state.pop();
+                        $('.process-log-msg-row:last').remove();
                     }
-                );
+                    return state;
+                }
+            );
         }
-    }
+    };
 
     var extractParent = function (pid) {
         var i = pid.lastIndexOf('/');
-        if (i == -1) return User;
+        if (i === -1) return User;
         return pid.substr(0, i);
-    }
+    };
 
     return {
         ask: ask,
@@ -515,9 +699,9 @@ var Process = (function () {
         Root: Root,
         System: System,
         User: User,
-        Parent: function () { return context ? extractParent(context.self) : User },
+        Parent: function () { return context ? extractParent(context.self) : User; },
         Self: function () { return context ? context.self : User; },
-        Sender: function () { return context ? context.sender : NoSender; },
+        Sender: function () { return context ? context.sender : NoSender; }
     };
 })();
 
@@ -531,28 +715,28 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
     };
 
     Process.clone = function (obj) {
-        if (null == obj || "object" != typeof obj) return obj;
+        if (null === obj || "object" !== typeof obj) return obj;
         var copy = obj.constructor();
         for (var attr in obj) {
             if (obj.hasOwnProperty(attr)) copy[attr] = obj[attr];
         }
         return copy;
-    }
+    };
 
     Process.cloneMap = function (obj, fn) {
-        if (null == obj || "object" != typeof obj) return obj;
+        if (null === obj || "object" !== typeof obj) return obj;
         var copy = obj.constructor();
         for (var attr in obj) {
             if (obj.hasOwnProperty(attr)) copy[attr] = fn(obj[attr]);
         }
         return copy;
-    }
+    };
 
     Process.spawnView = function (name, containerId, templateId, setup, inbox, shutdown) {
 
         if (typeof setup !== "function") {
             var val = setup;
-            setup = function () { return val };
+            setup = function () { return val; };
         }
 
         return Process.spawn(name,
@@ -562,15 +746,15 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
                 var view = function (state) {
                     this.render = function (el) {
                         ko.cleanNode($("#" + containerId)[0]);
-                        ko.applyBindings(state, el)
-                    }
+                        ko.applyBindings(state, el);
+                    };
                 };
 
                 var state = setup();
 
                 var makeObs = function (value) {
-                    if (value != null && typeof value !== "undefined" && typeof value !== "function") {
-                        if (value != null && typeof value.tag === "string" && value.tag == "Computed") {
+                    if (value !== null && typeof value !== "undefined" && typeof value !== "function") {
+                        if (value !== null && typeof value.tag === "string" && value.tag === "Computed") {
                             return ko.computed(state[key].fn, state);
                         }
                         if (Object.prototype.toString.call(value) === Object.prototype.toString.call([])) {
@@ -583,7 +767,7 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
                     else {
                         return value;
                     }
-                }
+                };
 
                 state.with = function (patch) {
                     var clone = Process.clone(this);
@@ -605,7 +789,7 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
                         }
                     }
                     return clone;
-                }
+                };
 
                 if (typeof state === "object") {
                     for (var key in state) {
@@ -631,16 +815,16 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
             // Inbox
             function (state, msg) {
                 var newState = inbox(state.state, msg);
-                if (newState != state.state) {
+                if (newState !== state.state) {
                     state.refresh(newState);
                     return {
                         state: newState,
                         refresh: state.refresh
-                    }
+                    };
                 }
                 else {
                     return state;
-                };
+                }
             },
             // Shutdown
             function (state) {
@@ -650,5 +834,5 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
                     shutdown(state);
                 }
             });
-    }
+    };
 }

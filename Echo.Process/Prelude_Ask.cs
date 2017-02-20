@@ -1,10 +1,9 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
+using static Echo.Process;
 
 namespace Echo
 {
@@ -24,7 +23,6 @@ namespace Echo
     /// </summary>
     public static partial class Process
     {
-
         /// <summary>
         /// Ask a process for a reply
         /// </summary>
@@ -54,6 +52,30 @@ namespace Echo
             InMessageLoop
                 ? raiseDontUseInMessageLoopException<Task<R>>(nameof(observeState))
                 : Task.Run(() => ask<R>(pid, message, sender));
+
+        /// <summary>
+        /// Ask a process for a reply (if the process is running).  If the process isn't running
+        /// then None is returned
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>The response to the request or None if the process isn't running</returns>
+        public static Option<T> askIfAlive<T>(ProcessId pid, object message, ProcessId sender) =>
+            ping(pid)
+                ? Optional(ActorContext.System(pid).Ask<T>(pid, message, sender))
+                : None;
+
+        /// <summary>
+        /// Ask a process for a reply (if the process is running).  If the process isn't running
+        /// then None is returned
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>The response to the request or None if the process isn't running</returns>
+        public static Option<T> askIfAlive<T>(ProcessId pid, object message) =>
+            ping(pid)
+                ? Optional(ask<T>(pid, message, Self))
+                : None;
 
         /// <summary>
         /// Asynchronous ask - must be used outside of a Process

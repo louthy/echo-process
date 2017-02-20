@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using LanguageExt;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
-using Newtonsoft.Json;
+using Echo;
+using static Echo.Process;
 
 namespace LanguageExt.ProcessJS
 {

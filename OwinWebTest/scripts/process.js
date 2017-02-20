@@ -591,8 +591,7 @@ var Process = (function () {
                         break;
                 }
             }
-            catch (e)
-            {
+            catch (e) {
                 console.error(e);
             }
         };
@@ -625,17 +624,17 @@ var Process = (function () {
 
     var formatItem = function (msg) {
         return "<div class='process-log-msg-row'>" +
-                "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
-                "<div class='log-time'>" + msg.DateDisplay + "</div>" +
-                "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
-                (msg.Message === null || !msg.Message.IsSome
-                    ? ""
-                    : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
-                "</div>" +
-                (msg.Exception === null || !msg.Exception.IsSome || !msg.Exception.Value === ""
-                    ? ""
-                    : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
-                "</div>";
+            "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
+            "<div class='log-time'>" + msg.DateDisplay + "</div>" +
+            "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
+            (msg.Message === null || !msg.Message.IsSome
+                ? ""
+                : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
+            "</div>" +
+            (msg.Exception === null || !msg.Exception.IsSome || !msg.Exception.Value === ""
+                ? ""
+                : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
+            "</div>";
     };
 
     var log = {

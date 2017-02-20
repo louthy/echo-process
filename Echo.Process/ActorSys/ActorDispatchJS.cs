@@ -129,5 +129,8 @@ namespace Echo
 
         public IEnumerable<Type> GetValidMessageTypes() =>
             new Type[0];
+
+        public bool Ping() =>
+            throw new NotSupportedException();
     }
 }

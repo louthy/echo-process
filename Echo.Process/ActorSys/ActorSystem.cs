@@ -32,6 +32,7 @@ namespace Echo
         readonly long startupTimestamp;
         readonly object regsync = new object();
         readonly SessionManager sessionManager;
+        public readonly Ping Ping;
         public readonly SystemName SystemName;
 
         public AppProfile AppProfile => appProfile;
@@ -48,6 +49,7 @@ namespace Echo
             this.appProfile = appProfile;
             this.settings = settings;
             this.cluster = cluster;
+            Ping = new Ping(this);
             startupTimestamp = DateTime.UtcNow.Ticks;
             sessionManager = new SessionManager(cluster, SystemName, appProfile.NodeName, VectorConflictStrategy.Branch);
             watchers = Map<ProcessId, Set<ProcessId>>();
@@ -163,10 +165,23 @@ namespace Echo
                 rootItem = null;
                 if (ri != null)
                 {
-                    startupSubscription?.Dispose();
-                    startupSubscription = null;
-                    var item = ri;
-                    ri.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
+                    try
+                    {
+                        Ping.Dispose();
+                    }
+                    catch { }
+                    try
+                    {
+                        startupSubscription?.Dispose();
+                        startupSubscription = null;
+                    }
+                    catch { }
+                    try
+                    {
+                        var item = ri;
+                        ri.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
+                    }
+                    catch { }
                     cluster.IfSome(c => c?.Dispose());
                 }
             }
@@ -748,7 +763,7 @@ by name then use Process.deregisterByName(name).");
 
         internal IActorDispatch GetRemoteDispatcher(ProcessId pid) =>
             cluster.Match(
-                Some: c  => new ActorDispatchRemote(pid, c, ActorContext.SessionId, Settings.TransactionalIO) as IActorDispatch,
+                Some: c  => new ActorDispatchRemote(Ping, pid, c, ActorContext.SessionId, Settings.TransactionalIO) as IActorDispatch,
                 None: () => new ActorDispatchNotExist(pid));
 
         internal Option<Func<ProcessId, IEnumerable<ProcessId>>> GetProcessSelector(ProcessId pid)
@@ -796,7 +811,7 @@ by name then use Process.deregisterByName(name).");
                 else
                 {
                     return cluster.Match(
-                            Some: c  => new ActorDispatchRemote(orig, c, ActorContext.SessionId, Settings.TransactionalIO) as IActorDispatch,
+                            Some: c  => new ActorDispatchRemote(Ping, orig, c, ActorContext.SessionId, Settings.TransactionalIO) as IActorDispatch,
                             None: () => new ActorDispatchNotExist(orig));
                 }
             }

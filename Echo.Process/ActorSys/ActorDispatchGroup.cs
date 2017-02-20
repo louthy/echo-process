@@ -100,5 +100,8 @@ namespace Echo
             from x in MapRoleMembers(disp => disp.GetValidMessageTypes())
             from y in x
             select y;
+
+        public bool Ping() =>
+            Exists && MapRoleMembers(disp => disp.Ping()).Exists(x => x);
     }
 }

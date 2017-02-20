@@ -15,10 +15,12 @@ namespace Echo
         public readonly ProcessId ProcessId;
         public readonly ICluster Cluster;
         public readonly Option<SessionId> SessionId;
+        public readonly Ping Pinger;
         readonly bool transactionalIO;
 
-        public ActorDispatchRemote(ProcessId pid, ICluster cluster, Option<SessionId> sessionId, bool transactionalIO)
+        public ActorDispatchRemote(Ping ping, ProcessId pid, ICluster cluster, Option<SessionId> sessionId, bool transactionalIO)
         {
+            Pinger = ping;
             ProcessId = pid;
             Cluster = cluster;
             SessionId = sessionId;
@@ -171,5 +173,8 @@ namespace Echo
                 return new Type[0];
             }
         }
+
+        public bool Ping() =>
+            Exists && Pinger.DoPing(ProcessId).Wait();
     }
 }

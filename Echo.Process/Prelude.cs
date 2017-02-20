@@ -304,6 +304,20 @@ namespace Echo
             ActorContext.System(pid).GetDispatcher(pid).Exists;
 
         /// <summary>
+        /// Find out if a process exists and is alive
+        /// 
+        ///     Rules:
+        ///         * Local processes   - the process must actually be running
+        ///         * Remote processes  - the process must actually be running
+        ///         * Dispatchers/roles - at least one process in the collection must be running
+        ///         * JS processes      - not current supported
+        /// </summary>
+        /// <param name="pid">Process ID to check</param>
+        /// <returns>True if exists</returns>
+        public static bool ping(ProcessId pid) =>
+            ActorContext.System(pid).GetDispatcher(pid).Ping();
+
+        /// <summary>
         /// Watch another Process in case it terminates
         /// </summary>
         /// <param name="pid">Process to watch</param>
