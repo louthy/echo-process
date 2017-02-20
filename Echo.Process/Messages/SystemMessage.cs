@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using LanguageExt.UnitsOfMeasure;
 
-namespace LanguageExt
+namespace Echo
 {
     internal abstract class SystemMessage : Message
     {

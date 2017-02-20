@@ -6,7 +6,7 @@ using System.Reactive.Subjects;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorRequest : UserControlMessage
     {

@@ -1,11 +1,12 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     internal class ActorDispatchLocal : IActorDispatch
     {

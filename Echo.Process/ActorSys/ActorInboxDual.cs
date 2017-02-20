@@ -7,12 +7,13 @@ using System.Reflection;
 //using Microsoft.FSharp.Control;
 using System.Reactive.Linq;
 using System.Reactive.Concurrency;
-using static LanguageExt.Process;
+using static Echo.Process;
 using static LanguageExt.Prelude;
 using Newtonsoft.Json;
-using LanguageExt.ActorSys;
+using Echo.ActorSys;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// This is both a local and remote inbox in one. 

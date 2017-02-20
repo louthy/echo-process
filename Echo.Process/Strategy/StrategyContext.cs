@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Keeps a running context whilst a strategy computation is running
@@ -53,7 +54,7 @@ namespace LanguageExt
             Option<MessageDirective> messageDirective
             )
         {
-            bool isStop = directive == LanguageExt.Directive.Stop;
+            bool isStop = directive == Echo.Directive.Stop;
 
             Global = isStop ? StrategyState.Empty : global;
             Exception = exception;

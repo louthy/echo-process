@@ -1,9 +1,10 @@
-﻿using LanguageExt.Client;
+﻿using Echo.Client;
+using LanguageExt;
 using System;
 using System.Collections.Generic;
-using static LanguageExt.Process;
+using static Echo.Process;
 
-namespace LanguageExt
+namespace Echo
 {
     internal class ActorDispatchJS : IActorDispatch
     {

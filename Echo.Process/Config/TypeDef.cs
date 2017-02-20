@@ -10,15 +10,18 @@ using static LanguageExt.Parsec.Char;
 using static LanguageExt.Parsec.Expr;
 using static LanguageExt.Parsec.Token;
 using static LanguageExt.Parsec.Indent;
+using static LanguageExt.TypeClass;
 using System.Collections;
+using LanguageExt;
+using LanguageExt.ClassInstances;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     public class TypeDef : IEquatable<TypeDef>, IComparable<TypeDef>
     {
         public readonly string Name;
         public readonly Type MapsTo;
-        public readonly FuncSpec[] FuncSpecs;
+        public readonly Arr<FuncSpec> FuncSpecs;
         public readonly TypeDef GenericType;
         public readonly Func<Option<string>, object, object> Ctor;
         public readonly Func<ProcessSystemConfigParser, Parser<object>> ValueParser;
@@ -75,7 +78,7 @@ namespace LanguageExt.Config
                           let ps = m.GetParameters().Map(p => new FieldSpec(p.Name, () => assembly.Get(p.ParameterType))).ToArray()
                           select FuncSpec.Attrs(MakeName(m.Name), () => assembly.Get(m.ReturnType), locals => m.Invoke(null, locals.Values.ToArray()), ps);
 
-            FuncSpecs = List.append(props, fields, methods).ToArray();
+            FuncSpecs = toArray(mconcat<MSeq<FuncSpec>, IEnumerable<FuncSpec>>(props, fields, methods));
 
 
             ValueParser = BuildObjectParser(FuncSpecs).Memo();
@@ -163,7 +166,7 @@ namespace LanguageExt.Config
             GenericType = genericType;
         }
 
-        private Func<ProcessSystemConfigParser, Parser<object>> BuildObjectParser(FuncSpec[] funcSpecs)
+        private Func<ProcessSystemConfigParser, Parser<object>> BuildObjectParser(Arr<FuncSpec> funcSpecs)
         {
             return p =>
                 from state in getState<ParserState>()
@@ -174,7 +177,7 @@ namespace LanguageExt.Config
 
                                     // Known function and property definitions
                                     choice(
-                                        List.fold(funcSpecs, LanguageExt.Map.empty<string, Lst<FuncSpec>>(), (s, x) => s.AddOrUpdate(x.Name, Some: exists => exists.Add(x), None: () => List(x)))
+                                        funcSpecs.Fold(LanguageExt.Map.empty<string, Lst<FuncSpec>>(), (s, x) => s.AddOrUpdate(x.Name, Some: exists => exists.Add(x), None: () => List(x)))
                                         .Map((func, variants) =>
 
                                               // Hard-coded (for now) strategy match grammar

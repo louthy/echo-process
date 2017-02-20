@@ -1,8 +1,9 @@
 ﻿using System.Linq;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// 
@@ -31,7 +32,7 @@ namespace LanguageExt
 
                 return ActorContext.System(leaf).Cluster
                                    .Map(x => x.GetSet<ProcessId>(key))
-                                   .IfNone(Set.empty<ProcessId>())
+                                   .IfNone(Set<ProcessId>())
                                    .Append(ActorContext.System(leaf).GetLocalRegistered(name))
                                    .Map(pid => pid.Append(leaf.Skip(1)))
                                    .AsEnumerable();

@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Reactive.Linq;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     internal class ActorDispatchNotExist : IActorDispatch
     {
@@ -19,7 +20,7 @@ namespace LanguageExt
             raise<T>(new ProcessException($"Doesn't exist ({ProcessId})", sender.Path, sender.Path, null));
 
         public Map<string, ProcessId> GetChildren() =>
-            Map.empty<string, ProcessId>();
+            Map<string, ProcessId>();
 
         public IObservable<T> Observe<T>() =>
             Observable.Empty<T>();

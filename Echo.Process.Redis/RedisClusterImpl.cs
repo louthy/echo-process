@@ -10,7 +10,7 @@ using static LanguageExt.Prelude;
 using System.Threading;
 using System.Reflection;
 
-namespace LanguageExt
+namespace Echo
 {
     class RedisClusterImpl : ICluster
     {
@@ -21,7 +21,7 @@ namespace LanguageExt
         int databaseNumber;
         ConnectionMultiplexer redis;
 
-        Map<string, Subject<RedisValue>> subscriptions = Map.empty<string, Subject<RedisValue>>();
+        Map<string, Subject<RedisValue>> subscriptions = Map<string, Subject<RedisValue>>();
         object subsync = new object();
 
         /// <summary>
@@ -275,7 +275,7 @@ namespace LanguageExt
 
         public Set<T> GetSet<T>(string key) =>
             Retry(() =>
-                Set.createRange(Db.SetMembers(key).Map(x => JsonConvert.DeserializeObject<T>(x))));
+                toSet(Db.SetMembers(key).Map(x => JsonConvert.DeserializeObject<T>(x))));
 
         public void SetRemove<T>(string key, T value) =>
             Retry(() =>
@@ -297,7 +297,7 @@ namespace LanguageExt
             Retry(() =>
                 Db.HashSet(
                     key, 
-                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v))).Values.ToArray()
+                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v))).ToArray()
                     ));
 
         public bool DeleteHashField(string key, string field) =>
@@ -312,25 +312,25 @@ namespace LanguageExt
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map.empty<string, object>(),
+                    Map<string, object>(),
                     (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value)))
-                  .Filter(notnull));
+                  .Filter((object v) => notnull(v)));
 
         public Map<string, T> GetHashFields<T>(string key) =>
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map.empty<string, T>(),
+                    Map<string, T>(),
                     (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
-                  .Filter(notnull));
+                  .Filter(v => notnull<T>(v)));
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map.empty<K, T>(),
+                    Map<K, T>(),
                     (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value)))
-                  .Filter(notnull));
+                  .Filter(v => notnull<T>(v)));
 
         public Option<T> GetHashField<T>(string key, string field)
         {
@@ -345,9 +345,9 @@ namespace LanguageExt
                   .Zip(fields)
                   .Filter(x => !x.Item1.IsNullOrEmpty)
                   .Fold(
-                      Map.empty<string, T>(),
+                      Map<string, T>(),
                       (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1)))
-                  .Filter(notnull));
+                  .Filter(v => notnull<T>(v)));
 
         // TODO: These facts exist elsewhere - normalise
         const string userInboxSuffix = "-user-inbox";
@@ -407,7 +407,7 @@ namespace LanguageExt
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
         public Map<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery) =>
-            Map.createRange(
+            toMap(
                 map(QueryKeys(keyQuery, "", metaDataSuffix).Map(x => (RedisKey)x).ToArray(), keys =>
                     keys.Map(x => (string)x)
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))

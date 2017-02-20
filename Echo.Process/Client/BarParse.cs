@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Text;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using LanguageExt;
-using LanguageExt.Client;
+using Echo.Client;
 
-namespace LanguageExt.Client
+namespace Echo.Client
 {
     class BarParse
     {

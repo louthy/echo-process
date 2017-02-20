@@ -1,13 +1,14 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using static LanguageExt.Process;
+using static Echo.Process;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public static partial class Router
     {
@@ -91,7 +92,7 @@ namespace LanguageExt
             )
         {
             if (Workers == null) throw new ArgumentNullException(nameof(Workers));
-            var workers = Set.createRange(Workers);
+            var workers = toSet(Workers);
             if (workers.Count < 1) throw new ArgumentException($"{nameof(Workers)} should have a length of at least 1");
 
             var router = spawn<T>(
@@ -206,7 +207,7 @@ namespace LanguageExt
             )
         {
             if (Workers == null) throw new ArgumentNullException(nameof(Workers));
-            var workers = Set.createRange(Workers);
+            var workers = toSet(Workers);
             if (workers.Count < 1) throw new ArgumentException($"{nameof(Workers)} should have a length of at least 1");
             var router = spawn<T>(
                 Name,

@@ -6,7 +6,7 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>

@@ -1,9 +1,10 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     abstract class ProcessOp
     {
@@ -53,21 +54,21 @@ namespace LanguageExt
         public ProcessOpTransaction Write(object value, string name, string prop, ProcessFlags flags)
         {
             var op = new WriteConfigOp(value, name, prop, flags);
-            var settings = Settings.IfNone(Map<string, object>.Empty).AddOrUpdate($"{name}@{prop}", value);
+            var settings = Settings.IfNone(Map<string, object>()).AddOrUpdate($"{name}@{prop}", value);
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
         public ProcessOpTransaction Clear(string name, string prop, ProcessFlags flags)
         {
             var op = new ClearConfigOp(name, prop, flags);
-            var settings = Settings.IfNone(Map<string, object>.Empty).Remove($"{name}@{prop}");
+            var settings = Settings.IfNone(Map<string, object>()).Remove($"{name}@{prop}");
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
         public ProcessOpTransaction ClearAll(ProcessFlags flags)
         {
             var op = new ClearAllOp(flags);
-            var settings = Settings.IfNone(Map<string, object>.Empty).Clear();
+            var settings = Settings.IfNone(Map<string, object>()).Clear();
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
@@ -79,7 +80,7 @@ namespace LanguageExt
 
         public T Read<T>(string name, string prop, ProcessFlags flags, T defaultValue)
         {
-            var val = Settings.IfNone(Map<string, object>.Empty).Find($"{name}@{prop}");
+            var val = Settings.IfNone(Map<string, object>()).Find($"{name}@{prop}");
             if (val.IsSome) return val.Map(x => (T)x).IfNone(defaultValue);
             return ActorContext.System(ProcessId).Settings.GetProcessSetting<T>(ProcessId, name, prop, flags).IfNone(defaultValue);
         }

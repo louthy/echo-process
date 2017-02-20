@@ -1,5 +1,6 @@
-﻿using LanguageExt.Config;
-using LanguageExt.Session;
+﻿using Echo.Config;
+using Echo.Session;
+using LanguageExt;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorRequestContext
     {

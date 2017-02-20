@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace LanguageExt
+namespace Echo
 {
     [Flags]
     public enum InboxDirective

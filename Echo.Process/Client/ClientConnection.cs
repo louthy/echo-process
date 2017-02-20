@@ -7,8 +7,9 @@ using LanguageExt.ClassInstances.Const;
 using LanguageExt.ClassInstances.Pred;
 using static LanguageExt.Prelude;
 using System.Security.Cryptography;
+using LanguageExt;
 
-namespace LanguageExt.Client
+namespace Echo.Client
 {
     public class ClientMessageId : NewType<ClientMessageId, long> { public ClientMessageId(long x) : base(x) { } }
 

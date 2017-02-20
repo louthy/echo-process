@@ -2,15 +2,16 @@
 using System.Threading;
 using System.Reflection;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using LanguageExt.UnitsOfMeasure;
 using System.Reactive.Subjects;
 using Newtonsoft.Json;
 using System.Collections.Generic;
-using LanguageExt.Config;
+using Echo.Config;
 using LanguageExt.ClassInstances;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Internal class that represents the state of a single process.
@@ -26,8 +27,8 @@ namespace LanguageExt
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
         readonly Option<ICluster> cluster;
-        Map<string, IDisposable> subs = Map.empty<string, IDisposable>();
-        Map<string, ActorItem> children = Map.empty<string, ActorItem>();
+        Map<string, IDisposable> subs = Map<string, IDisposable>();
+        Map<string, ActorItem> children = Map<string, ActorItem>();
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
         EventWaitHandle request;
@@ -158,7 +159,7 @@ namespace LanguageExt
         Unit RemoveAllSubscriptions()
         {
             subs.Iter(x => x.Dispose());
-            subs = Map.empty<string, IDisposable>();
+            subs = Map<string, IDisposable>();
             return unit;
         }
 
@@ -950,7 +951,7 @@ namespace LanguageExt
                 {
                     ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
                     Parent.Actor.UnlinkChild(Id);
-                    children = Map.empty<string, ActorItem>();
+                    children = Map<string, ActorItem>();
                 });
             }
         }

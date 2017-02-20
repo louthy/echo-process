@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Not currently used, but may be in future when distributed asks are done.

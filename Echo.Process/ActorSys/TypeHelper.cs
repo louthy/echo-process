@@ -7,8 +7,9 @@ using System.Threading.Tasks;
 using System.Reflection;
 using static LanguageExt.Prelude;
 using Newtonsoft.Json;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class TypeHelper
     {

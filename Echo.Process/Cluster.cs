@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     static class Cluster
     {

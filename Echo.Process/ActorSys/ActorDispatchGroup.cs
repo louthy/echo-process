@@ -3,8 +3,9 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Reactive.Linq;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorDispatchGroup : IActorDispatch
     {

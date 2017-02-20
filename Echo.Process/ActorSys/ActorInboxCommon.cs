@@ -5,10 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using System.Reflection;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     static class ActorInboxCommon
     {

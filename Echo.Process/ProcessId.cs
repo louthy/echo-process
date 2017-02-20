@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using System.Text;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ProcessIdInternal
     {

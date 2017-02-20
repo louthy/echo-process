@@ -3,8 +3,9 @@ using System;
 using System.Linq;
 using LanguageExt.ClassInstances;
 using static LanguageExt.TypeClass;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Name of a Process System in LanguageExt.Process system.

@@ -1,7 +1,8 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt.Session
+namespace Echo.Session
 {
     /// <summary>
     /// Version vector conflict strategy
@@ -84,7 +85,7 @@ namespace LanguageExt.Session
         object sync = new object();
 
         public static SessionVector Create(int timeout, VectorConflictStrategy strategy, Map<string,object> initialState) =>
-            new SessionVector(Map.empty<string, ValueVector>(), DateTime.UtcNow, timeout, initialState);
+            new SessionVector(Map<string, ValueVector>(), DateTime.UtcNow, timeout, initialState);
 
         /// <summary>
         /// Ctor

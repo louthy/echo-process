@@ -1,4 +1,4 @@
-﻿using LanguageExt.Client;
+﻿using Echo.Client;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Named process already exists

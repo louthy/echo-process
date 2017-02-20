@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using LanguageExt.UnitsOfMeasure;
+using LanguageExt;
 
-namespace LanguageExt.Session
+namespace Echo.Session
 {
     /// <summary>
     /// Very simple process that tells the Session Manager to synchronise with

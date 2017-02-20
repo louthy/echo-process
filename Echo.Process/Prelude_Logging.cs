@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.Reactive.Subjects;
 
-namespace LanguageExt
+namespace Echo
 {
     public static partial class Process
     {

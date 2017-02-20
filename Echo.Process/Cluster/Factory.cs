@@ -1,12 +1,13 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class ClusterFactory
     {
         static object sync = new object();
-        static Map<string, Func<ClusterConfig, ICluster>> providers = Map.create<string, Func<ClusterConfig, ICluster>>();
+        static Map<string, Func<ClusterConfig, ICluster>> providers = Map<string, Func<ClusterConfig, ICluster>>();
 
         /// <summary>
         /// Provider registration

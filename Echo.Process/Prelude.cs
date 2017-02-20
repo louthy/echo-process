@@ -1,4 +1,5 @@
-﻿using LanguageExt.UnitsOfMeasure;
+﻿using LanguageExt;
+using LanguageExt.UnitsOfMeasure;
 using System;
 using System.Collections.Generic;
 using System.Reactive.Concurrency;
@@ -7,7 +8,7 @@ using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>
@@ -360,7 +361,7 @@ namespace LanguageExt
         /// Get a list of cluster nodes that are online
         /// </summary>
         public static Map<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).ClusterState?.Members ?? Map.empty<ProcessName, ClusterNode>();
+            ActorContext.System(system).ClusterState?.Members ?? Map<ProcessName, ClusterNode>();
 
         /// <summary>
         /// List of system names running on this node

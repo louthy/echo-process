@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace LanguageExt.ActorSys
+namespace Echo.ActorSys
 {
     internal class BlockingQueue<T> : IDisposable
     {

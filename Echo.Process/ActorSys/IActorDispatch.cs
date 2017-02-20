@@ -1,7 +1,8 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 
-namespace LanguageExt
+namespace Echo
 {
     interface IActorDispatch
     {

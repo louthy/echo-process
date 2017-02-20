@@ -1,8 +1,9 @@
 ﻿using System;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Holds the 'global' state for a strategy.  i.e the state that will
@@ -15,7 +16,7 @@ namespace LanguageExt
         public readonly DateTime LastFailure;
         public readonly Map<string, object> Metadata;
 
-        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, Map.empty<string, object>());
+        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, Map<string, object>());
 
         public StrategyState(
             Time backoffAmount,

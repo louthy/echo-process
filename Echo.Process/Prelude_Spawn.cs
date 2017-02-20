@@ -1,11 +1,12 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reflection;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>
@@ -150,7 +151,7 @@ namespace LanguageExt
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Action<ProcessId> Terminated = null
             ) =>
-            List.map(Range(0, Count), n => spawn($"{Name}-{n}", Inbox, Flags, Strategy, MaxMailboxSize, Terminated)).ToList();
+            Range(0, Count).Map(n => spawn($"{Name}-{n}", Inbox, Flags, Strategy, MaxMailboxSize, Terminated)).ToList();
 
         /// <summary>
         /// Create N child processes.
@@ -180,7 +181,7 @@ namespace LanguageExt
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            List.map(Range(0, Count), n => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{n}", Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, false)).ToList();
+            Range(0, Count).Map(n => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{n}", Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, false)).ToList();
 
         /// <summary>
         /// Create N child processes.
@@ -209,7 +210,7 @@ namespace LanguageExt
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            Map.map(Spec, (id,state) => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{id}", Inbox, state, Terminated, Strategy, Flags, MaxMailboxSize, false)).Values.ToList();
+            Spec.Map((id,state) => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{id}", Inbox, state, Terminated, Strategy, Flags, MaxMailboxSize, false)).Values.ToList();
 
         /// <summary>
         /// Spawn by type

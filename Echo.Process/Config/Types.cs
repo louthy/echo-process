@@ -14,7 +14,7 @@ using static LanguageExt.Parsec.Indent;
 using LanguageExt.Parsec;
 using LanguageExt.UnitsOfMeasure;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     public class Types
     {
@@ -239,18 +239,18 @@ namespace LanguageExt.Config
             Func<ProcessSystemConfigParser, Parser<ProcessFlags>> flag =
                 p =>
                     choice(
-                        flagMap(p, "default", LanguageExt.ProcessFlags.Default),
-                        flagMap(p, "listen-remote-and-local", LanguageExt.ProcessFlags.ListenRemoteAndLocal),
-                        flagMap(p, "persist-all", LanguageExt.ProcessFlags.PersistAll),
-                        flagMap(p, "persist-inbox", LanguageExt.ProcessFlags.PersistInbox),
-                        flagMap(p, "persist-state", LanguageExt.ProcessFlags.PersistState),
-                        flagMap(p, "remote-publish", LanguageExt.ProcessFlags.RemotePublish),
-                        flagMap(p, "remote-state-publish", LanguageExt.ProcessFlags.RemoteStatePublish));
+                        flagMap(p, "default", Echo.ProcessFlags.Default),
+                        flagMap(p, "listen-remote-and-local", Echo.ProcessFlags.ListenRemoteAndLocal),
+                        flagMap(p, "persist-all", Echo.ProcessFlags.PersistAll),
+                        flagMap(p, "persist-inbox", Echo.ProcessFlags.PersistInbox),
+                        flagMap(p, "persist-state", Echo.ProcessFlags.PersistState),
+                        flagMap(p, "remote-publish", Echo.ProcessFlags.RemotePublish),
+                        flagMap(p, "remote-state-publish", Echo.ProcessFlags.RemoteStatePublish));
 
             Func<ProcessSystemConfigParser, Parser<ProcessFlags>> flagsValue =
                 p =>
                     from fs in p.brackets(p.commaSep(flag(p)))
-                    select List.fold(fs, LanguageExt.ProcessFlags.Default, (s, x) => s | x);
+                    select fs.Fold(Echo.ProcessFlags.Default, (s, x) => s | x);
 
             ProcessFlags = new TypeDef(
                 "process-flags",
@@ -389,10 +389,10 @@ namespace LanguageExt.Config
             Func<ProcessSystemConfigParser, Parser<Directive>> directive =
                 p =>
                     choice(
-                        p.reserved("resume").Map(_ => LanguageExt.Directive.Resume),
-                        p.reserved("restart").Map(_ => LanguageExt.Directive.Restart),
-                        p.reserved("stop").Map(_ => LanguageExt.Directive.Stop),
-                        p.reserved("escalate").Map(_ => LanguageExt.Directive.Escalate));
+                        p.reserved("resume").Map(_ => Echo.Directive.Resume),
+                        p.reserved("restart").Map(_ => Echo.Directive.Restart),
+                        p.reserved("stop").Map(_ => Echo.Directive.Stop),
+                        p.reserved("escalate").Map(_ => Echo.Directive.Escalate));
 
             Directive = new TypeDef(
                 "directive",
@@ -442,31 +442,29 @@ namespace LanguageExt.Config
                 10
             );
 
-            TypeMap = Map.create(
-                Tuple(typeof(bool).FullName, Bool),
-                Tuple(typeof(int).FullName, Int),
-                Tuple(typeof(double).FullName, Double),
-                Tuple(typeof(string).FullName, String),
-                Tuple(typeof(ProcessId).FullName, ProcessId),
-                //Tuple(typeof(ProcessName).FullName, ProcessName),
-                Tuple(typeof(ProcessFlags).FullName, ProcessFlags),
-                Tuple(typeof(Time).FullName, Time),
-                Tuple(typeof(MessageDirective).FullName, MessageDirective),
-                Tuple(typeof(Directive).FullName, Directive)
+            TypeMap = Map(
+                (typeof(bool).FullName, Bool),
+                (typeof(int).FullName, Int),
+                (typeof(double).FullName, Double),
+                (typeof(string).FullName, String),
+                (typeof(ProcessId).FullName, ProcessId),
+                (typeof(ProcessFlags).FullName, ProcessFlags),
+                (typeof(Time).FullName, Time),
+                (typeof(MessageDirective).FullName, MessageDirective),
+                (typeof(Directive).FullName, Directive)
             );
 
-            All = Map.create(
-                Tuple(Bool.Name, Bool),
-                Tuple(Int.Name, Int),
-                Tuple(Double.Name, Double),
-                Tuple(String.Name, String),
-                Tuple(ProcessId.Name, ProcessId),
-                //Tuple(ProcessName.Name, ProcessName),
-                Tuple(ProcessFlags.Name, ProcessFlags),
-                Tuple(Time.Name, Time),
-                Tuple(MessageDirective.Name, MessageDirective),
-                Tuple(Directive.Name, Directive),
-                Tuple(DispatcherType.Name, DispatcherType)
+            All = Map(
+                (Bool.Name, Bool),
+                (Int.Name, Int),
+                (Double.Name, Double),
+                (String.Name, String),
+                (ProcessId.Name, ProcessId),
+                (ProcessFlags.Name, ProcessFlags),
+                (Time.Name, Time),
+                (MessageDirective.Name, MessageDirective),
+                (Directive.Name, Directive),
+                (DispatcherType.Name, DispatcherType)
                 );
             AllInOrder = (from x in All.Values
                           orderby x.Order descending

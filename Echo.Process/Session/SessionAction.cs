@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt.Session
+namespace Echo.Session
 {
     public enum SessionActionTag
     {

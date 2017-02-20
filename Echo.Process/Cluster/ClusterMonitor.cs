@@ -3,9 +3,10 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Process that monitors the state of the cluster
@@ -37,7 +38,7 @@ namespace LanguageExt
             public readonly Map<ProcessName, ClusterNode> Members;
             public readonly IActorSystem System;
 
-            public static State Empty(IActorSystem system) => new State(Map.empty<ProcessName, ClusterNode>(), system);
+            public static State Empty(IActorSystem system) => new State(Map<ProcessName, ClusterNode>(), system);
 
             public State(Map<ProcessName, ClusterNode> members, IActorSystem system)
             {
@@ -122,8 +123,8 @@ namespace LanguageExt
 
         static Tuple<Set<ProcessName>, Set<ProcessName>> DiffState(State oldState, State newState)
         {
-            var oldSet = Set.createRange(oldState.Members.Keys);
-            var newSet = Set.createRange(newState.Members.Keys);
+            var oldSet = toSet(oldState.Members.Keys);
+            var newSet = toSet(newState.Members.Keys);
             return Tuple(oldSet - newSet, newSet - oldSet);
         }
 

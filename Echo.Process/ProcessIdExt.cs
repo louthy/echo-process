@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 using LanguageExt;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using Echo;
 
 /// <summary>
 /// Extensions methods for ProcessId

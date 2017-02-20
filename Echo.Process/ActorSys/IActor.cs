@@ -1,11 +1,12 @@
-﻿using LanguageExt.UnitsOfMeasure;
+﻿using LanguageExt;
+using LanguageExt.UnitsOfMeasure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     internal interface IActor : IDisposable
     {

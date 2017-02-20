@@ -2,8 +2,9 @@
 using System.Threading.Tasks;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     public static partial class Process
     {

@@ -3,7 +3,7 @@ using LanguageExt;
 using static LanguageExt.Prelude;
 using LanguageExt.UnitsOfMeasure;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     public class FieldSpec
     {
@@ -52,7 +52,7 @@ namespace LanguageExt.Config
             new FuncSpec(
                 name,
                 type,
-                locals => body(locals.Map(v => v.Value.Value)),
+                locals => body(locals.Select(v => v.Value.Value)),
                 args
             );
 

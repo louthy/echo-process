@@ -2,13 +2,14 @@
 using System.Linq;
 using System.Threading;
 using System.Reflection;
-using static LanguageExt.Process;
+using static Echo.Process;
 using static LanguageExt.Prelude;
 //using Microsoft.FSharp.Control;
 using Newtonsoft.Json;
-using LanguageExt.ActorSys;
+using Echo.ActorSys;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorInboxRemote<S,T> : IActorInbox
     {

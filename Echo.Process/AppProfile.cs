@@ -1,7 +1,8 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>

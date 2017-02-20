@@ -7,7 +7,7 @@ using LanguageExt.UnitsOfMeasure;
 using LanguageExt;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     public class ValueToken
     {
@@ -99,7 +99,7 @@ namespace LanguageExt.Config
 
         public ProcessToken(Lst<NamedValueToken> values)
         {
-            Settings        = Map.createRange(values.Map(x => Tuple(x.Name, x.Value)));
+            Settings        = toMap(values.Map(x => Tuple(x.Name, x.Value)));
             ProcessId       = GetValue<ProcessId>("pid");
             Flags           = GetValue<ProcessFlags>("flags");
             MailboxSize     = GetValue<int>("mailbox-size");
@@ -173,7 +173,7 @@ namespace LanguageExt.Config
         public ClusterToken(Option<string> alias, Lst<NamedValueToken> values)
         {
             Alias = alias;
-            Settings = Map.createRange(values.Map(x => Tuple(x.Name, x.Value)));
+            Settings = toMap(values.Map(x => (x.Name, x.Value)));
             NodeName = GetValue<string>("node-name");
             Role = GetValue<string>("role");
             Connection = GetValue<string>("connection");
@@ -222,6 +222,6 @@ namespace LanguageExt.Config
            Settings.Find(name).Map(tok => tok.Cast<T>());
 
         public readonly static ClusterToken Empty =
-            new ClusterToken(Map.empty<string, ValueToken>(), None, None, None, None, None, None);
+            new ClusterToken(Map<string, ValueToken>(), None, None, None, None, None, None);
     }
 }

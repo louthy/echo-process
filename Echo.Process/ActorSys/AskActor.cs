@@ -5,9 +5,9 @@ using System.Reactive.Subjects;
 using System.Reflection;
 using System.Threading;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 
-namespace LanguageExt
+namespace Echo
 {
     internal static class AskActor
     {

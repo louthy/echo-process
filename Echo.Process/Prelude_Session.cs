@@ -6,10 +6,11 @@ using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 using LanguageExt.UnitsOfMeasure;
 using System.Security.Cryptography;
-using LanguageExt.Session;
+using Echo.Session;
 using System.Reactive.Subjects;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>
@@ -220,7 +221,7 @@ namespace LanguageExt
                        obj is T
                            ? (T)obj
                            : default(T)))
-                  .IfNone(List.empty<T>())
+                  .IfNone(List<T>())
                   .Filter(notnull)
                 :  raiseUseInMsgLoopOnlyException<Lst<T>>(nameof(sessionGetData));
 

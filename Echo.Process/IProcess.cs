@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Represents a process as an object rather than a function

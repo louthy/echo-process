@@ -38,8 +38,8 @@
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.13-alpha" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.13-alpha" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.14-alpha" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.14-alpha" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net451'">
     <PackageReference Include="WindowsBase" Version="4.6.1055.0" />

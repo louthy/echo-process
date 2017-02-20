@@ -4,13 +4,14 @@ using System.Linq;
 using System.Threading;
 using System.Reflection;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using Newtonsoft.Json;
-using LanguageExt.ActorSys;
+using Echo.ActorSys;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
     {

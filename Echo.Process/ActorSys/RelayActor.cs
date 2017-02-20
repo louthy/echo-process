@@ -1,4 +1,4 @@
-﻿using LanguageExt.Client;
+﻿using Echo.Client;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -7,9 +7,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 
-namespace LanguageExt
+namespace Echo
 {
     internal static class RelayActor
     {

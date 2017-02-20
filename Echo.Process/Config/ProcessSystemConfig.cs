@@ -14,7 +14,7 @@ using static LanguageExt.Parsec.Token;
 using LanguageExt.UnitsOfMeasure;
 using Newtonsoft.Json;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     /// <summary>
     /// Parses and provides access to configuration settings relating
@@ -41,9 +41,9 @@ namespace LanguageExt.Config
             new ProcessSystemConfig(
                 default(SystemName),
                 "root",
-                Map.empty<string, ValueToken>(),
-                Map.empty<ProcessId, ProcessToken>(),
-                Map.empty<string, State<StrategyContext, Unit>>(),
+                Map<string, ValueToken>(),
+                Map<ProcessId, ProcessToken>(),
+                Map<string, State<StrategyContext, Unit>>(),
                 null,
                 new Types()
             );
@@ -60,7 +60,7 @@ namespace LanguageExt.Config
         {
             SystemName = systemName;
             NodeName = nodeName;
-            this.settingOverrides = Map.empty<string, Map<string, object>>();
+            this.settingOverrides = Map<string, Map<string, object>>();
             this.roleSettings = roleSettings;
             this.processSettings = processSettings;
             this.stratSettings = stratSettings;
@@ -145,7 +145,7 @@ namespace LanguageExt.Config
         /// <returns></returns>
         internal T GetProcessSetting<T>(ProcessId pid, string name, string prop, T defaultValue, ProcessFlags flags)
         {
-            var empty = Map.empty<string, ValueToken>();
+            var empty = Map<string, ValueToken>();
 
             var settingsMaps = new[] {
                     processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
@@ -167,7 +167,7 @@ namespace LanguageExt.Config
         /// <returns></returns>
         internal Option<T> GetProcessSetting<T>(ProcessId pid, string name, string prop, ProcessFlags flags)
         {
-            var empty = Map.empty<string, ValueToken>();
+            var empty = Map<string, ValueToken>();
 
             var settingsMaps = new[] {
                     processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
@@ -187,7 +187,7 @@ namespace LanguageExt.Config
         /// types, not value types)</param>
         internal T GetRoleSetting<T>(string name, string prop, T defaultValue)
         {
-            var empty = Map.empty<string, ValueToken>();
+            var empty = Map<string, ValueToken>();
             var key = $"role-{Role.Current}@settings";
             var flags = ActorContext.System(SystemName).Cluster.Map(_ => ProcessFlags.PersistState).IfNone(ProcessFlags.Default);
             var settingsMaps = new[] { roleSettings, Cluster.Map(c => c.Settings).IfNone(empty) };
@@ -221,7 +221,7 @@ namespace LanguageExt.Config
         internal Option<T> GetClusterSetting<T>(string name, string prop)
         {
             var key = "cluster@settings";
-            var empty = Map.empty<string, ValueToken>();
+            var empty = Map<string, ValueToken>();
             var settingsMaps = new[] { Cluster.Map(c => c.Settings).IfNone(empty) };
             return GetSettingGeneral<T>(settingsMaps, key, name, prop, ProcessFlags.Default);
         }
@@ -334,7 +334,7 @@ namespace LanguageExt.Config
         /// </summary>
         internal Lst<ProcessToken> GetRouterWorkers(ProcessId pid) =>
             GetProcessSetting<Lst<ProcessToken>>(pid, "workers", "value", ProcessFlags.Default)
-           .IfNone(List.empty<ProcessToken>());
+           .IfNone(List<ProcessToken>());
 
         /// <summary>
         /// Get the router worker count

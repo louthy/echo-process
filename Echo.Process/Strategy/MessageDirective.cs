@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 using LanguageExt.UnitsOfMeasure;
 
-namespace LanguageExt
+namespace Echo
 {
     public enum MessageDirectiveType
     {

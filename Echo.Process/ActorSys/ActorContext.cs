@@ -1,13 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using static LanguageExt.Prelude;
-using System.Collections.Concurrent;
-using LanguageExt.Config;
-using System.Threading;
+using Echo.Config;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     static class ActorContext
     {

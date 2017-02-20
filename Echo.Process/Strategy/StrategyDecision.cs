@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using LanguageExt.UnitsOfMeasure;
 
-namespace LanguageExt
+namespace Echo
 {
     public class StrategyDecision
     {

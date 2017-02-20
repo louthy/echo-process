@@ -4,10 +4,11 @@ using System.Reflection;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using System.Collections.Generic;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorDispatchRemote : IActorDispatch
     {

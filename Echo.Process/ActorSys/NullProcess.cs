@@ -1,4 +1,5 @@
-﻿using LanguageExt.UnitsOfMeasure;
+﻿using LanguageExt;
+using LanguageExt.UnitsOfMeasure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +8,7 @@ using System.Threading.Tasks;
 
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     class NullProcess : IActor
     {
@@ -18,7 +19,7 @@ namespace LanguageExt
             System = system;
         }
 
-        public Map<string, ActorItem> Children => Map.empty<string, ActorItem>();
+        public Map<string, ActorItem> Children => Map<string, ActorItem>();
         public ProcessId Id => ProcessId.Top.SetSystem(System);
         public ProcessFlags Flags => ProcessFlags.Default;
         public ProcessName Name => "$";

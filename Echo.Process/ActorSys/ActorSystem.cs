@@ -4,13 +4,13 @@ using System.Linq;
 using System.Reactive.Linq;
 using LanguageExt;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using System.Threading;
-using LanguageExt.Config;
-using LanguageExt.Session;
-using LanguageExt.ActorSys;
+using Echo.Config;
+using Echo.Session;
+using Echo.ActorSys;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorSystem : IActorSystem, IDisposable
     {
@@ -50,8 +50,8 @@ namespace LanguageExt
             this.cluster = cluster;
             startupTimestamp = DateTime.UtcNow.Ticks;
             sessionManager = new SessionManager(cluster, SystemName, appProfile.NodeName, VectorConflictStrategy.Branch);
-            watchers = Map.empty<ProcessId, Set<ProcessId>>();
-            watchings = Map.empty<ProcessId, Set<ProcessId>>();
+            watchers = Map<ProcessId, Set<ProcessId>>();
+            watchings = Map<ProcessId, Set<ProcessId>>();
 
             startupSubscription = NotifyCluster(cluster, startupTimestamp);
 
@@ -213,7 +213,7 @@ namespace LanguageExt
             {
                 watchers = watchers.AddOrUpdate(watching,
                     Some: set => set.Remove(watcher),
-                    None: () => Set.empty<ProcessId>()
+                    None: () => Set<ProcessId>()
                 );
 
                 if (watchers[watching].IsEmpty)
@@ -223,7 +223,7 @@ namespace LanguageExt
 
                 watchings = watchings.AddOrUpdate(watcher,
                     Some: set => set.Remove(watching),
-                    None: () => Set.empty<ProcessId>()
+                    None: () => Set<ProcessId>()
                 );
 
                 if (watchings[watcher].IsEmpty)
@@ -556,7 +556,7 @@ namespace LanguageExt
         public Set<ProcessId> GetLocalRegistered(ProcessName name) =>
             registeredProcessNames
                 .Find(name)
-                .IfNone(Set.empty<ProcessId>());
+                .IfNone(Set<ProcessId>());
 
         public ProcessId Register(ProcessName name, ProcessId pid)
         {
@@ -675,7 +675,7 @@ by name then use Process.deregisterByName(name).");
         {
             lock (regsync)
             {
-                var names = registeredProcessIds.Find(pid).IfNone(Set.empty<ProcessName>());
+                var names = registeredProcessIds.Find(pid).IfNone(Set<ProcessName>());
                 names.Iter(name =>
                     registeredProcessNames = registeredProcessNames.SetItem(name, registeredProcessNames[name].Remove(pid))
                 );
@@ -687,7 +687,7 @@ by name then use Process.deregisterByName(name).");
         {
             lock (regsync)
             {
-                var pids = registeredProcessNames.Find(name).IfNone(Set.empty<ProcessId>());
+                var pids = registeredProcessNames.Find(name).IfNone(Set<ProcessId>());
 
                 pids.Iter(pid =>
                     registeredProcessIds = registeredProcessIds.SetItem(pid, registeredProcessIds[pid].Remove(name))

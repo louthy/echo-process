@@ -2,8 +2,9 @@
 using LanguageExt.UnitsOfMeasure;
 
 using static LanguageExt.Prelude;
+using LanguageExt;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     static class TimeAttr
     {

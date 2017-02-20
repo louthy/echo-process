@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public interface IReturn
     {

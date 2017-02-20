@@ -1,7 +1,8 @@
-﻿using LanguageExt.UnitsOfMeasure;
-using static LanguageExt.Strategy;
+﻿using LanguageExt;
+using LanguageExt.UnitsOfMeasure;
+using static Echo.Strategy;
 
-namespace LanguageExt
+namespace Echo
 {
     public static partial class Process
     {

@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using LanguageExt;
+using System.Collections.Generic;
 
-namespace LanguageExt
+namespace Echo
 {
     public partial class Process
     {

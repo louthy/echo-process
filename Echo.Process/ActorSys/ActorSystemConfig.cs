@@ -3,8 +3,9 @@ using Newtonsoft.Json;
 using System;
 using System.Runtime.Serialization.Formatters;
 using System.Reflection;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     class ActorSystemConfig
     {

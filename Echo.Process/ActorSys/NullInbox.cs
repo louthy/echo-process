@@ -2,7 +2,7 @@
 using LanguageExt;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     class NullInbox : IActorInbox
     {

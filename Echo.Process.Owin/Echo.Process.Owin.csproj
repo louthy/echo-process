@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Owin.WebSocket" Version="1.6.0" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.13-alpha" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.14-alpha" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using LanguageExt;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class RedisCluster
     {

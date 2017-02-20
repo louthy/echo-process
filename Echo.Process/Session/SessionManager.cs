@@ -6,9 +6,9 @@ using System.Reactive.Threading;
 using System.Reactive.Threading.Tasks;
 using LanguageExt;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 
-namespace LanguageExt.Session
+namespace Echo.Session
 {
     /// <summary>
     /// Session manager for a single actor-system
@@ -98,28 +98,28 @@ namespace LanguageExt.Session
         private static string SessionKey(SessionId sessionId) =>
             $"sys-session-{sessionId}";
 
-        public Unit Start(SessionId sessionId, int timeoutSeconds)
+        public LanguageExt.Unit Start(SessionId sessionId, int timeoutSeconds)
         {
             Sync.Start(sessionId, timeoutSeconds, LoadData(sessionId));
             cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), TimeoutKey, timeoutSeconds));
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Start(sessionId, timeoutSeconds, system, nodeName)));
         }
 
-        public Unit Stop(SessionId sessionId)
+        public LanguageExt.Unit Stop(SessionId sessionId)
         {
             Sync.Stop(sessionId);
             cluster.Iter(c => c.Delete(SessionKey(sessionId)));
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Stop(sessionId, system, nodeName)));
         }
 
-        public Unit Touch(SessionId sessionId) =>
+        public LanguageExt.Unit Touch(SessionId sessionId) =>
             Sync.Touch(sessionId);
 
         private Map<string, object> LoadData(SessionId sessionId) =>
             cluster.Map(c => c.GetHashFields(SessionKey(sessionId)))
-                   .IfNone(Map.empty<string, object>());
+                   .IfNone(Map<string, object>());
 
-        public Unit SetData(long time, SessionId sessionId, string key, object value)
+        public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
             Sync.SetData(sessionId, key, value, time);
             cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, value));
@@ -134,7 +134,7 @@ namespace LanguageExt.Session
             )));
         }
 
-        public Unit ClearData(long time, SessionId sessionId, string key)
+        public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)
         {
             Sync.ClearData(sessionId, key, time);
             cluster.Iter(c => c.Delete(SessionKey(sessionId)));

@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using LanguageExt.Config;
+using Echo.Config;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class ProcessConfig
     {
@@ -224,12 +225,12 @@ namespace LanguageExt
                 StartFromConfig(new ProcessSystemConfig(
                     systemName,
                     nodeName.Value,
-                    Map.empty<string, ValueToken>(),
-                    Map.empty<ProcessId, ProcessToken>(),
-                    Map.empty<string, State<StrategyContext, Unit>>(),
+                    Map<string, ValueToken>(),
+                    Map<ProcessId, ProcessToken>(),
+                    Map<string, State<StrategyContext, Unit>>(),
                     new ClusterToken(
                         None,
-                        List.create(
+                        List(
                             new NamedValueToken("node-name", new ValueToken(types.String, nodeName.Value), None),
                             new NamedValueToken("role", new ValueToken(types.String, roleName.Value), None),
                             new NamedValueToken("env", new ValueToken(types.String, systemName.Value), None),
@@ -263,7 +264,7 @@ namespace LanguageExt
             {
                 var parser = new ProcessSystemConfigParser(nodeName.IfNone(""), new Types(), strategyFuncs);
                 var configs = String.IsNullOrWhiteSpace(configText)
-                    ? Map.create(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
+                    ? Map(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
                     : parser.ParseConfigText(configText);
 
                 nodeName.Map(_ => configs.Filter(c => c.NodeName == nodeName).Iter(StartFromConfig))
@@ -398,7 +399,7 @@ namespace LanguageExt
         /// this selects the property of the setting to access</param>
         /// <returns>Optional configuration setting value</returns>
         public static Lst<T> readList<T>(string name, string prop = "value") =>
-            read(name, prop, List.empty<T>());
+            read(name, prop, List<T>());
 
         /// <summary>
         /// Access a map setting 
@@ -412,7 +413,7 @@ namespace LanguageExt
         /// this selects the property of the setting to access</param>
         /// <returns>Optional configuration setting value</returns>
         public static Map<string, T> readMap<T>(string name, string prop = "value") =>
-            read(name, prop, Map.empty<string, T>());
+            read(name, prop, Map<string, T>());
 
         /// <summary>
         /// Write a setting

@@ -1,8 +1,9 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class StrategyEvent
     {

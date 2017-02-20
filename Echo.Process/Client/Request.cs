@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using Newtonsoft.Json;
+using LanguageExt;
 
-namespace LanguageExt.Client
+namespace Echo.Client
 {
     public class Req
     {

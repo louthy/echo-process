@@ -7,7 +7,7 @@ using System.Reflection.Emit;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Builds a proxy from an interface.  It proxies a Process so that methods 

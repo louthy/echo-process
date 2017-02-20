@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Provides the name of a system that is shutting down, use Cancel to

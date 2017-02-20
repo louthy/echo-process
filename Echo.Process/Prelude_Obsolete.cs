@@ -1,11 +1,12 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt
+namespace Echo
 {
     public static partial class Process
     {

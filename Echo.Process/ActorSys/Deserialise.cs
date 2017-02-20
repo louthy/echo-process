@@ -3,8 +3,9 @@ using System;
 using System.Reflection;
 using static LanguageExt.Prelude;
 using System.Linq;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Helper function for invoking the generic JsonConvert.DeserializeObject function
@@ -14,7 +15,7 @@ namespace LanguageExt
     /// </summary>
     internal static class Deserialise
     {
-        static Map<string, MethodInfo> funcs = Map.empty<string, MethodInfo>();
+        static Map<string, MethodInfo> funcs = Map<string, MethodInfo>();
 
         static MethodInfo Nothing() =>
             null;

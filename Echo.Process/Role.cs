@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// <para>
@@ -279,7 +280,7 @@ namespace LanguageExt
 
             // Round-robin
             object sync = new object();
-            Map<string, int> roundRobinState = Map.empty<string, int>();
+            Map<string, int> roundRobinState = Map<string, int>();
             RoundRobin = Dispatch.register(roundRobin, leaf => {
                 var key = leaf.ToString();
                 var workers = NodeIds(leaf).ToArray();

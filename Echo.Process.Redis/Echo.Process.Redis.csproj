@@ -31,8 +31,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="StackExchange.Redis" Version="1.2.0" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.13-alpha" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.13-alpha" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.14-alpha" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.14-alpha" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

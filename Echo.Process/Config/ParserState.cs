@@ -2,7 +2,7 @@
 using LanguageExt;
 using static LanguageExt.Prelude;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     public class ParserState
     {
@@ -19,7 +19,7 @@ namespace LanguageExt.Config
         }
 
         public ParserState AddCluster(string alias, ClusterToken cluster) =>
-            new ParserState(Map.addOrUpdate(Clusters, alias, cluster), Locals);
+            new ParserState(Clusters.AddOrUpdate(alias, cluster), Locals);
 
         public ParserState SetClusters(Map<string, ClusterToken> clusters) =>
             new ParserState(clusters, Locals);
@@ -33,6 +33,6 @@ namespace LanguageExt.Config
         public Option<ValueToken> Local(string name) =>
             Locals.Find(name);
 
-        public static readonly ParserState Empty = new ParserState(Map.empty<string,ClusterToken>(), Map.empty<string, ValueToken>());
+        public static readonly ParserState Empty = new ParserState(Map<string,ClusterToken>(), Map<string, ValueToken>());
     }
 }

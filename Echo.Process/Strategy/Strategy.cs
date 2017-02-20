@@ -4,8 +4,9 @@ using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
 using System.Reflection;
 using LanguageExt.ClassInstances;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class Strategy
     {

@@ -3,13 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using System.Threading;
-using LanguageExt.Config;
-using LanguageExt.Session;
+using Echo.Config;
+using Echo.Session;
 using LanguageExt.UnitsOfMeasure;
+using LanguageExt;
 
-namespace LanguageExt
+namespace Echo
 {
     /// <summary>
     /// Represents the state of the whole actor system.  Mostly it holds the store of

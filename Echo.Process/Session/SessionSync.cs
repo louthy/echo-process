@@ -8,10 +8,11 @@ using System.Reactive.Linq;
 using System.Reactive.Threading;
 using System.Reactive.Threading.Tasks;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using System.Reactive.Concurrency;
+using LanguageExt;
 
-namespace LanguageExt.Session
+namespace Echo.Session
 {
     /// <summary>
     /// Manages the in-memory view of the sessions
@@ -20,8 +21,8 @@ namespace LanguageExt.Session
     {
         SystemName system;
         ProcessName nodeName;
-        Map<SessionId, SessionVector> sessions = Map.empty<SessionId, SessionVector>();
-        Map<SessionId, Subject<Tuple<SessionId, DateTime>>> sessionTouched = Map.empty<SessionId, Subject<Tuple<SessionId, DateTime>>>();
+        Map<SessionId, SessionVector> sessions = Map<SessionId, SessionVector>();
+        Map<SessionId, Subject<Tuple<SessionId, DateTime>>> sessionTouched = Map<SessionId, Subject<Tuple<SessionId, DateTime>>>();
         Subject<Tuple<SessionId, DateTime>> touched = new Subject<Tuple<SessionId, DateTime>>();
 
         VectorConflictStrategy strategy;
@@ -63,7 +64,7 @@ namespace LanguageExt.Session
                     Touch(incoming.SessionId);
                     break;
                 case SessionActionTag.Start:
-                    Start(incoming.SessionId, incoming.Timeout, Map.empty<string,object>());
+                    Start(incoming.SessionId, incoming.Timeout, Map<string,object>());
                     break;
                 case SessionActionTag.Stop:
                     Stop(incoming.SessionId);
@@ -140,7 +141,7 @@ namespace LanguageExt.Session
         /// </summary>
         /// <param name="sessionId"></param>
         /// <param name="vector"></param>
-        public Unit Stop(SessionId sessionId)
+        public LanguageExt.Unit Stop(SessionId sessionId)
         {
             lock (sync)
             {
@@ -158,7 +159,7 @@ namespace LanguageExt.Session
         /// <summary>
         /// Timestamp a sessions to keep it alive
         /// </summary>
-        public Unit Touch(SessionId sessionId) =>
+        public LanguageExt.Unit Touch(SessionId sessionId) =>
             sessions.Find(sessionId).IfSome(s =>
             {
                 s.Touch();
@@ -168,13 +169,13 @@ namespace LanguageExt.Session
         /// <summary>
         /// Set data on the session key/value store
         /// </summary>
-        public Unit SetData(SessionId sessionId, string key, object value, long vector) =>
+        public LanguageExt.Unit SetData(SessionId sessionId, string key, object value, long vector) =>
             sessions.Find(sessionId).Iter(s => s.SetKeyValue(vector, key, value, strategy));
 
         /// <summary>
         /// Clear a session key
         /// </summary>
-        public Unit ClearData(SessionId sessionId, string key, long vector) =>
+        public LanguageExt.Unit ClearData(SessionId sessionId, string key, long vector) =>
             sessions.Find(sessionId).Iter(s => s.ClearKeyValue(vector, key));
     }
 }

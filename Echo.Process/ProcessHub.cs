@@ -1,16 +1,16 @@
 ﻿using System;
 using LanguageExt;
-using static LanguageExt.Process;
+using static Echo.Process;
 using static LanguageExt.Prelude;
-using LanguageExt.Client;
+using Echo.Client;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class ProcessHub
     {
         static readonly object sync = new object();
         static Func<ProcessId, bool> routeValidator = _ => false;
-        static Map<ClientConnectionId, ClientConnection> connections = Map.empty<ClientConnectionId, ClientConnection>();
+        static Map<ClientConnectionId, ClientConnection> connections = Map<ClientConnectionId, ClientConnection>();
 
         /// <summary>
         /// Inject a function that validates incoming message destinations 

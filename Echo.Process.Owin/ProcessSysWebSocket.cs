@@ -6,12 +6,12 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
-using static LanguageExt.Process;
+using static Echo.Process;
 using LanguageExt;
-using LanguageExt.Client;
+using Echo.Client;
 using Newtonsoft.Json;
 
-namespace LanguageExt
+namespace Echo
 {
     public static class ProcessOwin
     {

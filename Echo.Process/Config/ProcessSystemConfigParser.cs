@@ -12,8 +12,9 @@ using static LanguageExt.Parsec.Prim;
 using static LanguageExt.Parsec.Token;
 using static LanguageExt.Parsec.Indent;
 using LanguageExt.UnitsOfMeasure;
+using LanguageExt;
 
-namespace LanguageExt.Config
+namespace Echo.Config
 {
     /// <summary>
     /// Parses the Process system conf file format
@@ -411,7 +412,7 @@ namespace LanguageExt.Config
                         ? failure<Lst<NamedValueToken>>("Invalid arguments spec, has zero arguments")
                         : spec.Length == 1
                             ? from a in argument(settingName, spec.Head())
-                              select List.create(a)
+                              select List(a)
                             : argumentMany(settingName, spec);
 
             // Declare the global type
@@ -487,51 +488,51 @@ namespace LanguageExt.Config
             }
 
             // Extract the process settings
-            var processSettings = List.fold(
-                from nv in res.Reply.Result
-                where nv.Value.Type == processType || nv.Value.Type == routerType
-                let process = nv.Value.Cast<ProcessToken>()
-                let pid = process.ProcessId
-                where pid.IsSome
-                let reg = process.RegisteredName
-                let final = process.SetRegisteredName(new ValueToken(types.ProcessName, reg.IfNone(new ProcessName(nv.Name))))
-                select Tuple(pid.IfNone(ProcessId.None), final),
-                Map.empty<ProcessId, ProcessToken>(),
-                (s, x) => Map.tryAdd(s, x.Item1, x.Item2, (_, p) => failwith<Map<ProcessId, ProcessToken>>("Process declared twice: " + p.RegisteredName.IfNone("not defined"))));
+            var processSettings = 
+                (from nv in res.Reply.Result
+                 where nv.Value.Type == processType || nv.Value.Type == routerType
+                 let process = nv.Value.Cast<ProcessToken>()
+                 let pid = process.ProcessId
+                 where pid.IsSome
+                 let reg = process.RegisteredName
+                 let final = process.SetRegisteredName(new ValueToken(types.ProcessName, reg.IfNone(new ProcessName(nv.Name))))
+                 select Tuple(pid.IfNone(ProcessId.None), final)).Fold(
+                Map<ProcessId, ProcessToken>(),
+                (s, x) => s.TryAdd(x.Item1, x.Item2, (_, p) => failwith<Map<ProcessId, ProcessToken>>("Process declared twice: " + p.RegisteredName.IfNone("not defined"))));
 
 
             // Extract the cluster settings
-            var stratSettings = List.fold(
-                from nv in res.Reply.Result
-                where nv.Value.Type == strategyType
-                let strategy = nv.Value.Cast<State<StrategyContext, Unit>>()
-                select Tuple(nv.Name, strategy),
-                Map.empty<string, State<StrategyContext, Unit>>(),
-                (s, x) => Map.tryAdd(s, x.Item1, x.Item2, (_, __) => failwith<Map<string, State<StrategyContext, Unit>>>("Strategy declared twice: " + x.Item1)));
+            var stratSettings =
+                (from nv in res.Reply.Result
+                 where nv.Value.Type == strategyType
+                 let strategy = nv.Value.Cast<State<StrategyContext, Unit>>()
+                 select Tuple(nv.Name, strategy)).Fold(
+                    Map<string, State<StrategyContext, Unit>>(),
+                    (s, x) => s.TryAdd(x.Item1, x.Item2, (_, __) => failwith<Map<string, State<StrategyContext, Unit>>>("Strategy declared twice: " + x.Item1)));
 
             // Extract the strategy settings
-            var clusterSettings = List.fold(
-                from nv in res.Reply.Result
-                where nv.Value.Type == clusterType
-                let cluster = nv.Value.Cast<ClusterToken>()
-                let env = cluster.Env
-                let alias = cluster.Alias
-                let key = alias || env
-                let clusterNodeName = cluster.NodeName
-                where clusterNodeName.Map(nn => nn == nodeName).IfNone(false)
-                let final = cluster.SetEnvironment(new ValueToken(types.String, key.IfNone(nv.Name)))
-                select Tuple(final.Env.IfNone(""), final),
-                Map.empty<SystemName, ClusterToken>(),
-                (s, x) => Map.tryAdd(s, new SystemName(x.Item1), x.Item2, (_, c) => failwith<Map<SystemName, ClusterToken>>("Cluster declared twice: " + c.Env.IfNone(""))));
+            var clusterSettings = 
+                (from nv in res.Reply.Result
+                 where nv.Value.Type == clusterType
+                 let cluster = nv.Value.Cast<ClusterToken>()
+                 let env = cluster.Env
+                 let alias = cluster.Alias
+                 let key = alias || env
+                 let clusterNodeName = cluster.NodeName
+                 where clusterNodeName.Map(nn => nn == nodeName).IfNone(false)
+                 let final = cluster.SetEnvironment(new ValueToken(types.String, key.IfNone(nv.Name)))
+                 select Tuple(final.Env.IfNone(""), final)).Fold(
+                    Map<SystemName, ClusterToken>(),
+                    (s, x) => s.TryAdd(new SystemName(x.Item1), x.Item2, (_, c) => failwith<Map<SystemName, ClusterToken>>("Cluster declared twice: " + c.Env.IfNone(""))));
 
-            var roleSettings = List.fold(
-                res.Reply.Result,
-                Map.empty<string, ValueToken>(),
-                (s, x) => Map.addOrUpdate(s, x.Name, x.Value)
+            var roleSettings = 
+                res.Reply.Result.Fold(
+                    Map<string, ValueToken>(),
+                    (s, x) => s.AddOrUpdate(x.Name, x.Value)
             );
 
             return String.IsNullOrEmpty(nodeName)
-                ? Map.create(Tuple(default(SystemName), new ProcessSystemConfig(default(SystemName), "root", roleSettings, processSettings, stratSettings, null, types)))
+                ? Map((default(SystemName), new ProcessSystemConfig(default(SystemName), "root", roleSettings, processSettings, stratSettings, null, types)))
                 : clusterSettings.Map(cluster => 
                       new ProcessSystemConfig(
                           cluster.Env.Map(e => new SystemName(e)).IfNone(default(SystemName)),
