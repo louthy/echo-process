@@ -1,4 +1,4 @@
-# echo-process
+# echo
 Actor system that works alongside the functional framework [Language-Ext](https://github.com/louthy/language-ext)
 
 An issue with working with C# is that no matter how much of [Language-Ext functional framework](https://github.com/louthy/language-ext) you take on-board, you will always end up bumping into mutable state or side-effecting systems.  A way around that is to package up the side-effects into atoms of functional computation that are attached to the mutable state (in whatever form it may take).  The [Actor model](https://en.wikipedia.org/wiki/Actor_model) + functional message handling expressions are the perfect programming model for that.  
