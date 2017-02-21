@@ -48,6 +48,5 @@ Nu-get package | Description
 [LanguageExt.Core](https://www.nuget.org/packages/LanguageExt.Core) | All of the core types and functional 'prelude'.  This is the core framework that the Echo library is based upon.
 [Echo.Process](https://www.nuget.org/packages/Echo.Process) | 'Erlang like' actor system for in-app messaging and massive concurrency
 [Echo.Process.Redis](https://www.nuget.org/packages/Echo.Process.Redis) | Cluster support for the `LangaugeExt.Process` system for cluster aware processes using Redis for queue and state persistence
-[Echo.Process.Owin](https://www.nuget.org/packages/Echo.Process.Owin) | 
-WebSockets gateway into the Process system.  Uses Owin to register the WebSockets handler.
+[Echo.Process.Owin](https://www.nuget.org/packages/Echo.Process.Owin) | WebSockets gateway into the Process system.  Uses Owin to register the WebSockets handler.
 [Echo.ProcessJS](https://www.nuget.org/packages/Echo.ProcessJS) | Javascript API to the `Echo.Process` system.  Supports running of Processes in a client browser, with hooks for two-way UI binding
