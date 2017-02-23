@@ -430,11 +430,7 @@ namespace Echo
 
         static T Retry<T>(Func<T> f)
         {
-            try
-            {
-                return f();
-            }
-            catch (TimeoutException)
+            var retry = fun(() =>
             {
                 using (var ev = new AutoResetEvent(false))
                 {
@@ -462,45 +458,23 @@ namespace Echo
                         }
                     }
                 }
-            }
-        }
+            });
 
-        static void Retry(Action f)
-        {
             try
             {
-                f();
-                return;
+                return f();
             }
             catch (TimeoutException)
             {
-                using (var ev = new AutoResetEvent(false))
-                {
-                    for (int i = 1; ; i++)
-                    {
-                        try
-                        {
-                            f();
-                            return;
-                        }
-                        catch (TimeoutException)
-                        {
-                            if (i == TimeoutRetries)
-                            {
-                                throw;
-                            }
-                            // Backing off wait time
-                            // 0 - immediately
-                            // 1 - 100 ms
-                            // 2 - 400 ms
-                            // 3 - 900 ms
-                            // 4 - 1600 ms
-                            // Maximum wait == 3000ms
-                            ev.WaitOne(i * i * 100);
-                        }
-                    }
-                }
+                return retry();
+            }
+            catch (RedisConnectionException)
+            {
+                return retry();
             }
         }
+
+        static void Retry(Action f) =>
+            Retry(() => { f(); return unit; });
     }
 }
