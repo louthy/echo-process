@@ -430,7 +430,7 @@ namespace Echo
 
         static T Retry<T>(Func<T> f)
         {
-            var retry = fun(() =>
+            T retry()
             {
                 using (var ev = new AutoResetEvent(false))
                 {
@@ -458,7 +458,7 @@ namespace Echo
                         }
                     }
                 }
-            });
+            };
 
             try
             {
