@@ -61,7 +61,8 @@ namespace Echo
                 il.Emit(OpCodes.Ret);
 
                 // Methods
-                var methods = interf.GetTypeInfo().GetMethods();
+
+                var methods = interf.GetRuntimeMethods();
                 foreach (var method in methods)
                 {
                     CreateMethod(method, typeBuilder, pidField);

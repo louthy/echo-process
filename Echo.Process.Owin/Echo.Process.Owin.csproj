@@ -4,7 +4,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net451</TargetFramework>
-    <PackageVersion>2.0.5-alpha</PackageVersion>
+    <PackageVersion>2.0.6-alpha</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>
