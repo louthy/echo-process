@@ -11,7 +11,7 @@ namespace Echo
     public static class Strategy
     {
         public static State<StrategyContext, A> Return<A>(A value) =>
-            default(MState<SState<StrategyContext, A>, State<StrategyContext, A>, StrategyContext, A>).Return(value);
+            default(MState<StrategyContext, A>).Return(_ => value);
 
         public static State<StrategyContext, A> Return<A>(Func<StrategyContext, (StrategyContext, A)> f) =>
             State<StrategyContext, A>(s =>
@@ -24,7 +24,7 @@ namespace Echo
             State<StrategyContext, Unit>(s => (unit, f(s)));
 
         public static State<StrategyContext, A> Return<A>(Func<StrategyContext, (TryOption<A>, StrategyContext State)> f) =>
-            default(MState<SState<StrategyContext, A>, State<StrategyContext, A>, StrategyContext, A>).Return( s =>
+            new State<StrategyContext, A>( s =>
             {
                 var (a, ns) = f(s);
                 return a.Match(

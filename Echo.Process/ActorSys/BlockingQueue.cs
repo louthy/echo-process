@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LanguageExt;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -55,8 +56,6 @@ namespace Echo.ActorSys
             {
                 cancelled = false;
                 paused = false;
-                bufferHead = 0;
-                bufferTail = 0;
 
                 while (!cancelled)
                 {
@@ -191,6 +190,8 @@ namespace Echo.ActorSys
         public void Cancel()
         {
             cancelled = true;
+            bufferHead = 0;
+            bufferTail = 0;
             wait.Set();
         }
 

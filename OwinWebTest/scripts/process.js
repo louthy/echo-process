@@ -5,6 +5,12 @@
 
 var unit = "(unit)";
 
+if (!window.location.origin) {
+    window.location.origin = window.location.protocol + "//"
+        + window.location.hostname
+        + (window.location.port ? ':' + window.location.port : '');
+}
+
 var failwith = function (err) {
     console.error(err);
     throw err;

@@ -24,8 +24,6 @@ namespace OwinWebTest
                 tellSelf(_, 1 * second);
             });
 
-            Thread.Sleep(5000);
-
             spawn<string>("echo", msg => replyOrTellSender(new { tag = "rcv", value = msg }));
 
             spawn<string>("hello", msg => reply("Hello, " + msg));

@@ -24,7 +24,7 @@ namespace Echo
             Responses = System.Cluster.Match(
                 Some: c => c.SubscribeToChannel<Resp>("ping-responses"),
                 None: () => Observable.Empty<Resp>())
-               .Merge(Responses, TaskPoolScheduler.Default);
+               .Merge(EarlyResponses, TaskPoolScheduler.Default);
 
             Requests = System.Cluster.Match(
                 Some: c => c.SubscribeToChannel<Req>("ping-requests"),
