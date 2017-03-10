@@ -35,7 +35,7 @@ namespace Echo.ActorSys
 
         public IDisposable ReceiveAsync<S>(S state, Func<S, T, InboxDirective> handler)
         {
-            Task.Run(() =>
+            Task.Factory.StartNew(() =>
             {
                 var s = state;
                 try
@@ -46,7 +46,7 @@ namespace Echo.ActorSys
                 {
                     Process.logErr(e);
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             return this;
         }
 
