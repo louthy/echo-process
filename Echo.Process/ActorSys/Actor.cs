@@ -220,9 +220,12 @@ namespace Echo
 
         S GetState()
         {
-            var res = state.IfNoneUnsafe(InitState);
-            state = res;
-            return res;
+            lock (sync)
+            {
+                var res = state.IfNoneUnsafe(InitState);
+                state = res;
+                return res;
+            }
         }
 
         S InitState()

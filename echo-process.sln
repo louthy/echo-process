@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26228.4
+VisualStudioVersion = 15.0.26228.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Echo.Process", "Echo.Process\Echo.Process.csproj", "{B0F37249-AA2A-45C8-A8CA-3AE94853DA4E}"
 EndProject
@@ -11,9 +11,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echo.Process.Owin", "Echo.P
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{8A938267-9A86-418D-89B1-48DC5E470F61}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OwinWebTest", "OwinWebTest\OwinWebTest.csproj", "{6585E8E2-E746-4467-9621-C12E55B90DBD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OwinWebTest", "Samples\OwinWebTest\OwinWebTest.csproj", "{6585E8E2-E746-4467-9621-C12E55B90DBD}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echo.ProcessJS", "Echo.ProcessJS\Echo.ProcessJS.csproj", "{58D320A7-C7B0-4B21-A42C-488C7D5243C2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scratchpad", "Tests\Scratchpad\Scratchpad.csproj", "{64AE28C6-31B1-4206-9401-840ABE9557F4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,11 +87,24 @@ Global
 		{58D320A7-C7B0-4B21-A42C-488C7D5243C2}.Release|x64.Build.0 = Release|Any CPU
 		{58D320A7-C7B0-4B21-A42C-488C7D5243C2}.Release|x86.ActiveCfg = Release|Any CPU
 		{58D320A7-C7B0-4B21-A42C-488C7D5243C2}.Release|x86.Build.0 = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|x64.Build.0 = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Debug|x86.Build.0 = Debug|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|x64.ActiveCfg = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|x64.Build.0 = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|x86.ActiveCfg = Release|Any CPU
+		{64AE28C6-31B1-4206-9401-840ABE9557F4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{6585E8E2-E746-4467-9621-C12E55B90DBD} = {8A938267-9A86-418D-89B1-48DC5E470F61}
+		{64AE28C6-31B1-4206-9401-840ABE9557F4} = {8A938267-9A86-418D-89B1-48DC5E470F61}
 	EndGlobalSection
 EndGlobal

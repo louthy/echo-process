@@ -1,4 +1,4 @@
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.3\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props" Condition="Exists('..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.3\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" />
   <Import Project="..\packages\Microsoft.Net.Compilers.2.0.0-rc4\build\Microsoft.Net.Compilers.props" Condition="Exists('..\packages\Microsoft.Net.Compilers.2.0.0-rc4\build\Microsoft.Net.Compilers.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
@@ -116,11 +116,11 @@
     <Compile Include="Startup.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Echo.Process.Owin\Echo.Process.Owin.csproj">
+    <ProjectReference Include="..\..\Echo.Process.Owin\Echo.Process.Owin.csproj">
       <Project>{37576ee2-954e-4718-8c26-c298fcfc9b3c}</Project>
       <Name>Echo.Process.Owin</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Echo.Process\Echo.Process.csproj">
+    <ProjectReference Include="..\..\Echo.Process\Echo.Process.csproj">
       <Project>{b0f37249-aa2a-45c8-a8ca-3ae94853da4e}</Project>
       <Name>Echo.Process</Name>
     </ProjectReference>
