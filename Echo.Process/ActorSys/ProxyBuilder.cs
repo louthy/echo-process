@@ -62,7 +62,7 @@ namespace Echo
 
                 // Methods
 
-                var methods = interf.GetRuntimeMethods();
+                var methods = MethodsOf(interf);
                 foreach (var method in methods)
                 {
                     CreateMethod(method, typeBuilder, pidField);
@@ -76,6 +76,12 @@ namespace Echo
 
             return res;
         }
+
+        static IEnumerable<MethodInfo> MethodsOf(Type type) =>
+            type.GetTypeInfo().DeclaredMethods.Append(
+                from interf in type.GetTypeInfo().ImplementedInterfaces
+                from method in MethodsOf(interf)
+                select method);
 
         static Func<object> CreateDynamicConstructor(TypeBuilder typeBuilder)
         {

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard1.6;net451</TargetFrameworks>
-    <PackageVersion>2.0.6-alpha</PackageVersion>
+    <PackageVersion>2.0.7-alpha</PackageVersion>
     <PackageId>Echo.Process.Redis</PackageId>
     <Title>echo-process Redis Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -31,8 +31,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="StackExchange.Redis" Version="1.2.1" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.28-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.28-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.38-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.38-beta" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

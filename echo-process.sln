@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echo.ProcessJS", "Echo.Proc
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scratchpad", "Tests\Scratchpad\Scratchpad.csproj", "{64AE28C6-31B1-4206-9401-840ABE9557F4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{DF245383-B956-40B3-B11E-9E40ED3FC015}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -104,7 +106,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{6585E8E2-E746-4467-9621-C12E55B90DBD} = {8A938267-9A86-418D-89B1-48DC5E470F61}
+		{6585E8E2-E746-4467-9621-C12E55B90DBD} = {DF245383-B956-40B3-B11E-9E40ED3FC015}
 		{64AE28C6-31B1-4206-9401-840ABE9557F4} = {8A938267-9A86-418D-89B1-48DC5E470F61}
 	EndGlobalSection
 EndGlobal
