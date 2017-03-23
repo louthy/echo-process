@@ -169,19 +169,28 @@ namespace Echo
                     {
                         Ping.Dispose();
                     }
-                    catch { }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
                     try
                     {
                         startupSubscription?.Dispose();
                         startupSubscription = null;
                     }
-                    catch { }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
                     try
                     {
                         var item = ri;
                         ri.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
                     }
-                    catch { }
+                    catch(Exception e)
+                    {
+                        logErr(e);
+                    }
                     cluster.IfSome(c => c?.Dispose());
                 }
             }
@@ -513,10 +522,10 @@ namespace Echo
 
         public Option<ActorItem> GetJsItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey("js"))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey("js"))
             {
-                return Some(children.Value["js"]);
+                return Some(children["js"]);
             }
             else
             {
@@ -526,14 +535,14 @@ namespace Echo
 
         public Option<ActorItem> GetAskItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
-                var sys = children.Value[ActorSystemConfig.Default.SystemProcessName.Value];
+                var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
                 children = sys.Actor.Children;
-                if (children.Value.ContainsKey(ActorSystemConfig.Default.AskProcessName.Value))
+                if (children.ContainsKey(ActorSystemConfig.Default.AskProcessName.Value))
                 {
-                    return Some(children.Value[ActorSystemConfig.Default.AskProcessName.Value]);
+                    return Some(children[ActorSystemConfig.Default.AskProcessName.Value]);
                 }
                 else
                 {
@@ -548,14 +557,14 @@ namespace Echo
 
         public Option<ActorItem> GetInboxShutdownItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
-                var sys = children.Value[ActorSystemConfig.Default.SystemProcessName.Value];
+                var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
                 children = sys.Actor.Children;
-                if (children.Value.ContainsKey(ActorSystemConfig.Default.InboxShutdownProcessName.Value))
+                if (children.ContainsKey(ActorSystemConfig.Default.InboxShutdownProcessName.Value))
                 {
-                    return Some(children.Value[ActorSystemConfig.Default.InboxShutdownProcessName.Value]);
+                    return Some(children[ActorSystemConfig.Default.InboxShutdownProcessName.Value]);
                 }
                 else
                 {

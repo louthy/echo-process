@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net461;netstandard1.6</TargetFrameworks>
-    <PackageVersion>2.0.7-alpha</PackageVersion>
+    <PackageVersion>2.0.8-alpha</PackageVersion>
     <PackageId>Echo.ProcessJS</PackageId>
     <Title>echo-process Javascript Client</Title>
     <Authors>Paul Louth</Authors>

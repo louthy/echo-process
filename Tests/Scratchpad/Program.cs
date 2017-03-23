@@ -19,15 +19,21 @@ namespace Scratchpad
         {
             ProcessConfig.initialise();
 
-            ProxyTest();
+            var pid = ProxyTest();
 
+            Console.ReadKey();
+            Console.WriteLine("done.  next to kill process... press a key");
+            Console.ReadKey();
+
+            kill(pid);
+
+            Console.WriteLine("process is killed.  next to shutdown... press a key");
             Console.ReadKey();
 
             shutdownAll();
 
-            Console.WriteLine("end, press key.");
+            Console.WriteLine("done.  any key to quit.");
             Console.ReadKey();
-
         }
 
         public class MyState : IMyState
@@ -62,15 +68,19 @@ namespace Scratchpad
             }
         }
 
-        private static void ProxyTest()
+        private static ProcessId ProxyTest()
         {
-            IMyState state = spawn<IMyState>("mystate", () => new MyState());
+            ProcessId pid = spawn<MyState>("mystate");
+
+            var state = proxy<IMyState>(pid);
 
             state.Add(5);
             state.Add(3);
             state.Show();
             state.Remove(5);
             state.Show();
+
+            return pid;
         }
     }
 }
