@@ -1,10 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration">
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net451</TargetFramework>
-    <PackageVersion>2.0.8-alpha</PackageVersion>
+    <PackageVersion>2.0.9-alpha</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>
