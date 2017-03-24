@@ -45,26 +45,26 @@ namespace Echo
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO
-                ? Inbox.TellSystem(message)
-                : ProcessOp.IO(() => Inbox.TellSystem(message));
+                ? ProcessOp.IO(() => Inbox.TellSystem(message))
+                : Inbox.TellSystem(message);
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
             transactionalIO
-                ? Inbox.TellUserControl(message)
-                : ProcessOp.IO(() => Inbox.TellUserControl(message));
+                ? ProcessOp.IO(() => Inbox.TellUserControl(message))
+                : Inbox.TellUserControl(message);
 
         public Unit Ask(object message, ProcessId sender) =>
             Inbox.Ask(message, sender);
 
         public Unit Kill() =>
             transactionalIO
-                ? ShutdownProcess(false)
-                : ProcessOp.IO(() => ShutdownProcess(false));
+                ? ProcessOp.IO(() => ShutdownProcess(false))
+                : ShutdownProcess(false);
 
         public Unit Shutdown() =>
             transactionalIO
-                ? ShutdownProcess(true)
-                : ProcessOp.IO(() => ShutdownProcess(true));
+                ? ProcessOp.IO(() => ShutdownProcess(true))
+                : ShutdownProcess(true);
 
         Unit ShutdownProcess(bool maintainState) =>
             ActorContext.System(Actor.Id).WithContext(
@@ -86,31 +86,31 @@ namespace Echo
 
         public Unit Publish(object message) =>
             transactionalIO
-                ? Actor.Publish(message)
-                : ProcessOp.IO(() => Actor.Publish(message));
+                ? ProcessOp.IO(() => Actor.Publish(message))
+                : Actor.Publish(message);
 
         public int GetInboxCount() =>
             Inbox.Count;
 
         public Unit Watch(ProcessId pid) =>
             transactionalIO
-                ? Actor.AddWatcher(pid)
-                : ProcessOp.IO(() => Actor.AddWatcher(pid));
+                ? ProcessOp.IO(() => Actor.AddWatcher(pid))
+                : Actor.AddWatcher(pid);
 
         public Unit UnWatch(ProcessId pid) =>
             transactionalIO
-                ? Actor.RemoveWatcher(pid)
-                : ProcessOp.IO(() => Actor.RemoveWatcher(pid));
+                ? ProcessOp.IO(() => Actor.RemoveWatcher(pid))
+                : Actor.RemoveWatcher(pid);
 
         public Unit DispatchWatch(ProcessId watching) =>
             transactionalIO
-                ? Actor.DispatchWatch(watching)
-                : ProcessOp.IO(() => Actor.DispatchWatch(watching));
+                ? ProcessOp.IO(() => Actor.DispatchWatch(watching))
+                : Actor.DispatchWatch(watching);
 
         public Unit DispatchUnWatch(ProcessId watching) =>
             transactionalIO
-                ? Actor.DispatchUnWatch(watching)
-                : ProcessOp.IO(() => Actor.DispatchUnWatch(watching));
+                ? ProcessOp.IO(() => Actor.DispatchUnWatch(watching))
+                : Actor.DispatchUnWatch(watching);
 
         public bool IsLocal => 
             true;
