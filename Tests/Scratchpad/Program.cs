@@ -17,6 +17,14 @@ namespace Scratchpad
     {
         static void Main(string[] args)
         {
+            BlockingQueueTests.Run();
+            return;
+
+            ProxyTesting();
+        }
+
+        private static void ProxyTesting()
+        {
             ProcessConfig.initialise();
 
             var pid = ProxyTest();
