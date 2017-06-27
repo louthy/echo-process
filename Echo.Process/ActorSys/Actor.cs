@@ -3,7 +3,6 @@ using System.Threading;
 using System.Reflection;
 using static LanguageExt.Prelude;
 using static Echo.Process;
-using LanguageExt.UnitsOfMeasure;
 using System.Reactive.Subjects;
 using Newtonsoft.Json;
 using System.Collections.Generic;
@@ -522,6 +521,8 @@ namespace Echo
 
         public InboxDirective ProcessAsk(ActorRequest request)
         {
+            Console.WriteLine(request);
+
             var savedMsg = ActorContext.Request.CurrentMsg;
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedReq = ActorContext.Request.CurrentRequest;

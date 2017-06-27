@@ -1,0 +1,63 @@
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+
+    <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
+        <DefineConstants>TRACE;DEBUG</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Configuration">
+        <NoWarn>1701;1702;1705;IDE1006</NoWarn>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <TargetFrameworks>netcoreapp1.0</TargetFrameworks>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="Echo.Tests.nuget.props" />
+        <None Remove="Echo.Tests.project.lock.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="**\*.cs" />
+        <Compile Remove="obj\**" />
+        <Compile Remove="bin\**" />
+        <EmbeddedResource Include="**\*.resx" />
+        <EmbeddedResource Remove="bin\**" />
+        <EmbeddedResource Remove="obj\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
+        <PackageReference Include="System.ValueTuple" Version="4.3.0" />
+        <PackageReference Include="System.Reactive" Version="3.1.1" />
+        <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
+        <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
+        <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
+        <PackageReference Include="LanguageExt.Core" Version="2.0.69" />
+        <PackageReference Include="LanguageExt.Parsec" Version="2.0.69" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.0.0-preview-20170106-08" />
+        <PackageReference Include="xunit" Version="2.2.0" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.2.0" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net451'">
+        <PackageReference Include="WindowsBase" Version="4.6.1055.0" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.6'">
+        <PackageReference Include="System.Collections" Version="4.3.0" />
+        <PackageReference Include="System.Collections.Concurrent" Version="4.3.0" />
+        <PackageReference Include="System.Linq.Parallel" Version="4.3.0" />
+        <PackageReference Include="System.Linq.Queryable" Version="4.3.0" />
+        <PackageReference Include="System.Threading" Version="4.3.0" />
+        <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
+    </ItemGroup>
+    <ItemGroup>
+      <Service Include="{82a7f48d-3b50-4b1e-b82e-3ada8210c358}" />
+    </ItemGroup>
+
+</Project>

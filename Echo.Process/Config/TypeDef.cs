@@ -78,7 +78,7 @@ namespace Echo.Config
                           let ps = m.GetParameters().Map(p => new FieldSpec(p.Name, () => assembly.Get(p.ParameterType))).ToArray()
                           select FuncSpec.Attrs(MakeName(m.Name), () => assembly.Get(m.ReturnType), locals => m.Invoke(null, locals.Values.ToArray()), ps);
 
-            FuncSpecs = toArray(mconcat<MSeq<FuncSpec>, IEnumerable<FuncSpec>>(props, fields, methods));
+            FuncSpecs = toArray(mconcat<MEnumerable<FuncSpec>, IEnumerable<FuncSpec>>(props, fields, methods));
 
 
             ValueParser = BuildObjectParser(FuncSpecs).Memo();
@@ -383,7 +383,7 @@ namespace Echo.Config
                 (ProcessSystemConfigParser p) =>
                     p.brackets(
                         from xs in p.commaSep(p.expr(None, t()))
-                        select MakeTypedLst(xs.Map(x => x.Value), t().MapsTo))
+                        select MakeTypedLst(xs.Map(x => x.Value).Freeze(), t().MapsTo))
                     .label("array"),
                     LanguageExt.Map.create(
                         Types.OpT("+", () => maps[t()], (lhs, rhs) => (Lst<object>)lhs + (Lst<object>)lhs),

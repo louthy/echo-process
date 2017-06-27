@@ -24,7 +24,7 @@ namespace Echo
             new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All,
-                TypeNameAssemblyFormat = FormatterAssemblyStyle.Simple,
+                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
                 MissingMemberHandling = MissingMemberHandling.Ignore
             };
 

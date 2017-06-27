@@ -29,6 +29,9 @@ namespace Echo
 
         public ActorRequest SetSystem(SystemName sys) =>
             new ActorRequest(Message, To.SetSystem(sys), ReplyTo.SetSystem(sys), RequestId);
+
+        public override string ToString() =>
+            $"ActorRequest from {ReplyTo} to {To}: {Message}";
     }
 
     internal class ActorResponse : UserControlMessage
@@ -56,5 +59,8 @@ namespace Echo
 
         public ActorResponse SetSystem(SystemName sys) =>
             new ActorResponse(Message, ReplyTo.SetSystem(sys), ReplyFrom.SetSystem(sys), RequestId, ReplyType, IsFaulted);
+
+        public override string ToString() =>
+            $"ActorResponse to {ReplyTo} from {ReplyFrom}: {Message}";
     }
 }

@@ -1,15 +1,11 @@
-﻿using LanguageExt;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Echo.ActorSys
 {
-    internal class BlockingQueue<T> : IDisposable
+    public class BlockingQueue<T> : IDisposable
     {
         readonly EventWaitHandle wait = new AutoResetEvent(true);
         readonly object sync = new object();
@@ -19,7 +15,7 @@ namespace Echo.ActorSys
         volatile int bufferTail = 0;
         volatile T[] buffer;
         volatile int bufferSize;
-        const int InitialBufferSize = 64;
+        const int InitialBufferSize = 16;
 
         public readonly int Capacity;
 
@@ -40,7 +36,7 @@ namespace Echo.ActorSys
                 var s = state;
                 try
                 {
-                    Receive(msg => handler((S)s, msg));
+                    Receive(msg => handler(s, msg));
                 }
                 catch (Exception e)
                 {
@@ -80,13 +76,20 @@ namespace Echo.ActorSys
                         {
                             directive = handler(item);
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
                             Process.logErr(e);
                         }
 
                         if (directive == InboxDirective.Pause)
                         {
+                            lock (sync)
+                            {
+                                buffer[bufferTail] = default(T);
+                                bufferTail++;
+                                if (bufferTail >= bufferSize) bufferTail = 0;
+                            }
+
                             Pause();
                         }
                         else if (directive == InboxDirective.Shutdown)
@@ -127,16 +130,16 @@ namespace Echo.ActorSys
 
         public void Post(T value)
         {
-            var count = Count;
-            if(count >= Capacity) throw new QueueFullException();
+            lock (sync)
+            {
+                var count = Count;
+                if (count >= Capacity) throw new QueueFullException();
 
-            if (count < bufferSize)
-            {
-                PostToQueue(value);
-            }
-            else
-            {
-                lock (sync)
+                if (count < bufferSize)
+                {
+                    PostToQueue(value);
+                }
+                else
                 {
                     if (Count < bufferSize)
                     {
@@ -164,8 +167,6 @@ namespace Echo.ActorSys
                     // chunk of empty space to write into.
                     bufferTail = endBlockPos;
                     bufferSize = newBufferSize;
-
-                    Console.WriteLine($"Buffer doubled from {old.Length} to {newBufferSize}. Head: {bufferHead} Old tail: {oldTail} New tail: {bufferTail}");
 
                     // Recall this Post function to add the message
                     PostToQueue(value);

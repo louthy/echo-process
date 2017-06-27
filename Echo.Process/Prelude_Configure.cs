@@ -14,14 +14,15 @@ namespace Echo
 
         /// <summary>
         /// Process system configuration initialisation
-        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
-        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
-        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() by 
-        /// ProcessConfig.initialiseWeb(...)
+        /// This will look for `cluster.conf` and `process.conf` files in the web application folder, you should call this
+        /// function from within `Application_BeginRequest` of `Global.asax` or in the `Configuration` function of an OWIN 
+        /// `Startup` type.  
         /// </summary>
-        /// <param name="hostName">
-        /// <para>Web-site host-name: i.e. www.example.com - you would usually call this when you 
-        /// have your first Request object:  HttpContext.Request.Url.Host</para>
+        /// <param name="nodeName">
+        /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
+        /// have your first Request object:  `HttpContext.Request.Url.Host`.  Could also be the site-
+        /// name: `System.Web.Hosting.HostingEnvironment.SiteName`.  Anything that will identify this
+        /// node, and allow for multiple staging environments to be configured in the `cluster.conf`</para>
         /// <para>
         ///     i.e.
         /// </para>
@@ -49,28 +50,42 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string hostName, IEnumerable<FuncSpec> strategyFuncs = null) =>
-            initialiseWeb(hostName, () => { }, strategyFuncs);
+        public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(nodeName, () => { }, strategyFuncs);
 
-        /// <summary>
-        /// Process system configuration initialisation
-        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
-        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
-        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() followed by 
-        /// ProcessConfig.initialiseWeb(...)
-        /// 
-        /// NOTE: If a cluster is specified in the cluster.conf and its 'node-name' matches the host name of the web-
-        /// application (i.e. www.example.com), then those settings will be used to connect to the cluster.  
-        /// This allows for different staging environments to be setup.
-        /// </summary>
+        /// <param name="nodeName">
+        /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
+        /// have your first Request object:  `HttpContext.Request.Url.Host`.  Could also be the site-
+        /// name: `System.Web.Hosting.HostingEnvironment.SiteName`.  Anything that will identify this
+        /// node, and allow for multiple staging environments to be configured in the `cluster.conf`</para>
+        /// <para>
+        ///     i.e.
+        /// </para>
+        /// <para>
+        ///     object sync = new object();
+        ///     bool started = false;
+        ///     
+        ///             static bool started = false;
+        ///             static object sync = new object();
+        ///             
+        ///             protected void Application_BeginRequest(Object sender, EventArgs e)
+        ///             {
+        ///                 if (!started)
+        ///                 {
+        ///                     lock (sync)
+        ///                     {
+        ///                         if (!started)
+        ///                         {
+        ///                             ProcessConfig.initialiseWeb(HttpContext.Request.Url.Host);
+        ///                             started = true;
+        ///                         }
+        ///                     }
+        ///                 }
+        ///             }
+        /// </para>
+        /// </param>
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
-        /// <param name="hostName">
-        /// <para>Web-site host-name: i.e. www.example.com - you would usually call this when you 
-        /// have your first Request object:  HttpContext.Request.Url.Host</para>
-        /// <para>
-        ///     i.e.
-        /// </para>
         /// <para>
         ///     object sync = new object();
         ///     bool started = false;
@@ -95,11 +110,11 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string hostName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(hostName, setup, strategyFuncs);
+                return initialiseFileSystem(nodeName, setup, strategyFuncs);
             }
         }
 

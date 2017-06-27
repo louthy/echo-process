@@ -729,17 +729,26 @@ by name then use Process.deregisterByName(name).");
             {
                 ActorContext.SessionId = sessionId;
 
-                ActorContext.SetContext(new ActorRequestContext(
-                    this,
-                    self,
-                    sender,
-                    parent,
-                    msg,
-                    request,
-                    ProcessFlags.Default,
-                    Settings.TransactionalIO ? ProcessOpTransaction.Start(self.Actor.Id) : null)
-                );
+                ActorContext.SetContext(
+                    new ActorRequestContext(
+                        this,
+                        self,
+                        sender,
+                        parent,
+                        msg,
+                        request,
+                        ProcessFlags.Default,
+                        Settings.TransactionalIO 
+                            ? ProcessOpTransaction.Start(self.Actor.Id) 
+                            : null));
+
                 return f();
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e);
+                logErr(e);
+                throw;
             }
             finally
             {

@@ -15,6 +15,8 @@ namespace Echo
         public override Type MessageType => Type.UserControl;
         public readonly static UserControlMessage GetChildren = new GetChildrenMessage();
         public readonly static UserControlMessage Null = new UserControlNullMessage();
+
+        public override string ToString() => $"{MessageType} {Tag}";
     }
 
     class UserControlNullMessage : UserControlMessage
@@ -46,6 +48,8 @@ namespace Echo
 
         public UserMessage SetSystem(SystemName sys) =>
             new UserMessage(Content, Sender.SetSystem(sys), ReplyTo.SetSystem(sys));
+
+        public override string ToString() => $"UserMessage: {Content}";
     }
 
     public class TerminatedMessage : UserControlMessage

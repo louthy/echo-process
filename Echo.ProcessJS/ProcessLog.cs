@@ -6,8 +6,8 @@ using static LanguageExt.Prelude;
 using Echo;
 using static Echo.Process;
 
-namespace LanguageExt.ProcessJS
-{
+namespace Echo.ProcessJS
+{ 
     /// <summary>
     /// Process-log.  Provides a live view of the items being logged by the process
     /// system.  Can also be used directly by calling Tell to do user logging.

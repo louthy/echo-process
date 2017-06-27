@@ -42,10 +42,10 @@ namespace Echo.Config
         public Parser<T> parens<T>(Parser<T> p) =>
             TokenParser.Parens(p);
 
-        public Parser<Lst<T>> commaSep<T>(Parser<T> p) =>
+        public Parser<Seq<T>> commaSep<T>(Parser<T> p) =>
             TokenParser.CommaSep(p);
 
-        public Parser<Lst<T>> commaSep1<T>(Parser<T> p) =>
+        public Parser<Seq<T>> commaSep1<T>(Parser<T> p) =>
             TokenParser.CommaSep1(p);
 
         public readonly Parser<string> identifier;
@@ -61,8 +61,8 @@ namespace Echo.Config
         public readonly Parser<ProcessName> processName;
         public readonly Parser<ValueToken> match;
         public readonly Parser<ValueToken> redirect;
-        public readonly Func<string, FieldSpec[], Parser<Lst<NamedValueToken>>> arguments;
-        public readonly Func<string, FieldSpec[], Parser<Lst<NamedValueToken>>> argumentMany;
+        public readonly Func<string, FieldSpec[], Parser<Seq<NamedValueToken>>> arguments;
+        public readonly Func<string, FieldSpec[], Parser<Seq<NamedValueToken>>> argumentMany;
         public readonly Func<string, FieldSpec, Parser<NamedValueToken>> argument;
         public readonly Func<string, FieldSpec, Parser<NamedValueToken>> namedArgument;
         public readonly Parser<NamedValueToken> valueDef;
@@ -402,17 +402,17 @@ namespace Echo.Config
                     from a in commaSep1(choice(spec.Map(arg => namedArgument(settingName, arg))))
                     from r in a.Count == spec.Length
                         ? result(a)
-                        : failure<Lst<NamedValueToken>>("Invalid arguments for " + settingName)
+                        : failure<Seq<NamedValueToken>>("Invalid arguments for " + settingName)
                     select r;
 
             // Parses the arguments for a setting
             arguments =
                 (settingName, spec) =>
                     spec.Length == 0
-                        ? failure<Lst<NamedValueToken>>("Invalid arguments spec, has zero arguments")
+                        ? failure<Seq<NamedValueToken>>("Invalid arguments spec, has zero arguments")
                         : spec.Length == 1
                             ? from a in argument(settingName, spec.Head())
-                              select List(a)
+                              select SeqOne(a)
                             : argumentMany(settingName, spec);
 
             // Declare the global type
@@ -548,8 +548,8 @@ namespace Echo.Config
         {
             TypeDef strategy = null;
 
-            Func<Lst<NamedValueToken>, Arr<State<StrategyContext, Unit>>> compose = 
-                items => items.Map(x => (State<StrategyContext, Unit>)x.Value.Value).ToArray();
+            Func<Seq<NamedValueToken>, Seq<State<StrategyContext, Unit>>> compose = 
+                items => items.Map(x => (State<StrategyContext, Unit>)x.Value.Value);
 
             var oneForOne = FuncSpec.Property("one-for-one", () => strategy, () => strategy, value => Strategy.OneForOne((State<StrategyContext, Unit>)value));
             var allForOne = FuncSpec.Property("all-for-one", () => strategy, () => strategy, value => Strategy.AllForOne((State<StrategyContext, Unit>)value));
@@ -590,7 +590,7 @@ namespace Echo.Config
             strategy = new TypeDef(
                 "strategy",
                 typeof(State<StrategyContext,Unit>),
-                (_,s) => Strategy.Compose(compose((Lst<NamedValueToken>)s).ToArray()),
+                (_,s) => Strategy.Compose(compose((Seq<NamedValueToken>)s).ToArray()),
                 20,
                 new[] { oneForOne, allForOne, always, pause, retries1, retries2, backoff1, backoff2, match, redirect }.Append(strategyFuncs).ToArray()
             );

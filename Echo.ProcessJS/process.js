@@ -223,7 +223,6 @@ var Process = (function () {
                 return null;
             }
             else {
-                //failwith("'ask' is only available for intra-JS process calls.");
                 messageId++;
                 socket.send(Ask(connectionId, messageId, pid, ctx.sender, msg));
 

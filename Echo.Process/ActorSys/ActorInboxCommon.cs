@@ -8,6 +8,8 @@ using static LanguageExt.Prelude;
 using static Echo.Process;
 using System.Reflection;
 using LanguageExt;
+using System.Collections.Concurrent;
+using System.Reactive.Linq;
 
 namespace Echo
 {
