@@ -28,7 +28,11 @@ namespace Scratchpad
                 Console.WriteLine("*** All Posted ***");
                 Console.ReadKey();
 
-                if (count != max)
+                if (count == max)
+                {
+                    Console.WriteLine($"Should be {max} is actually {count} (errors: {errors.Count})");
+                }
+                else
                 {
                     Console.WriteLine($"Should be {max} is actually {count} (errors: {errors.Count})");
                 }
@@ -49,6 +53,7 @@ namespace Scratchpad
         volatile int bufferTail = 0;
         volatile T[] buffer;
         volatile int bufferSize;
+        volatile bool fullBuffer;
         const int InitialBufferSize = 16;
 
         public readonly int Capacity;
@@ -104,6 +109,7 @@ namespace Scratchpad
                         lock (sync)
                         {
                             item = buffer[bufferTail];
+                            Console.WriteLine(item);
                         }
 
                         try
@@ -139,7 +145,7 @@ namespace Scratchpad
                                 {
                                     buffer[bufferTail] = default(T);
                                     bufferTail++;
-                                    Console.WriteLine($"R: HEAD {bufferHead} TAIL {bufferTail} SIZE {bufferSize}");
+                                    //Console.WriteLine($"R: HEAD {bufferHead} TAIL {bufferTail} SIZE {bufferSize}");
                                     if (bufferTail >= bufferSize) bufferTail = 0;
                                 }
                             }
@@ -159,9 +165,14 @@ namespace Scratchpad
             }
         }
 
-        public int Count => bufferHead >= bufferTail
-            ? bufferHead - bufferTail
-            : bufferSize - bufferTail + bufferHead;
+        public int Count =>
+            bufferHead > bufferTail
+                ? bufferHead - bufferTail
+                : bufferHead < bufferTail
+                    ? bufferSize - bufferTail + bufferHead
+                    : fullBuffer
+                        ? bufferSize
+                        : 0;
 
         public void Post(T value)
         {
@@ -217,11 +228,11 @@ namespace Scratchpad
             {
                 bufferHead = 0;
             }
+            fullBuffer = bufferHead == bufferTail;
             if (!paused)
             {
                 wait.Set();
             }
-            Console.WriteLine($"P: HEAD {bufferHead} TAIL {bufferTail} SIZE {bufferSize}");
         }
 
         public void Cancel()

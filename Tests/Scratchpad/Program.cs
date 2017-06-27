@@ -18,6 +18,7 @@ namespace Scratchpad
         static void Main(string[] args)
         {
             BlockingQueueTests.Run();
+            PausableBlockingQueueTests.Run();
             return;
 
             ProxyTesting();

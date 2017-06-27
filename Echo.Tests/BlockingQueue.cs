@@ -31,7 +31,7 @@ namespace Echo.Tests
             {
                 Range(0, max).Iter(i => queue.Post(i));
 
-                Thread.Sleep(5000);
+                Thread.Sleep(1000);
 
                 Assert.True(count == max, $"Should be {max} is actually {count} (errors: {errors.Count})");
             }

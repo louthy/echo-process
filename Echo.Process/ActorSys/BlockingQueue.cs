@@ -15,6 +15,7 @@ namespace Echo.ActorSys
         volatile int bufferTail = 0;
         volatile T[] buffer;
         volatile int bufferSize;
+        volatile bool fullBuffer;
         const int InitialBufferSize = 16;
 
         public readonly int Capacity;
@@ -124,9 +125,14 @@ namespace Echo.ActorSys
             }
         }
 
-        public int Count => bufferHead >= bufferTail
-            ? bufferHead - bufferTail
-            : bufferSize - bufferTail + bufferHead;
+        public int Count =>
+            bufferHead > bufferTail
+                ? bufferHead - bufferTail
+                : bufferHead < bufferTail
+                    ? bufferSize - bufferTail + bufferHead
+                    : fullBuffer
+                        ? bufferSize
+                        : 0;
 
         public void Post(T value)
         {
@@ -149,29 +155,34 @@ namespace Echo.ActorSys
                         return;
                     }
 
-                    // Create a new buffer that's twice the size of our current one
-                    var old = buffer;
-                    var oldTail = bufferTail;
-                    var newBufferSize = bufferSize <<= 1;
-                    buffer = new T[newBufferSize];
-
-                    // Copy the old buffer from the current head position to the end
-                    // to the end of the new buffer
-                    var endBlockSize = old.Length - bufferHead;
-                    var endBlockPos = newBufferSize - endBlockSize;
-                    Array.Copy(old, bufferHead, buffer, endBlockPos, endBlockSize);
-
-                    // Set the tail (the last message) to the start of that end block
-                    // in the new buffer.  This leaves the head point (where the next 
-                    // message will be put) where it is, and therefore we have a new
-                    // chunk of empty space to write into.
-                    bufferTail = endBlockPos;
-                    bufferSize = newBufferSize;
+                    DoubleBufferSize();
 
                     // Recall this Post function to add the message
                     PostToQueue(value);
                 }
             }
+        }
+
+        private void DoubleBufferSize()
+        {
+            // Create a new buffer that's twice the size of our current one
+            var old = buffer;
+            var oldTail = bufferTail;
+            var newBufferSize = bufferSize <<= 1;
+            buffer = new T[newBufferSize];
+
+            // Copy the old buffer from the current head position to the end
+            // to the end of the new buffer
+            var endBlockSize = old.Length - bufferHead;
+            var endBlockPos = newBufferSize - endBlockSize;
+            System.Array.Copy(old, bufferHead, buffer, endBlockPos, endBlockSize);
+
+            // Set the tail (the last message) to the start of that end block
+            // in the new buffer.  This leaves the head point (where the next 
+            // message will be put) where it is, and therefore we have a new
+            // chunk of empty space to write into.
+            bufferTail = endBlockPos;
+            bufferSize = newBufferSize;
         }
 
         private void PostToQueue(T value)
@@ -182,6 +193,7 @@ namespace Echo.ActorSys
             {
                 bufferHead = 0;
             }
+            fullBuffer = bufferHead == bufferTail;
             if (!paused)
             {
                 wait.Set();
