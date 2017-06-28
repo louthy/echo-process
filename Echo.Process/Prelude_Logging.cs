@@ -10,10 +10,8 @@ namespace Echo
         /// <summary>
         /// Log info - Internal 
         /// </summary>
-        internal static void logInfo(object message)
-        {
+        internal static void logInfo(object message) =>
             Debug.WriteLine(new ProcessLogItem(ProcessLogItemType.Info, (message ?? "").ToString()));
-        }
 #else
         /// <summary>
         /// Log info - Internal 
@@ -32,7 +30,7 @@ namespace Echo
         /// <summary>
         /// Log warning - Internal 
         /// </summary>
-        internal static void logWarn(string message) =>
+        public static void logWarn(string message) =>
             IfNotNull(message, _ => log.OnNext(new ProcessLogItem(ProcessLogItemType.Warning, (message ?? "").ToString())));
 
         /// <summary>
@@ -56,25 +54,25 @@ namespace Echo
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        internal static void logUserErr(string message) =>
+        public static void logUserErr(string message) =>
             IfNotNull(message, _ => log.OnNext(new ProcessLogItem(ProcessLogItemType.UserError, (message ?? "").ToString())));
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        internal static void logErr(Exception ex) =>
+        public static void logErr(Exception ex) =>
             IfNotNull(ex, _ => log.OnNext(new ProcessLogItem(ProcessLogItemType.Error, ex)));
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        internal static void logErr(string message, Exception ex) =>
+        public static void logErr(string message, Exception ex) =>
             IfNotNull(message, _ => IfNotNull(ex, __ => log.OnNext(new ProcessLogItem(ProcessLogItemType.Error, (message ?? "").ToString(), ex))));
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        internal static void logErr(string message) =>
+        public static void logErr(string message) =>
             IfNotNull(message, _ => log.OnNext(new ProcessLogItem(ProcessLogItemType.Error, (message ?? "").ToString())));
 
         /// <summary>

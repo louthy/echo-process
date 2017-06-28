@@ -60,6 +60,9 @@ namespace Echo.Client
             Tell = tell;
         }
 
+        public DateTime LastAccess => 
+            lastAccess;
+
         public ClientConnection Touch()
         {
             lastAccess = DateTime.UtcNow;

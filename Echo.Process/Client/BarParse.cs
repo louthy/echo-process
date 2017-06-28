@@ -75,6 +75,15 @@ namespace Echo.Client
         Either<string, ProcessId> FixupPID(string pidStr) =>
             String.IsNullOrWhiteSpace(pidStr) || pidStr == "/no-sender"
                 ? Right<string, ProcessId>(ProcessId.None)
-                : ProcessId.TryParse(pidStr).MapLeft(ex => ex.Message);
+                : ProcessId.TryParse(pidStr)
+                           .Map(FixupRoot)
+                           .MapLeft(ex => ex.Message);
+
+        static ProcessName rootName = new ProcessName("root");
+
+        static ProcessId FixupRoot(ProcessId pid) =>
+            pid.HeadName() == rootName
+                ? Process.Root().Append(pid.Skip(1))
+                : pid;
     }
 }

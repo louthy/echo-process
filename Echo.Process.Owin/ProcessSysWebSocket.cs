@@ -32,8 +32,7 @@ namespace Echo
             }
             catch(Exception e)
             {
-                // TODO: logErr(e);
-                Console.WriteLine(e.Message);
+                logErr(e);
             }
         }
 
@@ -79,11 +78,10 @@ namespace Echo
                                     await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"askr\",\"id\":\"{req.Id}\",\"mid\":\"{req.MessageId}\",\"fail\":\"Invalid route\"}}"), true);
                                 }
                             }
-                            catch
+                            catch(Exception e)
                             {
                                 await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"askr\",\"id\":\"{req.Id}\",\"mid\":\"{req.MessageId}\",\"fail\":\"Error\"}}"), true);
-                                // TODO:
-                                //logSysErr(e);
+                                logErr(e);
                             }
                             return unit;
                         }
@@ -114,12 +112,11 @@ namespace Echo
                             return unit;
 
                         default:
-                            // TODO:
-                            //logSysErr($"Unknown message type in switch: {msg?.GetType()?.FullName}");
+                            logErr($"Unknown message type in switch: {msg?.GetType()?.FullName}");
                             return unit;
                     }
                 },
-                Left: err => /*TODO: logUserErr(err)*/ unit);
+                Left: err => { logUserErr(err); return unit; });
 
         static ProcessId FixRootName(ProcessId pid) =>
             pid.Take(1).Name.Value == "root"

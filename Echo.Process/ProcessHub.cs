@@ -8,9 +8,21 @@ namespace Echo
 {
     public static class ProcessHub
     {
+        const int ConnectionCutOffMinutes = 5;
+
+        static bool running = true;
         static readonly object sync = new object();
         static Func<ProcessId, bool> routeValidator = _ => false;
         static Map<ClientConnectionId, ClientConnection> connections = Map<ClientConnectionId, ClientConnection>();
+
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        static ProcessHub()
+        {
+            // Runs every minute checking for orphaned connections
+            Monitor();
+        }
 
         /// <summary>
         /// Inject a function that validates incoming message destinations 
@@ -27,6 +39,40 @@ namespace Echo
         /// Active client connections 
         /// </summary>
         public static Map<ClientConnectionId, ClientConnection> Connections => connections;
+
+        /// <summary>
+        /// Monitor open connections that should be closed
+        /// </summary>
+        static void Monitor()
+        {
+            try
+            {
+                var conns = Connections;
+
+                foreach(var conn in conns)
+                {
+                    if((DateTime.UtcNow - conn.Value.LastAccess).TotalMinutes >= ConnectionCutOffMinutes)
+                    {
+                        try
+                        {
+                            CloseConnection(conn.Key);
+                        }
+                        catch (Exception e)
+                        {
+                            logErr(e);
+                        }
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                logErr(e);
+            }
+            finally
+            {
+                delay(Monitor, 60 * seconds);
+            }
+        }
 
         /// <summary>
         /// Register a connection by ID
