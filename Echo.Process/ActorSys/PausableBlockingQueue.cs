@@ -21,6 +21,7 @@ namespace Echo.ActorSys
 
         public PausableBlockingQueue(int boundedCapacity)
         {
+            boundedCapacity = boundedCapacity < 1 ? 100000 : boundedCapacity;
             tokenSource = new CancellationTokenSource();
             token = tokenSource.Token;
             items = new BlockingCollection<A>(boundedCapacity);

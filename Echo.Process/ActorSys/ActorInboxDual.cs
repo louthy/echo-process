@@ -50,7 +50,6 @@ namespace Echo
             userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
             sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
 
-
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
 

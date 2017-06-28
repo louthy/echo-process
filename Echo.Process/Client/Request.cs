@@ -38,14 +38,14 @@ namespace Echo.Client
                                                    from msgid  in parse.GetMessageId()
                                                    from to     in parse.GetProcessId()
                                                    from sender in parse.GetProcessId()
-                                                   from body   in parse.GetNext()
+                                                   from body   in parse.GetRemaining()
                                                    select TellReq.Create(connid, msgid, to, sender, body, activeConnections)
 
                                 : typ == "ask"   ? from connid in parse.GetConnectionId()
                                                    from msgid in parse.GetMessageId()
                                                    from to in parse.GetProcessId()
                                                    from sender in parse.GetProcessId()
-                                                   from body in parse.GetNext()
+                                                   from body in parse.GetRemaining()
                                                    select AskReq.Create(connid, msgid, to, sender, body, activeConnections)
 
                                 : typ == "conn"  ? Right<string, Req>(ConnectReq.Default)

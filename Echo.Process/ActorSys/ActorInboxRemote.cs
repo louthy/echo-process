@@ -21,18 +21,19 @@ namespace Echo
         public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             if (cluster.IsNone) throw new Exception("Remote inboxes not supported when there's no cluster");
-            //this.tokenSource = new CancellationTokenSource();
             this.actor = (Actor<S, T>)process;
             this.cluster = cluster.IfNoneUnsafe(() => null);
 
-            this.maxMailboxSize = maxMailboxSize;
+            this.maxMailboxSize = maxMailboxSize == -1
+                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
+                : maxMailboxSize;
+
             this.parent = parent;
 
             userNotify = new PausableBlockingQueue<string>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); return InboxDirective.Default; });
-            userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterSystemInboxKey(actor.Id), false); return InboxDirective.Default; });
 
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();

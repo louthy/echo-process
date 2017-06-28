@@ -10,7 +10,6 @@ namespace Echo
     {
         const int ConnectionCutOffMinutes = 5;
 
-        static bool running = true;
         static readonly object sync = new object();
         static Func<ProcessId, bool> routeValidator = _ => false;
         static Map<ClientConnectionId, ClientConnection> connections = Map<ClientConnectionId, ClientConnection>();

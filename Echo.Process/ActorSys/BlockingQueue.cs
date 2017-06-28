@@ -25,6 +25,7 @@ namespace Echo.ActorSys
 
         public BlockingQueue(int capacity = 100000)
         {
+            capacity = capacity < 1 ? 100000 : capacity;
             buffer = new T[InitialBufferSize];
             bufferSize = InitialBufferSize;
             Capacity = capacity;
