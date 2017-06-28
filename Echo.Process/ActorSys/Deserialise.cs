@@ -17,14 +17,14 @@ namespace Echo
     {
         static Map<string, MethodInfo> funcs = Map<string, MethodInfo>();
 
-        static MethodInfo Nothing() =>
+        static MethodInfo Ignore() =>
             null;
 
         static MethodInfo DeserialiseFunc(Type type)
         {
             var name = type.FullName;
             var result = funcs.Find(name);
-            if (result.IsSome) return result.IfNoneUnsafe(Nothing);
+            if (result.IsSome) return result.IfNoneUnsafe(Ignore);
 
             var func = typeof(JsonConvert).GetTypeInfo()
                                    .GetDeclaredMethods("DeserializeObject")

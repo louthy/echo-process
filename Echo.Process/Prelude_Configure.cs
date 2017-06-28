@@ -5,12 +5,53 @@ using Echo.Config;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
+#if !NETSTANDARD
+using System.Web;
+#endif
 
 namespace Echo
 {
     public static class ProcessConfig
     {
         static object sync = new object();
+
+#if !NETSTANDARD
+
+        /// <summary>
+        /// Process system configuration initialisation
+        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
+        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
+        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() by 
+        /// ProcessConfig.initialiseWeb(...)
+        /// </summary>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(() => { }, strategyFuncs);
+
+        /// <summary>
+        /// Process system configuration initialisation
+        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
+        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
+        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() followed by 
+        /// ProcessConfig.initialiseWeb(...)
+        /// 
+        /// NOTE: If a cluster is specified in the cluster.conf and its 'node-name' matches the host name of the web-
+        /// application (i.e. www.example.com), then those settings will be used to connect to the cluster.  
+        /// This allows for different staging environments to be setup.
+        /// </summary>
+        /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
+        /// happen once only.</param>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        {
+            lock (sync)
+            {
+                if (HttpContext.Current == null) throw new NotSupportedException("There must be a valid HttpContext.Current to call ProcessConfig.initialiseWeb()");
+                return initialiseFileSystem(hostName(HttpContext.Current), setup, strategyFuncs, AppDomain.CurrentDomain.BaseDirectory);
+            }
+        }
+#endif
+
 
         /// <summary>
         /// Process system configuration initialisation
@@ -110,11 +151,11 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(nodeName, setup, strategyFuncs);
+                return initialiseFileSystem(nodeName, setup, strategyFuncs, appPath);
             }
         }
 
@@ -186,11 +227,15 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                var appPath = "";
+#if !NETSTANDARD
+                appPath = appPath ?? AppDomain.CurrentDomain.BaseDirectory;
+#endif
+
+                appPath = appPath ?? "";
                 var clusterPath = Path.Combine(appPath, "cluster.conf");
                 var processPath = Path.Combine(appPath, "process.conf");
 
@@ -498,5 +543,13 @@ namespace Echo
 
         static T clusterSettingMissing<T>(string name) =>
             failwith<T>("Cluster setting missing: " + name);
+
+#if !NETSTANDARD
+        static string hostName(HttpContext context) =>
+            context.Request.Url.Host == "localhost"
+                ? System.Environment.MachineName
+                : context.Request.Url.Host;
+#endif
+
     }
 }

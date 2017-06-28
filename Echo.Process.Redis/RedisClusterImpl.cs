@@ -163,7 +163,7 @@ namespace Echo
                     }
                  })
                 .Where(x => x.IsSome)
-                .Select(x => x.IfNoneUnsafe(null));
+                .Select(x => x.IfNoneUnsafe(Ignore<Object>));
  
         public IObservable<T> SubscribeToChannel<T>(string channelName) =>
             GetSubject(channelName)
@@ -178,7 +178,9 @@ namespace Echo
                     }
                  })
                 .Where(x => x.IsSome)
-                .Select(x => x.IfNoneUnsafe(null));
+                .Select(x => x.IfNoneUnsafe(Ignore<T>));
+
+        T Ignore<T>() => default(T);
 
         public void UnsubscribeChannel(string channelName)
         {
@@ -256,7 +258,7 @@ namespace Echo
                                  catch { return OptionUnsafe<T>.None; }
                              })
                              .Where( x => x.IsSome)
-                             .Select( x => x.IfNoneUnsafe(null) )
+                             .Select( x => x.IfNoneUnsafe(Ignore<T>) )
                              .ToList());
             }
             else

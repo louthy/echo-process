@@ -2,11 +2,14 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(TargetFramework)' == 'netstandard1.6'">
+    <DefineConstants>NETSTANDARD</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>netstandard1.6;net451</TargetFrameworks>
+    <TargetFrameworks>net451;netstandard1.6</TargetFrameworks>
     <PackageVersion>2.0.11-alpha</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
@@ -40,9 +43,12 @@
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
     <PackageReference Include="LanguageExt.Parsec" Version="2.0.71" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="1.1.2" />
+     
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net451'">
-    <PackageReference Include="WindowsBase" Version="4.6.1055.0" />
+      <PackageReference Include="WindowsBase" Version="4.6.1055.0" />
+      <Reference Include="System.Web" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.6'">
     <PackageReference Include="System.Collections" Version="4.3.0" />

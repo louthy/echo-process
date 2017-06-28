@@ -3,6 +3,7 @@ using System.Web;
 using LanguageExt;
 using static LanguageExt.Prelude;
 using Echo;
+using static Echo.Process;
 using System.IO;
 
 namespace OwinWebTest
@@ -11,12 +12,31 @@ namespace OwinWebTest
     {
         static readonly Func<Unit> Startup = memo(() =>
         {
-            var hostName = HttpContext.Current.Request.Url.Host;
+            // Register redis persistence provider
+            RedisCluster.register();
 
-            File.WriteAllText("c:\\temp\\output.txt", hostName);
+            // Load the config for this web-site 
+            ProcessConfig.initialiseWeb();
 
-            ProcessConfig.initialiseWeb(hostName);
+            // Allow messages to all processes from the browser
             ProcessHub.RouteValidator = _ => true;
+
+            // Spawn a ticking clock
+            var clock = spawn<Unit>("clock", _ =>
+            {
+                publish(DateTime.Now.ToString());
+                tellSelf(_, 1 * second);
+            });
+
+            // Reply to anything received
+            spawn<string>("echo", msg => replyOrTellSender(new { tag = "rcv", value = msg }));
+
+            // Send hello to anything received
+            spawn<string>("hello", msg => reply("Hello, " + msg));
+
+            // Start the clock ticking
+            tell(clock, unit);
+
             return unit;
         });
 

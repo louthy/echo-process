@@ -14,21 +14,8 @@ namespace OwinWebTest
     {
         public void Configuration(IAppBuilder app)
         {
-            //ProcessConfig.initialiseWeb("root");
             ProcessOwin.initialise(app);
             ProcessHub.RouteValidator = _ => true;
-
-            var clock = spawn<Unit>("clock", _ =>
-            {
-                publish(DateTime.Now.ToString());
-                tellSelf(_, 1 * second);
-            });
-
-            spawn<string>("echo", msg => replyOrTellSender(new { tag = "rcv", value = msg }));
-
-            spawn<string>("hello", msg => reply("Hello, " + msg));
-
-            tell(clock, unit);
         }
     }
 }
