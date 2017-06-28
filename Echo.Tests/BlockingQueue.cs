@@ -23,7 +23,7 @@ namespace Echo.Tests
                    .Where(log => log.Type > ProcessLogItemType.Warning)
                    .Subscribe(log => errors = log.Cons(errors));
 
-            var queue = new BlockingQueue<int>();
+            var queue = new PausableBlockingQueue<int>(10000);
 
             const int max = 1000;
 

@@ -67,11 +67,7 @@ namespace Echo.ActorSys
 
                         T item = default(T);
                         var directive = default(InboxDirective);
-
-                        lock (sync)
-                        {
-                            item = buffer[bufferTail];
-                        }
+                        item = buffer[bufferTail];
 
                         try
                         {
@@ -88,6 +84,7 @@ namespace Echo.ActorSys
                             {
                                 buffer[bufferTail] = default(T);
                                 bufferTail++;
+                                fullBuffer = bufferHead == bufferTail;
                                 if (bufferTail >= bufferSize) bufferTail = 0;
                             }
 
@@ -106,6 +103,7 @@ namespace Echo.ActorSys
                                 {
                                     buffer[bufferTail] = default(T);
                                     bufferTail++;
+                                    fullBuffer = bufferHead == bufferTail;
                                     if (bufferTail >= bufferSize) bufferTail = 0;
                                 }
                             }

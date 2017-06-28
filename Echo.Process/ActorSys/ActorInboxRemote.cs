@@ -12,7 +12,7 @@ namespace Echo
     class ActorInboxRemote<S,T> : IActorInbox
     {
         ICluster cluster;
-        BlockingQueue<string> userNotify;
+        PausableBlockingQueue<string> userNotify;
         Actor<S, T> actor;
         ActorItem parent;
         int maxMailboxSize;
@@ -28,7 +28,7 @@ namespace Echo
             this.maxMailboxSize = maxMailboxSize;
             this.parent = parent;
 
-            userNotify = new BlockingQueue<string>(this.maxMailboxSize);
+            userNotify = new PausableBlockingQueue<string>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); return InboxDirective.Default; });

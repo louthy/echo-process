@@ -23,8 +23,8 @@ namespace Echo
     /// </summary>
     class ActorInboxDual<S, T> : IActorInbox, ILocalActorInbox
     {
-        BlockingQueue<UserControlMessage> userInbox;
-        BlockingQueue<SystemMessage> sysInbox;
+        PausableBlockingQueue<UserControlMessage> userInbox;
+        PausableBlockingQueue<SystemMessage> sysInbox;
 
         ICluster cluster;
         Actor<S, T> actor;
@@ -43,8 +43,8 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id) 
                 : maxMailboxSize;
 
-            userInbox = new BlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new BlockingQueue<SystemMessage>(this.maxMailboxSize);
+            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
+            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
@@ -261,7 +261,7 @@ namespace Echo
             cluster = null;
         }
 
-        public void CheckRemoteInbox(string key, ICluster cluster, ProcessId self, BlockingQueue<SystemMessage> sysInbox, BlockingQueue<UserControlMessage> userInbox, bool pausable)
+        public void CheckRemoteInbox(string key, ICluster cluster, ProcessId self, PausableBlockingQueue<SystemMessage> sysInbox, PausableBlockingQueue<UserControlMessage> userInbox, bool pausable)
         {
             try
             {

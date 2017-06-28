@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard1.6;net451</TargetFrameworks>
-    <PackageVersion>2.0.10-alpha</PackageVersion>
+    <PackageVersion>2.0.11-alpha</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
@@ -32,14 +32,14 @@
       <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="LanguageExt.Core" Version="2.0.71" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
     <PackageReference Include="System.ValueTuple" Version="4.3.0" />
     <PackageReference Include="System.Reactive" Version="3.1.1" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.69" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.69" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.71" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net451'">
     <PackageReference Include="WindowsBase" Version="4.6.1055.0" />

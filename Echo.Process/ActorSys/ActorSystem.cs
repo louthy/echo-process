@@ -746,7 +746,6 @@ by name then use Process.deregisterByName(name).");
             }
             catch(Exception e)
             {
-                Console.WriteLine(e);
                 logErr(e);
                 throw;
             }

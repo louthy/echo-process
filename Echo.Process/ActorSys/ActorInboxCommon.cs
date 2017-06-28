@@ -1,15 +1,7 @@
-﻿//using Microsoft.FSharp.Control;
-//using Microsoft.FSharp.Core;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System;
 using static LanguageExt.Prelude;
 using static Echo.Process;
-using System.Reflection;
 using LanguageExt;
-using System.Collections.Concurrent;
-using System.Reactive.Linq;
 
 namespace Echo
 {

@@ -284,7 +284,7 @@ namespace Echo
         /// <summary>
         /// State observable stream
         /// </summary>
-        public IObservable<object> StateStream   => stateSubject;
+        public IObservable<object> StateStream => stateSubject;
 
         /// <summary>
         /// Publish to the PublishStream
@@ -521,8 +521,6 @@ namespace Echo
 
         public InboxDirective ProcessAsk(ActorRequest request)
         {
-            Console.WriteLine(request);
-
             var savedMsg = ActorContext.Request.CurrentMsg;
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedReq = ActorContext.Request.CurrentRequest;
@@ -544,7 +542,7 @@ namespace Echo
                                     var stateOut = actorFn(stateIn, tmsg);
                                     try
                                     {
-                                        if (notnull(stateOut) && !stateOut.Equals(stateIn))
+                                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                                         {
                                             stateSubject.OnNext(stateOut);
                                         }
@@ -569,7 +567,7 @@ namespace Echo
                     var stateOut = actorFn(stateIn, msg);
                     try
                     {
-                        if (notnull(stateOut) && !stateOut.Equals(stateIn))
+                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                         {
                             stateSubject.OnNext(stateOut);
                         }
@@ -649,12 +647,12 @@ namespace Echo
                     //ActorContext.AssertSession();
 
                     var stateIn = GetState();
-                    var stateOut = termFn(GetState(), pid);
+                    var stateOut = termFn(stateIn, pid);
                     state = stateOut;
 
                     try
                     {
-                        if (notnull(stateOut) && !state.Equals<EqDefault<S>,S>(stateIn))
+                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                         {
                             stateSubject.OnNext(stateOut);
                         }
@@ -732,7 +730,7 @@ namespace Echo
                     state = stateOut;
                     try
                     {
-                        if (notnull(stateOut) && !state.Equals(stateIn))
+                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                         {
                             stateSubject.OnNext(stateOut);
                         }
@@ -752,7 +750,7 @@ namespace Echo
                                     var stateOut = actorFn(stateIn, tmsg);
                                     try
                                     {
-                                        if (notnull(stateOut) && !stateOut.Equals(stateIn))
+                                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                                         {
                                             stateSubject.OnNext(stateOut);
                                         }

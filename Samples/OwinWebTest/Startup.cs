@@ -14,7 +14,7 @@ namespace OwinWebTest
     {
         public void Configuration(IAppBuilder app)
         {
-            ProcessConfig.initialiseWeb("root");
+            //ProcessConfig.initialiseWeb("root");
             ProcessOwin.initialise(app);
             ProcessHub.RouteValidator = _ => true;
 

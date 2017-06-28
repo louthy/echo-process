@@ -39,8 +39,8 @@
         <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
         <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
         <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-        <PackageReference Include="LanguageExt.Core" Version="2.0.69" />
-        <PackageReference Include="LanguageExt.Parsec" Version="2.0.69" />
+        <PackageReference Include="LanguageExt.Core" Version="2.0.71" />
+        <PackageReference Include="LanguageExt.Parsec" Version="2.0.71" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.0.0-preview-20170106-08" />
         <PackageReference Include="xunit" Version="2.2.0" />
         <PackageReference Include="xunit.runner.visualstudio" Version="2.2.0" />

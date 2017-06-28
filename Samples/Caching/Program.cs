@@ -13,8 +13,7 @@ namespace Caching
                    .Observe<DeadLetter>()
                    .Subscribe(Console.WriteLine);
 
-            Process.Errors()
-                   .Observe<object>()
+            Process.ProcessSystemLog
                    .Subscribe(Console.WriteLine);
 
             FuncCaching.Run();

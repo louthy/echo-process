@@ -15,8 +15,8 @@ namespace Echo
 {
     class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
     {
-        BlockingQueue<UserControlMessage> userInbox;
-        BlockingQueue<SystemMessage> sysInbox;
+        PausableBlockingQueue<UserControlMessage> userInbox;
+        PausableBlockingQueue<SystemMessage> sysInbox;
 
         Actor<S, T> actor;
         ActorItem parent;
@@ -36,8 +36,8 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
                 : maxMailboxSize;
 
-            userInbox = new BlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new BlockingQueue<SystemMessage>(this.maxMailboxSize);
+            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
+            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
@@ -86,7 +86,8 @@ namespace Echo
             {
                 try
                 {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message).IfSome(msg => userInbox.Post(msg));
+                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                                           .IfSome(msg => userInbox.Post(msg));
                 }
                 catch (QueueFullException)
                 {

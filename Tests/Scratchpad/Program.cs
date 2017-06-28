@@ -19,8 +19,6 @@ namespace Scratchpad
         {
             BlockingQueueTests.Run();
             PausableBlockingQueueTests.Run();
-            return;
-
             ProxyTesting();
         }
 
