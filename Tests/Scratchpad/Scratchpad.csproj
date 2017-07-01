@@ -33,10 +33,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="LanguageExt.Core, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\LanguageExt.Core.2.0.71\lib\net451\LanguageExt.Core.dll</HintPath>
+      <HintPath>..\..\packages\LanguageExt.Core.2.0.75\lib\net451\LanguageExt.Core.dll</HintPath>
     </Reference>
     <Reference Include="LanguageExt.Parsec, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\LanguageExt.Parsec.2.0.71\lib\net451\LanguageExt.Parsec.dll</HintPath>
+      <HintPath>..\..\packages\LanguageExt.Parsec.2.0.75\lib\net451\LanguageExt.Parsec.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
