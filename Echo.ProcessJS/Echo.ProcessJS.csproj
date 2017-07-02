@@ -30,7 +30,12 @@
       <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="process.js" />
+    <None Remove="process.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="process.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="LanguageExt.Core" Version="2.0.75" />

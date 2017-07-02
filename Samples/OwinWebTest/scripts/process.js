@@ -22,6 +22,22 @@ var PID = function (path) {
     };
 };
 
+var Some = function (value) {
+    return [].push(value);
+}
+var None = [];
+var isSome = function (value) {
+    return Object.prototype.toString.call(value) === '[object Array]' && value.length === 1;
+}
+var isNone = function (value) {
+    return !isSome(value);
+}
+var match = function (value, Some, None) {
+    return typeof value !== "undefined" && value !== null && isSome(value)
+        ? Some(value[0])
+        : None();
+}
+
 var ActorResponse = function (message, replyTo, replyFrom, requestId, isFaulted) {
     return {
         ReplyTo: PID(replyTo),
@@ -632,13 +648,13 @@ var Process = (function () {
             "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
             "<div class='log-time'>" + msg.DateDisplay + "</div>" +
             "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
-            (msg.Message === null || !msg.Message.IsSome
-                ? ""
-                : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
+            match(msg.Message,
+                function (value) { return "<div class='log-msg'>" + value + "</div>"; },
+                function () { return "" }) +
             "</div>" +
-            (msg.Exception === null || !msg.Exception.IsSome || !msg.Exception.Value === ""
-                ? ""
-                : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
+            match(msg.Exception,
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + value + "</div></div>"; },
+                function () { return "" }) +
             "</div>";
     };
 
@@ -655,7 +671,15 @@ var Process = (function () {
         tellWarn: function (msg) { this.tell(2, msg); },
         tellError: function (msg) { this.tell(12, msg); },
         tellDebug: function (msg) { this.tell(16, msg); },
+        injectCss: function () {
+            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto}";
+            var style = document.createElement("style");
+            style.type = "text/css";
+            style.innerHTML = css;
+            document.getElementsByTagName("head")[0].appendChild(style);
+        },
         view: function (id, viewSize) {
+            this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
             return Process.spawn("process-log",
                 function () {

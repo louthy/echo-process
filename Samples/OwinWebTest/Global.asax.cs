@@ -5,6 +5,7 @@ using static LanguageExt.Prelude;
 using Echo;
 using static Echo.Process;
 using System.IO;
+using Echo.ProcessJS;
 
 namespace OwinWebTest
 {
@@ -21,6 +22,9 @@ namespace OwinWebTest
             // Allow messages to all processes from the browser
             ProcessHub.RouteValidator = _ => true;
 
+            // Tool logging service for diagnostics
+            ProcessLog.startup(None);
+
             // Spawn a ticking clock
             var clock = spawn<Unit>("clock", _ =>
             {
@@ -29,7 +33,11 @@ namespace OwinWebTest
             });
 
             // Reply to anything received
-            spawn<string>("echo", msg => replyOrTellSender(new { tag = "rcv", value = msg }));
+            spawn<string>("echo", msg =>
+            {
+                ProcessLog.tellInfo($"echoing {msg}");
+                replyOrTellSender(new { tag = "rcv", value = msg });
+            });
 
             // Send hello to anything received
             spawn<string>("hello", msg => reply("Hello, " + msg));

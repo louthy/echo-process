@@ -1,4 +1,4 @@
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.5\build\net45\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props" Condition="Exists('..\..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.5\build\net45\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" />
   <Import Project="..\..\packages\Microsoft.Net.Compilers.2.0.1\build\Microsoft.Net.Compilers.props" Condition="Exists('..\..\packages\Microsoft.Net.Compilers.2.0.1\build\Microsoft.Net.Compilers.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
@@ -100,6 +100,13 @@
     <Content Include="Global.asax" />
     <Content Include="packages.config" />
     <Content Include="cluster.conf" />
+    <None Include="scripts\jquery-3.1.1.intellisense.js" />
+    <Content Include="scripts\jquery-3.1.1.js" />
+    <Content Include="scripts\jquery-3.1.1.min.js" />
+    <Content Include="scripts\jquery-3.1.1.slim.js" />
+    <Content Include="scripts\jquery-3.1.1.slim.min.js" />
+    <Content Include="scripts\jquery-3.1.1.slim.min.map" />
+    <Content Include="scripts\jquery-3.1.1.min.map" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>
@@ -129,6 +136,10 @@
     <ProjectReference Include="..\..\Echo.Process.Redis\Echo.Process.Redis.csproj">
       <Project>{5b593c53-2c86-4492-80d2-24aaa37268cd}</Project>
       <Name>Echo.Process.Redis</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Echo.ProcessJS\Echo.ProcessJS.csproj">
+      <Project>{58D320A7-C7B0-4B21-A42C-488C7D5243C2}</Project>
+      <Name>Echo.ProcessJS</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\Echo.Process\Echo.Process.csproj">
       <Project>{b0f37249-aa2a-45c8-a8ca-3ae94853da4e}</Project>
