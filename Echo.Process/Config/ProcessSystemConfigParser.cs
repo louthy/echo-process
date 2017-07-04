@@ -548,7 +548,7 @@ namespace Echo.Config
         {
             TypeDef strategy = null;
 
-            Func<Seq<NamedValueToken>, Seq<State<StrategyContext, Unit>>> compose = 
+            Func<Lst<NamedValueToken>, Lst<State<StrategyContext, Unit>>> compose = 
                 items => items.Map(x => (State<StrategyContext, Unit>)x.Value.Value);
 
             var oneForOne = FuncSpec.Property("one-for-one", () => strategy, () => strategy, value => Strategy.OneForOne((State<StrategyContext, Unit>)value));
@@ -590,7 +590,7 @@ namespace Echo.Config
             strategy = new TypeDef(
                 "strategy",
                 typeof(State<StrategyContext,Unit>),
-                (_,s) => Strategy.Compose(compose((Seq<NamedValueToken>)s).ToArray()),
+                (_,s) => Strategy.Compose(compose((Lst<NamedValueToken>)s).ToArray().ToArray()),
                 20,
                 new[] { oneForOne, allForOne, always, pause, retries1, retries2, backoff1, backoff2, match, redirect }.Append(strategyFuncs).ToArray()
             );
