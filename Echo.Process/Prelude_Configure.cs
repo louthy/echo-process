@@ -430,7 +430,7 @@ namespace Echo
         /// <returns>Optional configuration setting value</returns>
         public static T read<T>(string name, string prop, T defaultValue, SystemName system = default(SystemName)) =>
             InMessageLoop
-                ? ActorContext.Request.Ops.Read(name, prop, ActorContext.Request.ProcessFlags, defaultValue)
+                ? ActorContext.System(Self).Settings.GetProcessSetting(Self, name, prop, defaultValue, ActorContext.Request.ProcessFlags)
                 : ActorContext.System(system).Settings.GetRoleSetting(name, prop, defaultValue);
 
         /// <summary>
@@ -494,8 +494,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.Write(value, name, prop, ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .WriteSettingOverride(ActorInboxCommon.ClusterSettingsKey(Self), value, name, prop, ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
@@ -514,8 +515,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.Clear(name, prop, ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .ClearSettingOverride(ActorInboxCommon.ClusterSettingsKey(Self), name, prop, ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
@@ -531,8 +533,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.ClearAll(ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .ClearSettingsOverride(ActorInboxCommon.ClusterSettingsKey(Self), ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
