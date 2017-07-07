@@ -51,6 +51,7 @@ namespace Echo.ProcessJS
 
                 deadLetterSub = subscribe<DeadLetter>(DeadLetters(system), msg => tellWarning(msg.ToString()));
                 errorSub = subscribe<Exception>(Errors(system), e => tellError(e));
+                ProcessSystemLog.Subscribe(tell);
             }
 
             return unit;
