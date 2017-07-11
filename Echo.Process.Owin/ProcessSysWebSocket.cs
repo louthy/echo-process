@@ -37,7 +37,7 @@ namespace Echo
         }
 
         public override async Task OnMessageReceived(ArraySegment<byte> message, WebSocketMessageType type) =>
-            await Req.Parse(Encoding.UTF8.GetString(message.Array, message.Offset, message.Count), ProcessHub.Connections).MatchAsync(
+            await Req.Parse(Encoding.UTF8.GetString(message.Array, message.Offset, message.Count), Context.Request.RemoteIpAddress, ProcessHub.Connections).MatchAsync(
                 Right: async msg =>
                 {
                     switch (msg)
@@ -87,7 +87,7 @@ namespace Echo
                         }
 
                         case ConnectReq req:
-                            var conn = ProcessHub.OpenConnection(Tell);
+                            var conn = ProcessHub.OpenConnection(Context.Request.RemoteIpAddress, Tell);
                             await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"conn\",\"id\":\"{conn}\"}}"), true);
                             return unit;
 
@@ -107,8 +107,7 @@ namespace Echo
                             return unit;
 
                         case PingReq req:
-                            ProcessHub.TouchConnection(req.Id);
-                            await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"pong\",\"id\":\"{req.Id}\"}}"), true);
+                            await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"pong\",\"id\":\"{req.Id}\",\"status\":\"{ProcessHub.TouchConnection(req.Id)}\"}}"), true);
                             return unit;
 
                         default:

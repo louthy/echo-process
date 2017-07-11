@@ -170,6 +170,7 @@ var Process = (function () {
     var errors = inboxStart(Errors, System, ignore, function (msg) { publish(msg); }, true);
     var subscribeId = 1;
     var context = null;
+    var keepAlive = null;
 
     var inloop = function () {
         return context !== null;
@@ -526,7 +527,6 @@ var Process = (function () {
         socket = new WebSocket(uri);
 
         socket.onopen = function (e) {
-            console.log("opened " + uri);
             socket.send(Connect);
             window.addEventListener("beforeunload", unload);
         };
@@ -598,16 +598,34 @@ var Process = (function () {
                     // Pong (reply of ping)
                     case "pong":
                         lastPong = new Date();
+                        if (obj.status === "False") {
+                            connectionId = "";
+                            socket.send(Connect);
+                        }
                         break;
 
                     // Disconnected
                     case "disc":
                         connectionId = obj.id === connectionId ? "" : connectionId;
+                        if (keepAlive) {
+                            clearInterval(keepAlive);
+                            keepAlive = null;
+                        }
                         break;
 
                     // Connected
                     case "conn":
                         connectionId = obj.id === "" ? connectionId : obj.id;
+
+                        if (keepAlive) {
+                            clearInterval(keepAlive);
+                        }
+                        if (connectionId !== "") {
+                            keepAlive = setInterval(function () {
+                                socket.send(Ping(connectionId));
+                            }, 5000);
+                        }
+
                         doneFn();
                         break;
                 }
@@ -761,7 +779,9 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
         return copy;
     };
 
-    Process.spawnView = function (name, containerId, templateId, setup, inbox, shutdown) {
+    Process.spawnView = function (name, containerId, templateId, setup, inbox, shutdown, options) {
+
+        options = options || {};
 
         if (typeof setup !== "function") {
             var val = setup;
@@ -774,8 +794,11 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
 
                 var view = function (state) {
                     this.render = function (el) {
-                        ko.cleanNode($("#" + containerId)[0]);
-                        ko.applyBindings(state, el);
+                        var container = $("#" + containerId)[0];
+                        if (container) {
+                            ko.cleanNode(container);
+                        }
+                        ko.applyBindings(state, el)
                     };
                 };
 
@@ -828,7 +851,7 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
 
                 var refresh = function (s) {
                     var el = document.createElement("div");
-                    el.innerHTML = $("#" + templateId).html();
+                    el.innerHTML = $(document.getElementById(templateId)).html();
                     (new view(s)).render(el);
                     $("#" + containerId).empty();
                     $("#" + containerId).append(el);
@@ -858,7 +881,10 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
             // Shutdown
             function (state) {
                 ko.cleanNode($("#" + containerId)[0]);
-                $("#" + containerId).empty();
+                if (container &&  (!options.preserveDomOnKill)) {
+                    ko.cleanNode(container);
+                    $("#" + containerId).empty();
+                }
                 if ("function" === typeof shutdown) {
                     shutdown(state);
                 }

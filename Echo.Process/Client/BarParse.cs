@@ -84,8 +84,12 @@ namespace Echo.Client
         public Either<string, ClientMessageId> GetMessageId() =>
             GetLong().Map(ClientMessageId.New);
 
-        public Either<string, ClientConnectionId> GetConnectionId() =>
-            GetNext().Map(ClientConnectionId.New);
+        public Either<string, ClientConnectionId> GetConnectionId(string remoteIp) =>
+            GetNext()
+                .Map(ClientConnectionId.New)
+                .Bind(id => id.Value.StartsWith(remoteIp.GetHashCode().ToString() + "-")
+                    ? Right<string, ClientConnectionId>(id)
+                    : Left<string, ClientConnectionId>("Invalid client ID"));
 
         Either<string, ProcessId> FixupPID(string pidStr) =>
             String.IsNullOrWhiteSpace(pidStr) || pidStr == "/no-sender"

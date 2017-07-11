@@ -28,7 +28,7 @@ namespace Echo.Client
         /// Generate 
         /// </summary>
         /// <returns></returns>
-        public static ClientConnectionId Generate()
+        public static ClientConnectionId Generate(string remoteIp)
         {
             var bytes = new byte[DefaulteSizeInBytes];
             rnd.GetBytes(bytes);
@@ -37,7 +37,7 @@ namespace Echo.Client
             {
                 id.Append((char)('a' + (b % 26)));
             }
-            return New(id.ToString());
+            return New($"{remoteIp.GetHashCode()}-{id}");
         }
     }
 

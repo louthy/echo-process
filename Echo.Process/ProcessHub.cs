@@ -78,16 +78,22 @@ namespace Echo
         /// </summary>
         /// <param name="id">Client connection ID</param>
         /// <param name="conn">Connection ID</param>
-        public static ClientConnectionId OpenConnection(Action<ClientMessageDTO> tell)
-        {
-            var id = ClientConnectionId.Generate();
-            var conn = ClientConnection.New(id, tell);
-            lock (sync)
+        public static ClientConnectionId OpenConnection(string remoteIp, Action<ClientMessageDTO> tell) =>
+            EnsureConnection(ClientConnectionId.Generate(remoteIp), tell);
+
+        /// <summary>
+        /// Keep an existing connection alive
+        /// </summary>
+        public static ClientConnectionId EnsureConnection(ClientConnectionId id, Action<ClientMessageDTO> tell) =>
+            connections.Find(id).Map(c => c.Id).IfNone(() =>
             {
-                connections = connections.AddOrUpdate(id, conn);
-            }
-            return id;
-        }
+                var conn = ClientConnection.New(id, tell);
+                lock (sync)
+                {
+                    connections = connections.AddOrUpdate(id, conn);
+                }
+                return id;
+            });
 
         /// <summary>
         /// Register a connection by ID
