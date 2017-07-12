@@ -4,7 +4,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net451</TargetFramework>
-    <PackageVersion>2.0.19-beta</PackageVersion>
+    <PackageVersion>2.0.22-beta</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Owin.WebSocket" Version="1.7.0" />
-    <PackageReference Include="LanguageExt.Core" Version="2.0.77" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.81" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

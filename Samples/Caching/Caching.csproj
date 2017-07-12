@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.0.77" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.77" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.81" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.81" />
   </ItemGroup>
 
   <ItemGroup>
