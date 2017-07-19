@@ -696,6 +696,7 @@ var Process = (function () {
     };
 
     var log = {
+        pausedView: false,
         tell: function (type, msg) {
             if (typeof type === "undefined") failwith("Log.tell: 'type' not defined");
             if (typeof msg === "undefined") failwith("Log.tell: 'msg' not defined");
@@ -716,6 +717,7 @@ var Process = (function () {
             document.getElementsByTagName("head")[0].appendChild(style);
         },
         view: function (id, viewSize) {
+            var self = this;
             this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
             var pid = Process.spawn("process-log",
@@ -724,17 +726,23 @@ var Process = (function () {
                     return [];
                 },
                 function (state, msg) {
-                    state.unshift(msg);
-                    $("#" + id).prepend(formatItem(msg));
-                    if (state.length > (viewSize || 50)) {
-                        state.pop();
-                        $('.process-log-msg-row:last').remove();
+                    if (!self.pausedView) { 
+                        state.unshift(msg);
+                        $("#" + id).prepend(formatItem(msg));
+                        if (state.length > (viewSize || 50)) {
+                            state.pop();
+                            $('.process-log-msg-row:last').remove();
+                        }
+                        return state;
                     }
-                    return state;
                 }
             );
-
-            Process.ask('/root/user/process-log', {})
+        },
+        toggleView: function (onPaused, onResumed) { 
+            this.pausedView = !this.pausedView;
+            if (this.pausedView && onPaused) onPaused();
+            if (!this.pausedView && onResumed) onResumed();
+            Process.ask('/root/user/process-log', unit)
                 .done(function (items)
                 {
                     $(items).each(function (i, item) { $("#" + id).prepend(formatItem(item)); });
