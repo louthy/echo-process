@@ -699,7 +699,7 @@ var Process = (function () {
         view: function (id, viewSize) {
             this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
-            return Process.spawn("process-log",
+            var pid = Process.spawn("process-log",
                 function () {
                     Process.subscribe("/root/user/process-log");
                     return [];
@@ -714,6 +714,14 @@ var Process = (function () {
                     return state;
                 }
             );
+
+            Process.ask('/root/user/process-log', {})
+                .done(function (items)
+                {
+                    $(items).each(function (i, item) { $("#" + id).prepend(formatItem(item)); });
+                });
+
+            return pid;
         }
     };
 
