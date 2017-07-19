@@ -690,12 +690,13 @@ var Process = (function () {
                 function () { return "" }) +
             "</div>" +
             match(msg.Exception,
-                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div class='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
                 function () { return "" }) +
             "</div>";
     };
 
     var log = {
+        paused: false,
         tell: function (type, msg) {
             if (typeof type === "undefined") failwith("Log.tell: 'type' not defined");
             if (typeof msg === "undefined") failwith("Log.tell: 'msg' not defined");
@@ -709,30 +710,62 @@ var Process = (function () {
         tellError: function (msg) { this.tell(12, msg); },
         tellDebug: function (msg) { this.tell(16, msg); },
         injectCss: function () {
-            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto}";
+            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto} .log-ex-msg{white-space: pre-wrap;}";
             var style = document.createElement("style");
             style.type = "text/css";
             style.innerHTML = css;
             document.getElementsByTagName("head")[0].appendChild(style);
         },
+        updateViewWithItems: function (items) {
+            if (items && items.length > 0) {
+                var view = [];
+                for (var i = items.length - 1; i >= 0; i--) {
+                    view.push(formatItem(items[i]));
+                }
+                document.getElementById(this.id) = view.join("");
+            }
+        },
         view: function (id, viewSize) {
+            var self = this;
             this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
-            return Process.spawn("process-log",
+            this.id = id;
+            this.pid = Process.spawn("process-log",
                 function () {
                     Process.subscribe("/root/user/process-log");
                     return [];
                 },
                 function (state, msg) {
-                    state.unshift(msg);
-                    $("#" + id).prepend(formatItem(msg));
-                    if (state.length > (viewSize || 50)) {
-                        state.pop();
-                        $('.process-log-msg-row:last').remove();
+                    if (!self.paused) { 
+                        state.unshift(msg);
+                        $("#" + id).prepend(formatItem(msg));
+                        if (state.length > (viewSize || 50)) {
+                            state.pop();
+                            $('.process-log-msg-row:last').remove();
+                        }
+                        return state;
                     }
-                    return state;
                 }
             );
+            return this.pid;
+        },
+        pause: function (onPaused) {
+            if (this.paused) return;
+            togglePause(onPaused);
+        },
+        resume: function (onResumed) {
+            if (!this.paused) return;
+            togglePause(onResumed);
+        },
+        togglePause: function(onPaused, onResumed) { 
+            if (!this.pid || !this.id) return false;
+            this.paused = !this.paused;
+            if (this.paused && onPaused) onPaused();
+            if (!this.paused && onResumed) onResumed();
+            var self = this;
+            Process.ask(this.pid, unit)
+                   .done(function (items) { self.updateViewWithItems(items); });
+            return this.paused;
         }
     };
 

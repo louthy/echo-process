@@ -696,7 +696,7 @@ var Process = (function () {
     };
 
     var log = {
-        pausedView: false,
+        paused: false,
         tell: function (type, msg) {
             if (typeof type === "undefined") failwith("Log.tell: 'type' not defined");
             if (typeof msg === "undefined") failwith("Log.tell: 'msg' not defined");
@@ -716,17 +716,27 @@ var Process = (function () {
             style.innerHTML = css;
             document.getElementsByTagName("head")[0].appendChild(style);
         },
+        updateViewWithItems: function (items) {
+            if (items && items.length > 0) {
+                var view = [];
+                for (var i = items.length - 1; i >= 0; i--) {
+                    view.push(formatItem(items[i]));
+                }
+                document.getElementById(this.id) = view.join("");
+            }
+        },
         view: function (id, viewSize) {
             var self = this;
             this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
-            var pid = Process.spawn("process-log",
+            this.id = id;
+            this.pid = Process.spawn("process-log",
                 function () {
                     Process.subscribe("/root/user/process-log");
                     return [];
                 },
                 function (state, msg) {
-                    if (!self.pausedView) { 
+                    if (!self.paused) { 
                         state.unshift(msg);
                         $("#" + id).prepend(formatItem(msg));
                         if (state.length > (viewSize || 50)) {
@@ -737,18 +747,25 @@ var Process = (function () {
                     }
                 }
             );
+            return this.pid;
         },
-        toggleView: function (onPaused, onResumed) { 
-            this.pausedView = !this.pausedView;
-            if (this.pausedView && onPaused) onPaused();
-            if (!this.pausedView && onResumed) onResumed();
-            Process.ask('/root/user/process-log', unit)
-                .done(function (items)
-                {
-                    $(items).each(function (i, item) { $("#" + id).prepend(formatItem(item)); });
-                });
-
-            return pid;
+        pause: function (onPaused) {
+            if (this.paused) return;
+            togglePause(onPaused);
+        },
+        resume: function (onResumed) {
+            if (!this.paused) return;
+            togglePause(onResumed);
+        },
+        togglePause: function(onPaused, onResumed) { 
+            if (!this.pid || !this.id) return false;
+            this.paused = !this.paused;
+            if (this.paused && onPaused) onPaused();
+            if (!this.paused && onResumed) onResumed();
+            var self = this;
+            Process.ask(this.pid, unit)
+                   .done(function (items) { self.updateViewWithItems(items); });
+            return this.paused;
         }
     };
 
