@@ -67,6 +67,14 @@ var Process = (function () {
         return buffer.join("");
     };
 
+    function isEmpty(obj) {
+        for (var prop in obj) {
+            if (obj.hasOwnProperty(prop))
+                return false;
+        }
+        return JSON.stringify(obj) === JSON.stringify({});
+    }
+
     var Connect = "procsys:conn";
     var Disconnect = function (id) {
         return "procsys:diss|" + id;
@@ -210,6 +218,7 @@ var Process = (function () {
     var tell = function (pid, msg, sender) {
         if (typeof pid === "undefined") failwith("tell: 'pid' not defined");
         if (typeof msg === "undefined") failwith("tell: 'msg' not defined");
+        if (msg == unit) msg = {};
 
         var ctx = {
             isAsk: false,
@@ -288,6 +297,7 @@ var Process = (function () {
     var ask = function (pid, msg) {
         if (typeof pid === "undefined") failwith("ask: 'pid' not defined");
         if (typeof msg === "undefined") failwith("ask: 'msg' not defined");
+        if (msg == unit) msg = {};
         var ctx = {
             isAsk: true,
             self: pid,
@@ -300,6 +310,7 @@ var Process = (function () {
 
     var reply = function (msg) {
         if (typeof msg === "undefined") failwith("reply: 'msg' not defined");
+        if (msg == unit) msg = {};
         context.reply = msg;
     };
 
@@ -320,7 +331,10 @@ var Process = (function () {
         var onComplete = function () { };
 
         p.subs[id] = {
-            next: function (msg) { onNext(msg); },
+            next: function (msg) {
+                if (isEmpty(msg)) msg = unit;
+                onNext(msg);
+            },
             done: function () { onComplete(); }
         };
 
@@ -341,6 +355,7 @@ var Process = (function () {
         var self = context.self;
         if (isLocal(pid)) {
             return subscribeAsync(pid).forall(function (msg) {
+                if (isEmpty(msg)) msg = unit;
                 tell(self, msg, pid);
             });
         }
@@ -376,6 +391,7 @@ var Process = (function () {
 
     publish = function (msg) {
         if (typeof msg === "undefined") failwith("publish: 'msg' not defined");
+        if (msg == unit) msg = {};
         if (inloop()) {
             postMessage(
                 JSON.stringify({ pid: context.self, msg: msg, processjs: "pub" }),
@@ -507,6 +523,9 @@ var Process = (function () {
             !data.pid ||
             !data.msg) {
             return;
+        }
+        if (isEmpty(data.msg)) {
+            data.msg = unit;
         }
         switch (data.processjs) {
             case "tell": receiveTell(data); break;
@@ -671,7 +690,7 @@ var Process = (function () {
                 function () { return "" }) +
             "</div>" +
             match(msg.Exception,
-                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div class='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
                 function () { return "" }) +
             "</div>";
     };
@@ -691,7 +710,7 @@ var Process = (function () {
         tellError: function (msg) { this.tell(12, msg); },
         tellDebug: function (msg) { this.tell(16, msg); },
         injectCss: function () {
-            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto}";
+            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto} .log-ex-msg{white-space: pre-wrap;}";
             var style = document.createElement("style");
             style.type = "text/css";
             style.innerHTML = css;
@@ -701,7 +720,7 @@ var Process = (function () {
             var self = this;
             this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
-            return Process.spawn("process-log",
+            var pid = Process.spawn("process-log",
                 function () {
                     Process.subscribe("/root/user/process-log");
                     return [];
@@ -723,6 +742,13 @@ var Process = (function () {
             this.pausedView = !this.pausedView;
             if (this.pausedView && onPaused) onPaused();
             if (!this.pausedView && onResumed) onResumed();
+            Process.ask('/root/user/process-log', unit)
+                .done(function (items)
+                {
+                    $(items).each(function (i, item) { $("#" + id).prepend(formatItem(item)); });
+                });
+
+            return pid;
         }
     };
 
