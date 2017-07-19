@@ -671,7 +671,7 @@ var Process = (function () {
                 function () { return "" }) +
             "</div>" +
             match(msg.Exception,
-                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + value + "</div></div>"; },
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
                 function () { return "" }) +
             "</div>";
     };
@@ -880,10 +880,10 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
             },
             // Shutdown
             function (state) {
-                ko.cleanNode($("#" + containerId)[0]);
-                if (container &&  (!options.preserveDomOnKill)) {
-                    ko.cleanNode(container);
-                    $("#" + containerId).empty();
+                var $container = $("#" + containerId);
+                if ($container.length && (!options.preserveDomOnKill)) {
+                    ko.cleanNode($container[0]);
+                    $container.empty();
                 }
                 if ("function" === typeof shutdown) {
                     shutdown(state);
