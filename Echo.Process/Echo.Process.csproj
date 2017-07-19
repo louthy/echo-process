@@ -10,7 +10,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net451;netstandard1.6</TargetFrameworks>
-    <PackageVersion>2.0.24-beta</PackageVersion>
+    <PackageVersion>2.0.25-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
