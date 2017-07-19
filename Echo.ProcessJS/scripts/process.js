@@ -880,10 +880,10 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
             },
             // Shutdown
             function (state) {
-                ko.cleanNode($("#" + containerId)[0]);
-                if (container &&  (!options.preserveDomOnKill)) {
-                    ko.cleanNode(container);
-                    $("#" + containerId).empty();
+                var $container = $("#" + containerId);
+                if ($container.length && (!options.preserveDomOnKill)) {
+                    ko.cleanNode($container[0]);
+                    $container.empty();
                 }
                 if ("function" === typeof shutdown) {
                     shutdown(state);
