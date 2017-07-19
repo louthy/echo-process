@@ -671,7 +671,7 @@ var Process = (function () {
                 function () { return "" }) +
             "</div>" +
             match(msg.Exception,
-                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + value + "</div></div>"; },
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
                 function () { return "" }) +
             "</div>";
     };
