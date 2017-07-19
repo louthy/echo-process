@@ -3,7 +3,7 @@
 // Copyright (c) 2014-2017 Paul Louth
 // https://github.com/louthy/language-ext/blob/master/LICENSE.md
 
-var unit = "(unit)";
+var unit = {};
 
 if (!window.location.origin) {
     window.location.origin = window.location.protocol + "//"
