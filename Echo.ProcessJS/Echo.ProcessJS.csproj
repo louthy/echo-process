@@ -30,16 +30,13 @@
       <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <None Remove="process.js" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="scripts\process.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.0.81" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.81" />
+    <PackageReference Include="LanguageExt.Core" Version="2.0.83" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.0.83" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
