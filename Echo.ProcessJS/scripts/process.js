@@ -690,7 +690,7 @@ var Process = (function () {
                 function () { return "" }) +
             "</div>" +
             match(msg.Exception,
-                function (value) { return "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div class='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
                 function () { return "" }) +
             "</div>";
     };
@@ -709,7 +709,7 @@ var Process = (function () {
         tellError: function (msg) { this.tell(12, msg); },
         tellDebug: function (msg) { this.tell(16, msg); },
         injectCss: function () {
-            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto}";
+            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto} .log-ex-msg{white-space: pre-wrap;}";
             var style = document.createElement("style");
             style.type = "text/css";
             style.innerHTML = css;
