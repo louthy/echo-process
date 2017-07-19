@@ -67,6 +67,14 @@ var Process = (function () {
         return buffer.join("");
     };
 
+    function isEmpty(obj) {
+        for (var prop in obj) {
+            if (obj.hasOwnProperty(prop))
+                return false;
+        }
+        return JSON.stringify(obj) === JSON.stringify({});
+    }
+
     var Connect = "procsys:conn";
     var Disconnect = function (id) {
         return "procsys:diss|" + id;
@@ -210,6 +218,7 @@ var Process = (function () {
     var tell = function (pid, msg, sender) {
         if (typeof pid === "undefined") failwith("tell: 'pid' not defined");
         if (typeof msg === "undefined") failwith("tell: 'msg' not defined");
+        if (msg == unit) msg = {};
 
         var ctx = {
             isAsk: false,
@@ -288,6 +297,7 @@ var Process = (function () {
     var ask = function (pid, msg) {
         if (typeof pid === "undefined") failwith("ask: 'pid' not defined");
         if (typeof msg === "undefined") failwith("ask: 'msg' not defined");
+        if (msg == unit) msg = {};
         var ctx = {
             isAsk: true,
             self: pid,
@@ -300,6 +310,7 @@ var Process = (function () {
 
     var reply = function (msg) {
         if (typeof msg === "undefined") failwith("reply: 'msg' not defined");
+        if (msg == unit) msg = {};
         context.reply = msg;
     };
 
@@ -320,7 +331,10 @@ var Process = (function () {
         var onComplete = function () { };
 
         p.subs[id] = {
-            next: function (msg) { onNext(msg); },
+            next: function (msg) {
+                if (isEmpty(msg)) msg = unit;
+                onNext(msg);
+            },
             done: function () { onComplete(); }
         };
 
@@ -341,6 +355,7 @@ var Process = (function () {
         var self = context.self;
         if (isLocal(pid)) {
             return subscribeAsync(pid).forall(function (msg) {
+                if (isEmpty(msg)) msg = unit;
                 tell(self, msg, pid);
             });
         }
@@ -376,6 +391,7 @@ var Process = (function () {
 
     publish = function (msg) {
         if (typeof msg === "undefined") failwith("publish: 'msg' not defined");
+        if (msg == unit) msg = {};
         if (inloop()) {
             postMessage(
                 JSON.stringify({ pid: context.self, msg: msg, processjs: "pub" }),
@@ -507,6 +523,9 @@ var Process = (function () {
             !data.pid ||
             !data.msg) {
             return;
+        }
+        if (isEmpty(data.msg)) {
+            data.msg = unit;
         }
         switch (data.processjs) {
             case "tell": receiveTell(data); break;
