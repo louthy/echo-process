@@ -467,7 +467,11 @@ var Process = (function () {
                 deadLetter(data.pid, data.msg, data.sender);
             }
             else {
-                socket.send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, data.msg));
+                var msg = data.msg;
+                if (msg == unit) {
+                    msg = {};
+                }
+                socket.send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, msg));
             }
             return;
         }
@@ -722,8 +726,13 @@ var Process = (function () {
                 for (var i = items.length - 1; i >= 0; i--) {
                     view.push(formatItem(items[i]));
                 }
-                document.getElementById(this.id) = view.join("");
+                document.getElementById(this.id).innerHTML = view.join("");
             }
+        },
+        refresh: function () {
+            var self = this;
+            Process.ask("/root/user/process-log", unit)
+                .done(function (items) { self.updateViewWithItems(items); });
         },
         view: function (id, viewSize) {
             var self = this;
@@ -763,8 +772,7 @@ var Process = (function () {
             if (this.paused && onPaused) onPaused();
             if (!this.paused && onResumed) onResumed();
             var self = this;
-            Process.ask(this.pid, unit)
-                   .done(function (items) { self.updateViewWithItems(items); });
+            if (!this.paused) this.refresh();
             return this.paused;
         }
     };
