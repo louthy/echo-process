@@ -128,6 +128,9 @@ var Process = (function () {
     var failFn = function (e) { };
     var lastPong = new Date();
     var requests = {};
+    var socketClosedIntentionally = false;
+    var backOffMax = 5000;
+    var backOffMin = 100;
 
     var actor = { "/": { children: {} } };
     var ignore = function () { };
@@ -179,6 +182,10 @@ var Process = (function () {
     var subscribeId = 1;
     var context = null;
     var keepAlive = null;
+
+    var setImmediate = function (f) {
+        setTimeout(f, 0);
+    };
 
     var inloop = function () {
         return context !== null;
@@ -241,33 +248,64 @@ var Process = (function () {
         return setTimeout(function () { tell(pid, msg, self); }, delay);
     };
 
+    var makeThunk = function (ctx) {
+        return {
+            doneFn: function (e) { if (console && console.log) console.log(e) },
+            failFn: function (e) { e = e.data ? e.data : e; if (console && console.error) console.error(e) },
+            done: function (f) {
+                this.doneFn = f;
+                return this;
+            },
+            fail: function (f) {
+                this.failFn = function (e) {
+                    e = e.data ? e.data : e;
+                    f(e);
+                };
+                return this;
+            },
+            ctx: ctx
+        };
+    };
+
+    var makeErrorThunk = function (error, ctx) {
+        var thunk = makeThunk(ctx);
+        setImmediate(function () {
+            thunk.failFn(error);
+        });
+        return thunk;
+    };
+
+    var makeDoneThunk = function (value, ctx) {
+        var thunk = makeThunk(ctx);
+        setImmediate(function () { thunk.doneFn(value); });
+        return thunk;
+    };
+
+    var send = function (message, ctx) {
+        var thunk = makeThunk(ctx);
+        try {
+            if (socket.readyState == 1 && connectionId) {
+                socket.send(message);
+            }
+            else {
+                setImmediate(function () { thunk.failFn("Socket not connected"); });
+            }
+        }
+        catch (e) {
+            setImmediate(function () { thunk.failFn(e); });
+        }
+        return thunk;
+    }
+
     var askInternal = function (pid, msg, ctx) {
         var p = actor[pid];
         if (!p || !p.inbox) {
             if (isLocal(pid)) {
-                failwith("Process doesn't exist " + pid);
-                return null;
+                return makeErrorThunk("Process doesn't exist " + pid);
             }
             else {
                 messageId++;
-                socket.send(Ask(connectionId, messageId, pid, ctx.sender, msg));
-
-                var thunk = {
-                    doneFn: function (msg) {
-                    },
-                    failFn: function (msg) {
-                    },
-                    done: function (f) {
-                        this.doneFn = f;
-                        return this;
-                    },
-                    fail: function (f) {
-                        this.failFn = f;
-                        return this;
-                    },
-                    ctx: ctx
-                };
-
+                var thunk = send(Ask(connectionId, messageId, pid, ctx.sender, msg), ctx);
                 requests[messageId] = thunk;
                 return thunk;
             }
@@ -280,16 +318,21 @@ var Process = (function () {
             //       the send order).  Also, this allows for blocking 'ask', which is difficult to
             //       achieve by other means.
             return withContext(ctx, function () {
-                context.reply = null;
-                if (p.stateless) {
-                    var statea = p.inbox(msg);
-                    if (typeof statea !== "undefined") p.state = statea;
+                try {
+                    context.reply = null;
+                    if (p.stateless) {
+                        var statea = p.inbox(msg);
+                        if (typeof statea !== "undefined") p.state = statea;
+                    }
+                    else {
+                        var stateb = p.inbox(p.state, msg);
+                        if (typeof stateb !== "undefined") p.state = stateb;
+                    }
+                    return makeDoneThunk(context.reply);
                 }
-                else {
-                    var stateb = p.inbox(p.state, msg);
-                    if (typeof stateb !== "undefined") p.state = stateb;
+                catch (e) {
+                    return makeErrorThunk("Process doesn't exist " + pid);
                 }
-                return context.reply;
             });
         }
     };
@@ -363,15 +406,27 @@ var Process = (function () {
             var id = subscribeId;
             var ctx = {
                 unsubscribe: function () {
-                    socket.send(Unsubscribe(connectionId, pid, self));
+                    var self = this;
+                    try {
+                        socket.send(Unsubscribe(connectionId, pid, self));
+                    }
+                    catch (e) {
+                        setImmediate(function () { self.fail(e); });
+                    }
                     delete actor[self].obs[id];
                 },
-                next: function () { },
-                done: function () { }
+                next: function (x) { },
+                done: function () { },
+                fail: function (e) { }
             };
             actor[self].obs[id] = ctx;
             subscribeId++;
-            socket.send(Subscribe(connectionId, pid, self));
+            try {
+                socket.send(Subscribe(connectionId, pid, self));
+            }
+            catch (e) {
+                setImmediate(function () { ctx.fail(e); });
+            }
             return ctx;
         }
     };
@@ -456,7 +511,7 @@ var Process = (function () {
     };
 
     var error = function (e, to, msg, sender) {
-        console.error(e);
+        if (console && console.error) console.error(e);
         tell(Errors, { error: e, to: to, msg: msg, sender: getSender(sender) });
     };
 
@@ -471,27 +526,33 @@ var Process = (function () {
                 if (msg == unit) {
                     msg = {};
                 }
-                socket.send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, msg));
+                try {
+                    send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, msg), null);
+                }
+                catch (e) {
+                    error(e, data.pid, data.msg, data.sender);
+                    deadLetter(data.pid, data.msg, data.sender);
+                }
             }
-            return;
         }
-
-        try {
-            withContext(data.ctx, function () {
-                if (p.stateless) {
-                    var statea = p.inbox(data.msg);
-                    if (typeof statea !== "undefined") p.state = statea;
-                }
-                else {
-                    var stateb = p.inbox(p.state, data.msg);
-                    if (typeof stateb !== "undefined") p.state = stateb;
-                }
-            });
-        }
-        catch (e) {
-            error(e, data.pid, data.msg, data.sender);
-            deadLetter(data.pid, data.msg, data.sender);
-            p.state = p.setup();
+        else {
+            try {
+                withContext(data.ctx, function () {
+                    if (p.stateless) {
+                        var statea = p.inbox(data.msg);
+                        if (typeof statea !== "undefined") p.state = statea;
+                    }
+                    else {
+                        var stateb = p.inbox(p.state, data.msg);
+                        if (typeof stateb !== "undefined") p.state = stateb;
+                    }
+                });
+            }
+            catch (e) {
+                error(e, data.pid, data.msg, data.sender);
+                deadLetter(data.pid, data.msg, data.sender);
+                p.state = p.setup();
+            }
         }
     };
 
@@ -538,15 +599,36 @@ var Process = (function () {
     };
 
     var disconnect = function () {
-        socket.send(Disconnect(connectionId));
-        socket.close();
+        try {
+            socketClosedIntentionally = true;
+            socket.send(Disconnect(connectionId));
+            socket.close();
+        }
+        catch (e) {
+            error(e, "", "disconnect", null);
+        }
     };
 
     var unload = function () {
-        socket.send(Disconnect(connectionId));
+        disconnect();
+    };
+
+    var reconnect = function (delay) {
+        connect()
+            .done(function () {
+                console.log("reconnected");
+            })
+            .fail(function () {
+                console.log("reconnecting in " + delay + "ms");
+                delay = delay * 2;
+                if (delay > backOffMax) delay = backOffMax;
+                setTimeout(function () { reconnect(delay); }, delay);
+            });
     };
 
     var connect = function () {
+        socketClosedIntentionally = false;
+
         socket = new WebSocket(uri);
 
         socket.onopen = function (e) {
@@ -556,6 +638,10 @@ var Process = (function () {
 
         socket.onclose = function (e) {
             window.removeEventListener("beforeunload", unload);
+            connectionId = "";
+            if (!socketClosedIntentionally) {
+                reconnect(backOffMin);
+            }
         };
 
         socket.onmessage = function (e) {
@@ -623,7 +709,13 @@ var Process = (function () {
                         lastPong = new Date();
                         if (obj.status === "False") {
                             connectionId = "";
-                            socket.send(Connect);
+
+                            try {
+                                socket.send(Connect);
+                            }
+                            catch (e) {
+                                error(e, "", "re-connect failed", null);
+                            }
                         }
                         break;
 
@@ -645,7 +737,12 @@ var Process = (function () {
                         }
                         if (connectionId !== "") {
                             keepAlive = setInterval(function () {
-                                socket.send(Ping(connectionId));
+                                try {
+                                    socket.send(Ping(connectionId));
+                                }
+                                catch (e) {
+                                    error(e, "", "ping failed", null);
+                                }
                             }, 5000);
                         }
 
@@ -659,7 +756,7 @@ var Process = (function () {
         };
 
         socket.onerror = function (e) {
-            console.error(e.data);
+            error(e, "", "socket error", "");
         };
 
         return {
@@ -745,7 +842,7 @@ var Process = (function () {
                     return [];
                 },
                 function (state, msg) {
-                    if (!self.paused) { 
+                    if (!self.paused) {
                         state.unshift(msg);
                         $("#" + id).prepend(formatItem(msg));
                         if (state.length > (viewSize || 50)) {
@@ -766,7 +863,7 @@ var Process = (function () {
             if (!this.paused) return;
             togglePause(onResumed);
         },
-        togglePause: function(onPaused, onResumed) { 
+        togglePause: function (onPaused, onResumed) {
             if (!this.pid || !this.id) return false;
             this.paused = !this.paused;
             if (this.paused && onPaused) onPaused();
@@ -792,6 +889,8 @@ var Process = (function () {
         publish: publish,
         reply: reply,
         receive: receive,
+        setDisconnectBackOffMax: function (value) { backOffMax = value; },
+        setDisconnectBackOffMin: function (value) { backOffMin = value; },
         spawn: spawn,
         subscribe: subscribe,
         tell: tell,
