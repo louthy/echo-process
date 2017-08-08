@@ -101,8 +101,8 @@ namespace Echo
             Exception.Match(
                 Some: ex =>
                     Reason.Match(
-                        Some: reason => $"Dead letter from: {ProcessFmt(Sender)} to: {Recipient}, failed because: {reason} {ex.Message}. Type: {ContentTypeDisplay} Content: {ContentDisplay}",
-                        None: ()     => $"Dead letter from: {ProcessFmt(Sender)} to: {Recipient}, failed because: {ex.Message}. Type: {ContentTypeDisplay} Content: {ContentDisplay}"
+                        Some: reason => $"Dead letter from: {ProcessFmt(Sender)} to: {Recipient}, failed because: {reason} {ex.ToString()}. Type: {ContentTypeDisplay} Content: {ContentDisplay}",
+                        None: ()     => $"Dead letter from: {ProcessFmt(Sender)} to: {Recipient}, failed because: {ex.ToString()}. Type: {ContentTypeDisplay} Content: {ContentDisplay}"
                     ),
                 None: () =>
                     Reason.Match(
