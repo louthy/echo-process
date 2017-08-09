@@ -446,7 +446,7 @@ namespace Echo
                 {
                     // This allows for messages to arrive from JS and be dealt with at the endpoint 
                     // (where the type is known) rather than the gateway (where it isn't)
-                    return Some(JsonConvert.DeserializeObject<T>((string)message));
+                    return Some(Deserialise.Object<T>((string)message));
                 }
                 catch
                 {

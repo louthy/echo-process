@@ -1,5 +1,6 @@
 ﻿using LanguageExt;
 using LanguageExt.UnitsOfMeasure;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Reactive.Concurrency;

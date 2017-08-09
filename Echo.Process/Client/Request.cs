@@ -140,7 +140,7 @@ namespace Echo.Client
             if (conn.IsNone) return "Invalid connection-id";
 
             var msgObj = (from type in validMessageTypes(to)
-                          let obj = JsonConvert.DeserializeObject(msg, type, ActorSystemConfig.Default.JsonSerializerSettings)
+                          let obj = Deserialise.Object(msg, type)
                           where obj != null
                           select obj)
                          .FirstOrDefault();
@@ -179,7 +179,7 @@ namespace Echo.Client
             if (conn.IsNone) return "Invalid connection-id";
 
             var msgObj = (from type in validMessageTypes(to)
-                          let obj = JsonConvert.DeserializeObject(msg, type, ActorSystemConfig.Default.JsonSerializerSettings)
+                          let obj = Deserialise.Object(msg, type)
                           where obj != null
                           select obj)
                          .FirstOrDefault();

@@ -40,6 +40,9 @@ namespace Echo
             return func;
         }
 
+        public static T Object<T>(string value) =>
+            JsonConvert.DeserializeObject<T>(value);
+
         public static object Object(string value, Type type) =>
             DeserialiseFunc(type).Invoke(null, new object[] { value, ActorSystemConfig.Default.JsonSerializerSettings });
     }
