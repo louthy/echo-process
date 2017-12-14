@@ -100,6 +100,7 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
+        /// <param name="Lazy">If set to true actor will not start automatically, you need to tellSystem(processId, SystemMessage.StartupProcess) manually</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<S, T>(
             ProcessName Name,
@@ -109,7 +110,8 @@ namespace Echo
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<S, ProcessId, S> Terminated = null,
-            SystemName System = default(SystemName)
+            SystemName System = default(SystemName),
+            bool Lazy = false
             )
         {
             if (System.IsValid && ActorContext.Request != null) throw new ProcessException("When spawning you can only specify a System from outside of a Process", ActorContext.Self[Name].Path, "");
@@ -122,7 +124,7 @@ namespace Echo
                 ? sys.UserContext.Self
                 : ActorContext.SelfProcess;
 
-            return sys.ActorCreate(parent, Name, Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, false);
+            return sys.ActorCreate(parent, Name, Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, Lazy);
         }
 
         /// <summary>
