@@ -13,7 +13,7 @@ namespace Echo
     {
         const int responseActors = 20;
 
-        public static Tuple<long,Dictionary<long, AskActorReq>> Inbox(Tuple<long, Dictionary<long, AskActorReq>> state, object msg)
+        public static (long RequestId, Dictionary<long, AskActorReq> Requests) Inbox((long RequestId, Dictionary<long, AskActorReq> Requests) state, object msg)
         {
             var reqId = state.Item1;
             var dict = state.Item2;
@@ -88,13 +88,11 @@ namespace Echo
                 }
             }
 
-            return new Tuple<long, Dictionary<long, AskActorReq>>(reqId, dict);
+            return (reqId, dict);
         }
 
-        public static Tuple<long, Dictionary<long, AskActorReq>> Setup()
-        {
-            return Tuple(1L, new Dictionary<long, AskActorReq>());
-        }
+        public static (long, Dictionary<long, AskActorReq>) Setup() =>
+            (1L, new Dictionary<long, AskActorReq>());
     }
 
     internal class AskActorReq

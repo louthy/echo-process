@@ -2,12 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp1.1</TargetFramework>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.1.17" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.1.17" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.2.9-beta" />
   </ItemGroup>
 
   <ItemGroup>

@@ -31,7 +31,7 @@ namespace Echo.ActorSys
             items.Count;
 
         public IDisposable ReceiveAsync<S>(S state, Func<S, A, InboxDirective> handler) =>
-            (IDisposable)Task.Factory.StartNew(() =>
+            Task.Factory.StartNew(() =>
             {
                 bool addToFrontOfQueue = false;
                 var directive = default(InboxDirective);

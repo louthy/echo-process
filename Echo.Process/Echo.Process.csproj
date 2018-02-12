@@ -2,14 +2,14 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Label="Configuration" Condition="'$(TargetFramework)' == 'netstandard1.6'">
+  <PropertyGroup Label="Configuration" Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <DefineConstants>NETSTANDARD</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>net451;netstandard1.6</TargetFrameworks>
+    <TargetFrameworks>net451;netstandard2.0</TargetFrameworks>
     <PackageVersion>2.0.32-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
@@ -35,21 +35,21 @@
       <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.1.17" />
+    <PackageReference Include="LanguageExt.Core" Version="2.2.9-beta" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
-    <PackageReference Include="System.ValueTuple" Version="4.3.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.4.0" />
     <PackageReference Include="System.Reactive" Version="3.1.1" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.1.17" />
+    <PackageReference Include="LanguageExt.Parsec" Version="2.2.9-beta" />
      
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net451'">
       <PackageReference Include="WindowsBase" Version="4.6.1055.0" />
       <Reference Include="System.Web" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.6'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Collections" Version="4.3.0" />
     <PackageReference Include="System.Collections.Concurrent" Version="4.3.0" />
     <PackageReference Include="System.Linq.Parallel" Version="4.3.0" />

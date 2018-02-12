@@ -27,13 +27,16 @@ namespace Echo.Tests
 
             const int max = 1000;
 
-            using (queue.ReceiveAsync(0, (s, m) => { count++; return InboxDirective.Default; }))
+            try
             {
-                Range(0, max).Iter(i => queue.Post(i));
-
+                queue.ReceiveAsync(0, (s, m) => { count++; return InboxDirective.Default; });
+                Range(0, max).Iter(queue.Post);
                 Thread.Sleep(1000);
-
                 Assert.True(count == max, $"Should be {max} is actually {count} (errors: {errors.Count})");
+            }
+            finally
+            {
+                queue.Dispose();
             }
         }
     }

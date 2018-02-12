@@ -412,7 +412,7 @@ namespace Echo.Config
                         ? failure<Seq<NamedValueToken>>("Invalid arguments spec, has zero arguments")
                         : spec.Length == 1
                             ? from a in argument(settingName, spec.Head())
-                              select SeqOne(a)
+                              select Seq1(a)
                             : argumentMany(settingName, spec);
 
             // Declare the global type
