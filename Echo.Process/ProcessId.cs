@@ -522,8 +522,20 @@ namespace Echo
                 ? new ProcessId(value.Parts, system, Name, Path)
                 : this;
 
-        public bool StartsWith(ProcessId head) =>
-            this.Path.StartsWith(head.Path);
+        public bool StartsWith(ProcessId head)
+        {
+            if (head.Count() > Count()) return false;
+            if (head.value == null && value == null) return true;
+            if (head.value == null || value == null) return false;
+
+            var iterA = head.value.Parts.AsEnumerable().GetEnumerator();
+            var iterB = value.Parts.AsEnumerable().GetEnumerator();
+            while(iterA.MoveNext() && iterB.MoveNext())
+            {
+                if (iterA.Current != iterB.Current) return false;
+            }
+            return true;
+        }
 
         static R failwith<R>(string message)
         {
