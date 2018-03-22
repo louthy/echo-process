@@ -41,7 +41,7 @@ namespace Echo
 
         public int GetInboxCount() => -1;
 
-        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
             LocalScheduler.Push(schedule, ProcessId, () => Tell(message, sender, "tell", Message.Type.User));
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>

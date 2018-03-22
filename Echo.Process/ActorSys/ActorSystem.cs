@@ -853,7 +853,7 @@ by name then use Process.deregisterByName(name).");
         public Unit Ask(ProcessId pid, object message, ProcessId sender) =>
             GetDispatcher(pid).Ask(message, sender.IsValid ? sender : Self);
 
-        public Either<Unit, IDisposable> Tell(ProcessId pid, object message, Schedule schedule, ProcessId sender) =>
+        public Unit Tell(ProcessId pid, object message, Schedule schedule, ProcessId sender) =>
             GetDispatcher(pid).Tell(message, schedule, sender.IsValid ? sender : Self, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User);
 
         public Unit TellUserControl(ProcessId pid, UserControlMessage message) =>

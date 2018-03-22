@@ -86,11 +86,11 @@ namespace Echo
             }
         }
 
-        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
             Tell(message, schedule, sender, "user", Message.Type.User, tag);
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag).IfRight(unit);
+            Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO
@@ -105,7 +105,7 @@ namespace Echo
                       return unit;
                   });
 
-        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
             schedule == Schedule.Immediate
                 ? transactionalIO
                     ? TellNoIO(message, sender, inbox, type, tag)

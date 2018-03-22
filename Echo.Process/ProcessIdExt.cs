@@ -273,7 +273,7 @@ public static class ProcessIdExtensions
     /// <param name="message">Message to send</param>
     /// <param name="delayFor">How long to delay sending for</param>
     /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-    public static IDisposable Tell<T>(this ProcessId pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+    public static Unit Tell<T>(this ProcessId pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
         tell(pid, message, delayFor, sender);
 
     /// <summary>
@@ -288,6 +288,21 @@ public static class ProcessIdExtensions
     /// <param name="message">Message to send</param>
     /// <param name="delayUntil">Date and time to send</param>
     /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-    public static IDisposable Tell<T>(this ProcessId pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+    public static Unit Tell<T>(this ProcessId pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
         tell(pid, message, delayUntil, sender);
+
+    /// <summary>
+    /// Send a message at a specified time in the future
+    /// </summary>
+    /// <remarks>
+    /// This will fail to be accurate across a Daylight Saving Time boundary
+    /// </remarks>
+    /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+    /// for any other reason.</returns>
+    /// <param name="pid">Process ID to send to</param>
+    /// <param name="message">Message to send</param>
+    /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+    /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+    public static Unit Tell<T>(this ProcessId pid, T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+        tell(pid, message, schedule, sender);
 }
