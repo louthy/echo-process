@@ -9,7 +9,7 @@ namespace Echo
         IObservable<T> Observe<T>();
         IObservable<T> ObserveState<T>();
         Unit Ask(object message, ProcessId sender);
-        Unit Tell(object message, ProcessId sender, Message.TagSpec tag);
+        Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag);
         Unit TellSystem(SystemMessage message, ProcessId sender);
         Unit TellUserControl(UserControlMessage message, ProcessId sender);
         Map<string, ProcessId> GetChildren();

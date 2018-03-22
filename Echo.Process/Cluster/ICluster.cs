@@ -151,8 +151,10 @@ namespace Echo
         /// <returns>Session keys</returns>
         IEnumerable<string> QuerySessionKeys();
 
+
         // TODO: Docs
 
+        IEnumerable<string> QueryScheduleKeys(string system);
         bool HashFieldExists(string key, string field);
         void HashFieldAddOrUpdate<T>(string key, string field, T value);
         void HashFieldAddOrUpdate<T>(string key, Map<string, T> fields);

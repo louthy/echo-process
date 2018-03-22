@@ -374,6 +374,13 @@ namespace Echo
                 select strKey);
 
         /// <summary>
+        /// Finds all schedule keys
+        /// </summary>
+        /// <returns>Session keys</returns>
+        public IEnumerable<string> QueryScheduleKeys(string system) =>
+            QueryKeys($"/__schedule/{system}/*", "", "");
+
+        /// <summary>
         /// Finds all session keys
         /// </summary>
         /// <returns>Session keys</returns>

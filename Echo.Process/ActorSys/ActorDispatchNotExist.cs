@@ -28,7 +28,7 @@ namespace Echo
         public IObservable<T> ObserveState<T>() =>
             Observable.Empty<T>();
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
+        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
             Raise<Unit>(sender);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>

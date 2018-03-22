@@ -32,6 +32,7 @@ namespace Echo
         ActorItem system;
         ActorItem deadLetters;
         ActorItem errors;
+        ActorItem scheduler;
         ActorItem inboxShutdown;
         ActorItem sessionMonitor;
         ActorItem ask;
@@ -118,6 +119,11 @@ namespace Echo
             deadLetters     = ActorCreate<DeadLetter>(system, Config.DeadLettersProcessName, publish, null, ProcessFlags.Default);
             errors          = ActorCreate<Exception>(system, Config.ErrorsProcessName, publish, null, ProcessFlags.Default);
             monitor         = ActorCreate<ClusterMonitor.State, ClusterMonitor.Msg>(system, Config.MonitorProcessName, ClusterMonitor.Inbox, () => ClusterMonitor.Setup(System), null, ProcessFlags.Default);
+
+            Cluster.Iter(c =>
+            {
+                scheduler = ActorCreate<Unit>(system, Config.SchedulerName, (Action<Unit>)Echo.Scheduler.Inbox, null, ProcessFlags.Default);
+            });
 
             inboxShutdown   = ActorCreate<IActorInbox>(system, Config.InboxShutdownProcessName, inbox => inbox.Shutdown(), null, ProcessFlags.Default, 100000);
 

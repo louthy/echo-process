@@ -1,10 +1,6 @@
 ﻿using LanguageExt;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using static LanguageExt.Prelude;
 
@@ -97,17 +93,18 @@ namespace Echo
         public string Content;
         public Guid MessageId;
         public string SessionId;
+        public long Due;
 
-        internal static RemoteMessageDTO Create(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId) =>
+        internal static RemoteMessageDTO Create(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long due) =>
             map(message as ActorRequest, req =>
                 req == null
                     ? map(message as ActorResponse, res =>
                         res == null
-                            ? CreateMessage(message, to, sender, type, tag, sessionId)
+                            ? CreateMessage(message, to, sender, type, tag, sessionId, due)
                             : CreateResponse(res, to, sender, sessionId))
                     : CreateRequest(req, to, sender, sessionId));
 
-        internal static RemoteMessageDTO CreateMessage(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId) =>
+        internal static RemoteMessageDTO CreateMessage(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long due) =>
             new RemoteMessageDTO
             {
                 Type        = (int)type,
@@ -121,7 +118,8 @@ namespace Echo
                 Content     = message == null
                                 ? null
                                 : JsonConvert.SerializeObject(message, ActorSystemConfig.Default.JsonSerializerSettings),
-                SessionId   = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null)
+                SessionId   = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null),
+                Due         = due
             };
 
         internal static RemoteMessageDTO CreateRequest(ActorRequest req, ProcessId to, ProcessId sender, Option<SessionId> sessionId) =>

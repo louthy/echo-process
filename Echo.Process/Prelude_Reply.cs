@@ -45,9 +45,10 @@ namespace Echo
                                     ActorContext.Request.Self.Actor.Id, 
                                     ActorContext.Request.CurrentRequest.RequestId,
                                     typeof(T).AssemblyQualifiedName
-                                ), 
+                                ),
+                                Schedule.Immediate,
                                 ActorContext.Request.Self.Actor.Id
-                            )
+                            ).IfRight(unit)
                     : raiseUseInMsgLoopOnlyException<Unit>(nameof(reply));
 
         /// <summary>
@@ -79,9 +80,10 @@ namespace Echo
                                 ActorContext.Request.CurrentRequest.RequestId,
                                 exception.GetType().AssemblyQualifiedName,
                                 true
-                            ), 
+                            ),
+                            Schedule.Immediate,
                             ActorContext.Request.Self.Actor.Id
-                        )
+                        ).IfRight(unit)
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(reply));
 
         /// <summary>

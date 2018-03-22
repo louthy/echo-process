@@ -136,7 +136,8 @@ namespace Echo
                             req.RequestId,
                             typeof(Exception).AssemblyQualifiedName,
                             true
-                        ), 
+                        ),
+                        Schedule.Immediate,
                         self
                     );
 
@@ -221,5 +222,11 @@ namespace Echo
 
         public static string ClusterStatePubSubKey(ProcessId pid) =>
             ClusterKey(pid) + "-state-pubsub";
+
+        public static string ClusterScheduleKey(ProcessId pid) =>
+            $"/__schedule{ClusterKey(pid)}-user-schedule";
+
+        public static string ClusterScheduleNotifyKey(ProcessId pid) =>
+            ClusterScheduleKey(pid) + "-notify";
     }
 }

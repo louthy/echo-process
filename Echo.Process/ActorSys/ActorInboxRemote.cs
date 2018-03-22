@@ -16,6 +16,7 @@ namespace Echo
         Actor<S, T> actor;
         ActorItem parent;
         int maxMailboxSize;
+        int scheduledItems;
         object sync = new object();
 
         public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
@@ -74,6 +75,18 @@ namespace Echo
             // We want the check done asyncronously, in case the setup function creates child processes that
             // won't exist if we invoke directly.
             cluster.PublishToChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id), Guid.NewGuid().ToString());
+        }
+
+        void SubscribeToScheduleInboxChannel()
+        {
+            cluster.UnsubscribeChannel(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id));
+            cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id)).Subscribe(msg => scheduledItems++);
+            // We want the check done asyncronously, in case the setup function creates child processes that
+            // won't exist if we invoke directly.
+
+            // TODO: Consider the implications of race condition here --- will probably need some large 'clear out' process that does a query
+            //       on the cluster.  Or maybe this internal counter isn't the best approach.
+            scheduledItems = cluster.GetHashFields(ActorInboxCommon.ClusterScheduleKey(actor.Id)).Count; 
         }
 
         public bool IsPaused

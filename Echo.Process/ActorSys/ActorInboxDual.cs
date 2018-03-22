@@ -183,7 +183,7 @@ namespace Echo
                                 {
                                     if (IsPaused)
                                     {
-                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Tell(message, sender, Message.TagSpec.User);
+                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Tell(message, Schedule.Immediate, sender, Message.TagSpec.User);
                                     }
                                     else
                                     {

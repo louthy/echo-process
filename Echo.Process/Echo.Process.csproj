@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
@@ -10,7 +10,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net451;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.0.32-beta</PackageVersion>
+    <PackageVersion>2.0.33-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
@@ -33,6 +33,11 @@
       <Compile Remove="bin\**" />
       <EmbeddedResource Remove="bin\**" />
       <EmbeddedResource Remove="obj\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="ActorSys\LocalScheduler.cs" />
+    <None Remove="ActorSys\Scheduler.cs" />
+    <None Remove="Schedule.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="LanguageExt.Core" Version="2.2.9-beta" />

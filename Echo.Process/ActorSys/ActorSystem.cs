@@ -89,6 +89,7 @@ namespace Echo
             NodeName        = cluster.Map(c => c.NodeName).IfNone("user");
             AskId           = System[ActorSystemConfig.Default.AskProcessName];
             Disp            = ProcessId.Top["disp"].SetSystem(SystemName);
+            Scheduler       = System[ActorSystemConfig.Default.SchedulerName];
 
             userContext = new ActorRequestContext(
                 this,
@@ -105,6 +106,7 @@ namespace Echo
         public void Initialise()
         {
             ClusterWatch(cluster);
+            SchedulerStart(cluster);
         }
 
         public SystemName Name => SystemName;
@@ -131,7 +133,7 @@ namespace Echo
         public ClusterMonitor.State ClusterState =>
             clusterState;
 
-        private void ClusterWatch(Option<ICluster> cluster)
+        void ClusterWatch(Option<ICluster> cluster)
         {
             var monitor = System[ActorSystemConfig.Default.MonitorProcessName];
 
@@ -154,7 +156,13 @@ namespace Echo
                 });
             });
 
-            Tell(monitor, new ClusterMonitor.Msg(ClusterMonitor.MsgTag.Heartbeat), User);
+            Tell(monitor, new ClusterMonitor.Msg(ClusterMonitor.MsgTag.Heartbeat), Schedule.Immediate, User);
+        }
+
+        void SchedulerStart(Option<ICluster> cluster)
+        {
+            var pid = System[ActorSystemConfig.Default.SchedulerName];
+            cluster.IfSome(c => Tell(pid, unit, Schedule.Immediate, User));
         }
 
         public void Dispose()
@@ -513,6 +521,7 @@ namespace Echo
         public ProcessId Root { get; }
         public ProcessId User { get; }
         public ProcessId Errors { get; }
+        public ProcessId Scheduler { get; }
         public ProcessId DeadLetters { get; }
         public ProcessId Disp { get; }
         public readonly ProcessId RootJS;
@@ -844,8 +853,8 @@ by name then use Process.deregisterByName(name).");
         public Unit Ask(ProcessId pid, object message, ProcessId sender) =>
             GetDispatcher(pid).Ask(message, sender.IsValid ? sender : Self);
 
-        public Unit Tell(ProcessId pid, object message, ProcessId sender) =>
-            GetDispatcher(pid).Tell(message, sender.IsValid ? sender : Self, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User);
+        public Either<Unit, IDisposable> Tell(ProcessId pid, object message, Schedule schedule, ProcessId sender) =>
+            GetDispatcher(pid).Tell(message, schedule, sender.IsValid ? sender : Self, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User);
 
         public Unit TellUserControl(ProcessId pid, UserControlMessage message) =>
             GetDispatcher(pid).TellUserControl(message, Self);

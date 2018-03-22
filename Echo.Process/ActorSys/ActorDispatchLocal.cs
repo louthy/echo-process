@@ -1,10 +1,10 @@
 ﻿using LanguageExt;
+using static LanguageExt.Prelude;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-
-using static LanguageExt.Prelude;
+using static Echo.Process;
 
 namespace Echo
 {
@@ -38,10 +38,8 @@ namespace Echo
         public Either<string, bool> CanAccept<T>() =>
             Inbox.CanAcceptMessageType<T>();
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
-            transactionalIO
-                ? Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender)
-                : ProcessOp.IO(() => Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender));
+        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+            LocalScheduler.Push(schedule, Actor.Id, () => Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender));
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO

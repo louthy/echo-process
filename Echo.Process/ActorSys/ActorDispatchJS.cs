@@ -1,5 +1,6 @@
 ﻿using Echo.Client;
 using LanguageExt;
+using static LanguageExt.Prelude;
 using System;
 using System.Collections.Generic;
 using static Echo.Process;
@@ -40,8 +41,8 @@ namespace Echo
 
         public int GetInboxCount() => -1;
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
-            Tell(message, sender, "tell", Message.Type.User);
+        public Either<Unit, IDisposable> Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+            LocalScheduler.Push(schedule, ProcessId, () => Tell(message, sender, "tell", Message.Type.User));
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             Tell(message, sender, "sys-"+message.Tag.ToString().ToLower(), Message.Type.System);
