@@ -40,7 +40,7 @@ namespace Echo
 
         public ProcessId Sender { get; }
         public ProcessId ReplyTo { get; }
-        public object Content { get; }
+        public object Content { get; internal set; }
 
         public UserMessage SetSystem(SystemName sys) =>
             new UserMessage(Content, Sender.SetSystem(sys), ReplyTo.SetSystem(sys));

@@ -8,6 +8,8 @@ namespace Echo
 {
     internal static class Scheduler
     {
+        static readonly Schedule schedule = Schedule.Ephemeral(TimeSpan.FromSeconds(0.1), "loop");
+
         // TODO: Serious optimisation needed if this is to scale
 
         public static void Inbox(Unit tick)
@@ -48,7 +50,7 @@ namespace Echo
                 }
             });
 
-            tellSelf(unit, TimeSpan.FromSeconds(0.1));
+            tellSelf(unit, schedule);
         }
     }
 }

@@ -133,11 +133,27 @@ namespace Echo
         Unit DoScheduleNoIO(object message, ProcessId sender, Schedule schedule, Message.Type type, Message.TagSpec tag)
         {
             ValidateMessageType(message, sender);
-            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
+
             var inboxKey = ActorInboxCommon.ClusterScheduleKey(ProcessId);
             var inboxNotifyKey = ActorInboxCommon.ClusterScheduleNotifyKey(ProcessId);
             var id = schedule.Key ?? Guid.NewGuid().ToString();
+            var current = Cluster.GetHashField<RemoteMessageDTO>(inboxKey, id);
+
+            message = current.Match(
+                Some: last =>
+                {
+                    var a = MessageSerialiser.DeserialiseMsg(last, ProcessId) as UserMessage;
+                    var m = a == null
+                        ? message
+                        : schedule.Fold(a.Content, message);
+                    return m;
+                },
+                None: () => message);
+
+            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
+
             Cluster.HashFieldAddOrUpdate(inboxKey, id, dto);
+
             var clientsReached = Cluster.PublishToChannel(inboxNotifyKey, id);
             return unit;
         }

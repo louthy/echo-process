@@ -4,6 +4,7 @@ using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 using static LanguageExt.Map;
 using LanguageExt;
+using System.Collections;
 
 namespace Echo
 {
