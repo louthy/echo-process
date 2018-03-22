@@ -27,7 +27,7 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.2.9-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="2.2.13-beta" />
     <PackageReference Include="Owin.WebSocket" Version="1.7.0" />
   </ItemGroup>
   <ItemGroup>
