@@ -111,7 +111,7 @@ namespace Echo
                     ? TellNoIO(message, sender, inbox, type, tag)
                     : ProcessOp.IO(() => TellNoIO(message, sender, inbox, type, tag))
                 : schedule.Type == Schedule.PersistenceType.Ephemeral
-                    ? LocalScheduler.Push(schedule, ProcessId, () => TellNoIO(message, sender, inbox, type, tag))
+                    ? LocalScheduler.Push(schedule, ProcessId, m => TellNoIO(m, sender, inbox, type, tag), message)
                     : DoSchedule(message, schedule, sender, type, tag);
 
         Unit TellNoIO(object message, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag)
@@ -132,8 +132,6 @@ namespace Echo
 
         Unit DoScheduleNoIO(object message, ProcessId sender, Schedule schedule, Message.Type type, Message.TagSpec tag)
         {
-            ValidateMessageType(message, sender);
-
             var inboxKey = ActorInboxCommon.ClusterScheduleKey(ProcessId);
             var inboxNotifyKey = ActorInboxCommon.ClusterScheduleNotifyKey(ProcessId);
             var id = schedule.Key ?? Guid.NewGuid().ToString();
@@ -148,7 +146,9 @@ namespace Echo
                         : schedule.Fold(a.Content, message);
                     return m;
                 },
-                None: () => message);
+                None: () => schedule.Fold(schedule.Zero, message));
+
+            ValidateMessageType(message, sender);
 
             var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
 

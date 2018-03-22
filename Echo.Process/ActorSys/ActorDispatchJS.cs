@@ -42,7 +42,7 @@ namespace Echo
         public int GetInboxCount() => -1;
 
         public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
-            LocalScheduler.Push(schedule, ProcessId, () => Tell(message, sender, "tell", Message.Type.User));
+            LocalScheduler.Push(schedule, ProcessId, m => Tell(m, sender, "tell", Message.Type.User), message);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             Tell(message, sender, "sys-"+message.Tag.ToString().ToLower(), Message.Type.System);

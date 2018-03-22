@@ -39,7 +39,7 @@ namespace Echo
             Inbox.CanAcceptMessageType<T>();
 
         public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
-            LocalScheduler.Push(schedule, Actor.Id, () => Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender));
+            LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender), message);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO

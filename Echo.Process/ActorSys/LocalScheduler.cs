@@ -11,15 +11,15 @@ namespace Echo
     internal static class LocalScheduler
     {
         static object sync = new object();
-        static Map<long, Seq<(string key, Action action, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
+        static Map<long, Seq<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
         static Map<string, long> keys;
-        static Que<(Schedule schedule, ProcessId pid, Action action, ActorRequestContext context, Option<SessionId> sessionId)> inbound;
+        static Que<(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> inbound;
 
-        public static Unit Push(Schedule schedule, ProcessId pid, Action action)
+        public static Unit Push(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message)
         {
             if (schedule == Schedule.Immediate)
             {
-                action();
+                action(message);
                 return unit;
             }
             else
@@ -39,7 +39,7 @@ namespace Echo
 
                     lock (sync)
                     {
-                        inbound = inbound.Enqueue((schedule, pid, action, savedContext, savedSession));
+                        inbound = inbound.Enqueue((schedule, pid, action, message, savedContext, savedSession));
                     }
                     return unit;
                 }
@@ -67,18 +67,21 @@ namespace Echo
             var now = DateTime.UtcNow.Ticks;
             while (inbound.Count > 0 && DateTime.UtcNow.Ticks - now < TimeSpan.TicksPerMillisecond)
             {
-                var (schedule, pid, action, context, sessionId) = inbound.Peek();
+                var (schedule, pid, action, message, context, sessionId) = inbound.Peek();
 
                 var key = pid.Path + "|" + schedule.Key;
+                var existing = FindExistingScheduledMessage(key);
 
-                keys.Find(key).Match(
-                    Some: ticks =>
-                    {
-                        actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != key));
-                    },
-                    None: () => { });
+                RemoveExistingScheduledMessage(key);
 
-                actions = actions.AddOrUpdate(schedule.Due.Ticks, Some: seq => (key, action, context, sessionId).Cons(seq), None: () => Seq1((key, action, context, sessionId)));
+                message = schedule.Fold(existing.Map(x => x.message).IfNoneUnsafe(schedule.Zero), message);
+
+                actions = actions.AddOrUpdate(
+                    schedule.Due.Ticks,
+                    Some: seq => (key, action, message, context, sessionId).Cons(seq), 
+                    None: () => Seq1((key, action, message, context, sessionId)));
+
+
                 keys = keys.AddOrUpdate(key, schedule.Due.Ticks);
 
                 lock (sync)
@@ -87,6 +90,24 @@ namespace Echo
                 }
             }
         }
+
+        private static void RemoveExistingScheduledMessage(string key)
+        {
+            keys.Find(key).Match(
+                Some: ticks =>
+                {
+                    actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != key));
+                },
+                None: () => { });
+        }
+
+        private static Option<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> FindExistingScheduledMessage(string key) =>
+            from ticks in keys.Find(key)
+            from seq in actions.Find(ticks)
+            from res in (from tup in seq
+                         where tup.key == key
+                         select tup).HeadOrNone()
+            select res;
 
         static void ProcessActions()
         {
@@ -101,7 +122,7 @@ namespace Echo
                     {
                         if (item.context == null)
                         {
-                            item.action();
+                            item.action(item.message);
                         }
                         else
                         {
@@ -114,7 +135,7 @@ namespace Echo
                                          item.sessionId,
                                          () =>
                                          {
-                                             item.action();
+                                             item.action(item.message);
 
                                              // Run the operations that affect the settings and sending of tells
                                              // in the order which they occured in the actor
