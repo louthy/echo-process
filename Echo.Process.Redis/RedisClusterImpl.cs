@@ -449,7 +449,7 @@ namespace Echo
                         {
                             return f();
                         }
-                        catch (TimeoutException)
+                        catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
                         {
                             if (i == TimeoutRetries)
                             {
@@ -473,11 +473,7 @@ namespace Echo
             {
                 return f();
             }
-            catch (TimeoutException)
-            {
-                return retry();
-            }
-            catch (RedisConnectionException)
+            catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
             {
                 return retry();
             }
