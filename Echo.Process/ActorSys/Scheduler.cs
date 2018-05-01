@@ -8,7 +8,7 @@ namespace Echo
 {
     internal static class Scheduler
     {
-        static readonly Schedule schedule = Schedule.Ephemeral(TimeSpan.FromSeconds(0.1), "loop");
+        static readonly Schedule schedule = Schedule.Ephemeral(TimeSpan.FromSeconds(1), "loop");
 
         // TODO: Serious optimisation needed if this is to scale
 

@@ -47,7 +47,7 @@ namespace Echo
         }
 
         public static IDisposable Run() =>
-            Observable.Interval(TimeSpan.FromMilliseconds(1)).Subscribe(Process);
+            Observable.Interval(TimeSpan.FromMilliseconds(10)).Subscribe(Process);
 
         static void Process(long time)
         {
