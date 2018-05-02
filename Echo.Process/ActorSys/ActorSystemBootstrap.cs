@@ -122,7 +122,7 @@ namespace Echo
 
             Cluster.Iter(c =>
             {
-                scheduler = ActorCreate<Unit>(system, Config.SchedulerName, (Action<Unit>)Echo.Scheduler.Inbox, null, ProcessFlags.Default);
+                scheduler = ActorCreate<Scheduler.State, Scheduler.Msg>(system, Config.SchedulerName, Scheduler.Inbox, () => Scheduler.State.Empty, null, ProcessFlags.ListenRemoteAndLocal);
             });
 
             inboxShutdown   = ActorCreate<IActorInbox>(system, Config.InboxShutdownProcessName, inbox => inbox.Shutdown(), null, ProcessFlags.Default, 100000);

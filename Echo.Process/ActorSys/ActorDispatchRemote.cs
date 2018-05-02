@@ -133,7 +133,6 @@ namespace Echo
         Unit DoScheduleNoIO(object message, ProcessId sender, Schedule schedule, Message.Type type, Message.TagSpec tag)
         {
             var inboxKey = ActorInboxCommon.ClusterScheduleKey(ProcessId);
-            var inboxNotifyKey = ActorInboxCommon.ClusterScheduleNotifyKey(ProcessId);
             var id = schedule.Key ?? Guid.NewGuid().ToString();
             var current = Cluster.GetHashField<RemoteMessageDTO>(inboxKey, id);
 
@@ -152,9 +151,9 @@ namespace Echo
 
             var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
 
-            Cluster.HashFieldAddOrUpdate(inboxKey, id, dto);
+            tell(ProcessId.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.AddToSchedule(inboxKey, id, dto));
 
-            var clientsReached = Cluster.PublishToChannel(inboxNotifyKey, id);
+            //Cluster.HashFieldAddOrUpdate(inboxKey, id, dto);
             return unit;
         }
 

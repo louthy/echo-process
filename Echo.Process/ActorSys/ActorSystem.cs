@@ -162,7 +162,7 @@ namespace Echo
         void SchedulerStart(Option<ICluster> cluster)
         {
             var pid = System[ActorSystemConfig.Default.SchedulerName];
-            cluster.IfSome(c => Tell(pid, unit, Schedule.Immediate, User));
+            cluster.IfSome(c => Tell(pid, Echo.Scheduler.Msg.Check, Schedule.Immediate, User));
         }
 
         public void Dispose()

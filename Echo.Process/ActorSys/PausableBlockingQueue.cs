@@ -36,48 +36,57 @@ namespace Echo.ActorSys
                 bool addToFrontOfQueue = false;
                 var directive = default(InboxDirective);
 
-                foreach (var item in items.GetConsumingEnumerable(token))
+                if (token.IsCancellationRequested) return;
+
+                try
                 {
-                    do
+                    foreach (var item in items.GetConsumingEnumerable(token))
                     {
-                        if (token.IsCancellationRequested) return;
-
-                        if (IsPaused)
+                        do
                         {
-                            pauseWait?.WaitOne();
+                            if (token.IsCancellationRequested) return;
+
+                            if (IsPaused)
+                            {
+                                pauseWait?.WaitOne();
+                            }
+
+                            try
+                            {
+                                directive = handler(state, item);
+                            }
+                            catch (Exception e)
+                            {
+                                Process.logErr(e);
+                            }
+
+                            switch (directive)
+                            {
+                                case InboxDirective.Pause:
+                                    addToFrontOfQueue = false;
+                                    Pause();
+                                    break;
+
+                                case InboxDirective.Shutdown:
+                                    addToFrontOfQueue = false;
+                                    Cancel();
+                                    return;
+
+                                case InboxDirective.PushToFrontOfQueue:
+                                    addToFrontOfQueue = true;
+                                    break;
+
+                                case InboxDirective.Default:
+                                    addToFrontOfQueue = false;
+                                    break;
+                            }
                         }
-
-                        try
-                        {
-                            directive = handler(state, item);
-                        }
-                        catch (Exception e)
-                        {
-                            Process.logErr(e);
-                        }
-
-                        switch (directive)
-                        {
-                            case InboxDirective.Pause:
-                                addToFrontOfQueue = false;
-                                Pause();
-                                break;
-
-                            case InboxDirective.Shutdown:
-                                addToFrontOfQueue = false;
-                                Cancel();
-                                return;
-
-                            case InboxDirective.PushToFrontOfQueue:
-                                addToFrontOfQueue = true;
-                                break;
-
-                            case InboxDirective.Default:
-                                addToFrontOfQueue = false;
-                                break;
-                        }
+                        while (addToFrontOfQueue);
                     }
-                    while (addToFrontOfQueue);
+                }
+                catch(OperationCanceledException)
+                {
+                    return;
                 }
             }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 

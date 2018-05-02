@@ -20,8 +20,8 @@ namespace ScheduledMessages
             initialise("app", "schedule-test", "schedule-test1", "localhost", "0");
 
             //RunInbox();
-            //RunInboxAppendNum();
-            RunInboxAppend();
+            RunInboxAppendNum();
+            //RunInboxAppend();
         }
 
         static void RunInbox()
