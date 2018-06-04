@@ -3,7 +3,7 @@
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net451</TargetFramework>
+    <TargetFramework>net46</TargetFramework>
     <PackageVersion>2.0.39-beta</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
