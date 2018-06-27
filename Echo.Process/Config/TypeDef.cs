@@ -181,21 +181,23 @@ namespace Echo.Config
                                         .Map((func, variants) =>
 
                                               // Hard-coded (for now) strategy match grammar
-                                              func == "match" ? from m in p.match
-                                                                select new NamedValueToken("match", m, None)
+                                              func == "match" ? attempt(from m in p.match
+                                                                        select new NamedValueToken("match", m, None))
 
                                               // Hard-coded (for now) strategy redirect grammar
-                                            : func == "redirect" ? from r in p.redirect
-                                                                   select new NamedValueToken("redirect", r, None)
+                                            : func == "redirect" ? attempt(from r in p.redirect
+                                                                           select new NamedValueToken("redirect", r, None))
 
                                               // Attempt to parse the known properties and function definitions
-                                            : from nam in attempt(p.reserved(func))
-                                              from _ in p.symbol(":")
-                                              from tok in choice(variants.Map(variant =>
-                                                  from vals in p.arguments(nam, variant.Args)
-                                                  let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
-                                                  select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None)))
-                                              select tok).Values.ToArray()),
+                                            : attempt(
+                                                from nam in p.reserved(func)
+                                                from _ in p.symbol(":")
+                                                from tok in choice(variants.Map(variant =>
+                                                    attempt(
+                                                        from vals in p.arguments(nam, variant.Args)
+                                                        let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
+                                                        select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None))))
+                                                select tok)).Values.ToArray()),
 
                                     // Local value definitions
                                     from vd in p.valueDef

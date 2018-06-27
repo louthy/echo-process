@@ -189,6 +189,28 @@ namespace Echo
             select y;
 
         /// <summary>
+        /// Applies a strategy that causes the Process to 'back off'.  That is it will
+        /// be paused for an amount of time before it can continue doing other operations.
+        /// </summary>
+        /// <param name="Min">Minimum back-off time</param>
+        /// <param name="Max">Maximum back-off time; once this point is reached the Process 
+        /// will stop for good</param>
+        /// <param name="Scalar">The amount to multiply the previous back-off time amount for each failure.
+        /// That allows for the steps to grow gradually larger as the Process keeps failing</param>
+        /// <returns>Strategy computation as a State monad</returns>
+        public static State<StrategyContext, Unit> Backoff(Time Min, Time Max, double Scalar) =>
+            from x in Context
+            let current = x.Global.Failures < 2
+                ? Min < (0.0000001 * s)
+                    ? (0.0000001 * s)
+                    : Min
+                : (x.Global.BackoffAmount * Scalar).Max(Min)
+            from y in current > Max
+                ? SetDirective(Directive.Stop)
+                : SetBackOffAmount(current)
+            select y;
+
+        /// <summary>
         /// Applies a strategy that causes the Process to 'back off' for a fixed amount of 
         /// time.  That is it will be paused for an amount of time before it can continue 
         /// doing other operations.  This strategy never causes a Process to be stopped.

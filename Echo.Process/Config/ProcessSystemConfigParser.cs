@@ -333,7 +333,7 @@ namespace Echo.Config
 
             // Expression parser
             exprUnknownType =
-                buildExpressionParser(table, termUnknownType);
+                buildExpressionParser(table.Reverse().ToArray(), termUnknownType);
 
             // Variable declaration parser
             valueDef =
@@ -575,7 +575,16 @@ namespace Echo.Config
                 new FieldSpec("step", () => types.Time)
             );
 
-            var backoff2 = FuncSpec.Property("backoff", () => strategy, () => types.Time, value => Strategy.Backoff((Time)value));
+            var backoff2 = FuncSpec.Attrs(
+                "backoff",
+                () => strategy,
+                locals => Strategy.Backoff((Time)locals["min"], (Time)locals["max"], (double)locals["scalar"]),
+                new FieldSpec("min", () => types.Time),
+                new FieldSpec("max", () => types.Time),
+                new FieldSpec("scalar", () => types.Double)
+            );
+
+            var backoff3 = FuncSpec.Property("backoff", () => strategy, () => types.Time, value => Strategy.Backoff((Time)value));
 
             // match
             // | exception -> directive
@@ -592,7 +601,7 @@ namespace Echo.Config
                 typeof(State<StrategyContext,Unit>),
                 (_,s) => Strategy.Compose(compose((Lst<NamedValueToken>)s).ToArray().ToArray()),
                 20,
-                new[] { oneForOne, allForOne, always, pause, retries1, retries2, backoff1, backoff2, match, redirect }.Append(strategyFuncs).ToArray()
+                new[] { oneForOne, allForOne, always, pause, retries1, retries2, backoff1, backoff2, backoff3, match, redirect }.Append(strategyFuncs).ToArray()
             );
 
             return strategy;
