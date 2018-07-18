@@ -192,11 +192,11 @@ namespace Echo.Config
                                             : attempt(
                                                 from nam in p.reserved(func)
                                                 from _ in p.symbol(":")
-                                                from tok in choice(variants.Map(variant =>
+                                                from tok in choice(Seq(variants.Map(variant =>
                                                     attempt(
                                                         from vals in p.arguments(nam, variant.Args)
                                                         let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
-                                                        select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None))))
+                                                        select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None)))))
                                                 select tok)).Values.ToArray()),
 
                                     // Local value definitions

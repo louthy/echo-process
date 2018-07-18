@@ -249,7 +249,7 @@ namespace Echo.Config
                 select new ValueToken(types.Get("strategy"), r);
 
             // Type name parser
-            typeName = choice(types.AllInOrder.Map(t => reserved(t.Name).Map(_ => t)).ToArray());
+            typeName = choice(Seq(types.AllInOrder.Map(t => reserved(t.Name).Map(_ => t))));
 
             // cluster.<alias>.<property> parser -- TODO: generalise
             Parser<ValueToken> clusterVar =
@@ -321,7 +321,7 @@ namespace Echo.Config
 
             valueUntyped = choice(
                 variable,
-                choice(types.AllInOrder.Map(typ => attempt(typ.ValueParser(this).Map(val => new ValueToken(typ, typ.Ctor(None, val))))).ToArray())
+                choice(Seq(types.AllInOrder.Map(typ => attempt(typ.ValueParser(this).Map(val => new ValueToken(typ, typ.Ctor(None, val)))))))
             );
 
             // Expression term parser
@@ -399,7 +399,7 @@ namespace Echo.Config
             // Parses many arguments, wrapped in ( )
             argumentMany =
                 (settingName, spec) =>
-                    from a in commaSep1(choice(spec.Map(arg => namedArgument(settingName, arg))))
+                    from a in commaSep1(choice(Seq(spec.Map(arg => namedArgument(settingName, arg)))))
                     from r in a.Count == spec.Length
                         ? result(a)
                         : failure<Seq<NamedValueToken>>("Invalid arguments for " + settingName)
