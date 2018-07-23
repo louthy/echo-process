@@ -100,7 +100,7 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
-        /// <param name="Lazy">If set to true actor will not start automatically, you need to tellSystem(processId, SystemMessage.StartupProcess) manually</param>
+        /// <param name="Lazy">If set to true actor will not start automatically, you need to startup(processId) manually</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<S, T>(
             ProcessName Name,

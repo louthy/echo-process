@@ -23,8 +23,16 @@ namespace Echo
                 reqId++;
 
                 var req = (AskActorReq)msg;
-                ActorContext.System(req.To).Ask(req.To, new ActorRequest(req.Message, req.To, Self, reqId), Self);
-                dict.Add(reqId, req);
+                try
+                {
+                    ActorContext.System(req.To).Ask(req.To, new ActorRequest(req.Message, req.To, Self, reqId), Self);
+                    dict.Add(reqId, req);
+                }
+                catch(Exception e)
+                {
+                    req.Complete(new AskActorRes(new ProcessException($"Process issue: {e.Message}", req.To.Path, req.ReplyTo.Path, e), req.ReplyType));
+                    logUserErr(e.Message);
+                }
             }
             else
             {

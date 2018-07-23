@@ -235,7 +235,6 @@ namespace Echo
         public static Unit startup(ProcessId pid) =>
             ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess);
 
-
         /// <summary>
         /// Shutdown a specified running process.
         /// Forces the specified Process to shutdown.  The shutdown message jumps 
