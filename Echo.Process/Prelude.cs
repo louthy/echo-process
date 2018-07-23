@@ -230,6 +230,13 @@ namespace Echo
             ActorContext.System(pid).Kill(pid, false);
 
         /// <summary>
+        /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
+        /// </summary>
+        public static Unit startup(ProcessId pid) =>
+            ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess);
+
+
+        /// <summary>
         /// Shutdown a specified running process.
         /// Forces the specified Process to shutdown.  The shutdown message jumps 
         /// ahead of any messages already in the process's queue.  Any Process
