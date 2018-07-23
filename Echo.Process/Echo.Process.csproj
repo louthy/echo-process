@@ -10,7 +10,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net46;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.0.42-beta</PackageVersion>
+    <PackageVersion>2.0.43-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
@@ -40,14 +40,14 @@
     <None Remove="Schedule.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.0.19" />
+    <PackageReference Include="LanguageExt.Core" Version="3.0.20" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
-    <PackageReference Include="System.Reactive" Version="[3.1.1,5.0]" />
+    <PackageReference Include="System.Reactive" Version="[4.0,5.0]" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.0.19" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.0.20" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net46'">
       <PackageReference Include="WindowsBase" Version="4.6.1055.0" />
