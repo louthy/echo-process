@@ -10,7 +10,7 @@ namespace Echo.ActorSys
 {
     public class PausableBlockingQueue<A> : IDisposable
     {
-        readonly EventWaitHandle pauseWait = new AutoResetEvent(true);
+        readonly EventWaitHandle pauseWait = new AutoResetEvent(false);
         readonly BlockingCollection<A> items;
         readonly CancellationTokenSource tokenSource;
         readonly CancellationToken token;
