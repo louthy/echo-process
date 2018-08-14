@@ -926,18 +926,17 @@ namespace Echo
                 }
             }
 
-            unpause(pid);
-
             switch (directive.Type)
             {
                 case DirectiveType.Escalate:
                     tellSystem(Parent.Actor.Id, SystemMessage.ChildFaulted(pid, sender, e, message), Self);
                     break;
                 case DirectiveType.Resume:
-                    // Do nothing
+                    unpause(pid);
                     break;
                 case DirectiveType.Restart:
                     Restart();
+                    unpause(pid);
                     break;
                 case DirectiveType.Stop:
                     ShutdownProcess(false);
