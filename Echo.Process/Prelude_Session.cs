@@ -241,17 +241,33 @@ namespace Echo
         /// <param name="sid">Session ID</param>
         /// <param name="f">Function to invoke</param>
         /// <returns>Result of the function</returns>
-        public static R withSession<R>(SessionId sid, Func<R> f) =>
-            InMessageLoop
-                ? ActorContext.Request.System.WithContext(
+        public static R withSession<R>(SessionId sid, Func<R> f)
+        {
+            if (InMessageLoop)
+            {
+                return ActorContext.Request.System.WithContext(
                     ActorContext.Request.Self,
                     ActorContext.Request.Self.Actor.Parent,
                     Process.Sender,
                     ActorContext.Request.CurrentRequest,
                     ActorContext.Request.CurrentMsg,
                     Some(sid),
-                    f)
-                : raiseUseInMsgLoopOnlyException<R>(nameof(withSession));
+                    f);
+            }
+            else
+            {
+                var savedSessionId = ActorContext.SessionId;
+                try
+                {
+                    ActorContext.SessionId = sid;
+                    return f();
+                }
+                finally
+                {
+                    ActorContext.SessionId = savedSessionId;
+                }
+            }
+        }
 
         /// <summary>
         /// Acquires a session ID for the duration of invocation of the 
