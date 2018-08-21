@@ -6,8 +6,8 @@ namespace Echo
 {
     internal interface ILocalActorInbox : IDisposable
     {
-        Unit Ask(object message, ProcessId sender);
-        Unit Tell(object message, ProcessId sender);
+        Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId);
+        Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId);
         Unit TellUserControl(UserControlMessage message);
         Unit TellSystem(SystemMessage message);
         object ValidateMessageType(object message, ProcessId sender);

@@ -146,11 +146,11 @@ namespace Echo
             return unit;
         }
 
-        public Unit Ask(object message, ProcessId sender)
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (userInbox != null)
             {
-                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
                                 .IfSome(msg =>
                                 {
                                     if (IsPaused)
@@ -173,12 +173,12 @@ namespace Echo
             return unit;
         }
 
-        public Unit Tell(object message, ProcessId sender)
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
-                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
                                 .IfSome(msg =>
                                 {
                                     if (IsPaused)

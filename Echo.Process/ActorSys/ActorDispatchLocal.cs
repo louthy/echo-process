@@ -12,11 +12,13 @@ namespace Echo
     {
         public readonly ILocalActorInbox Inbox;
         public readonly IActor Actor;
+        public readonly Option<SessionId> SessionId;
         readonly bool transactionalIO;
 
-        public ActorDispatchLocal(ActorItem actor, bool transactionalIO)
+        public ActorDispatchLocal(ActorItem actor, bool transactionalIO, Option<SessionId> sessionId)
         {
             this.transactionalIO = transactionalIO;
+            SessionId = sessionId;
             Inbox = actor.Inbox as ILocalActorInbox;
             if (Inbox == null) throw new ArgumentException("Invalid (not local) ActorItem passed to LocalActorDispatch.");
             Actor = actor.Actor;
@@ -38,8 +40,11 @@ namespace Echo
         public Either<string, bool> CanAccept<T>() =>
             Inbox.CanAcceptMessageType<T>();
 
-        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
-            LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender), message);
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag)
+        {
+            var sessionId = ActorContext.SessionId;
+            return LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender, sessionId), message);
+        }
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO
@@ -52,7 +57,7 @@ namespace Echo
                 : Inbox.TellUserControl(message);
 
         public Unit Ask(object message, ProcessId sender) =>
-            Inbox.Ask(message, sender);
+            Inbox.Ask(message, sender, ActorContext.SessionId);
 
         public Unit Kill() =>
             transactionalIO

@@ -969,7 +969,7 @@ namespace Echo
             }
 
             inboxShutdown.Match(
-                Some: ibs => ibs.Tell(inbox, ProcessId.NoSender),
+                Some: ibs => ibs.Tell(inbox, ProcessId.NoSender, None),
                 None: ()  => inbox.Dispose()
             );
 

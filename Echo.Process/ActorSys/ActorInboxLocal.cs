@@ -79,14 +79,14 @@ namespace Echo
                     ? Self
                     : ProcessId.NoSender;
 
-        public Unit Ask(object message, ProcessId sender)
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
                                            .IfSome(msg => userInbox.Post(msg));
                 }
                 catch (QueueFullException)
@@ -97,14 +97,15 @@ namespace Echo
             return unit;
         }
 
-        public Unit Tell(object message, ProcessId sender)
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message).IfSome(msg => userInbox.Post(msg));
+                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
+                                           .IfSome(msg => userInbox.Post(msg));
                 }
                 catch(QueueFullException)
                 {

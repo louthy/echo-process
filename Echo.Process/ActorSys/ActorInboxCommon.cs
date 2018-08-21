@@ -112,7 +112,7 @@ namespace Echo
             return InboxDirective.Default;
         }
 
-        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message)
+        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message, Option<SessionId> sessionId)
         {
             if (message == null)
             {
@@ -120,6 +120,8 @@ namespace Echo
                 tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg, message));
                 return None;
             }
+
+            UserControlMessage rmsg = null;
 
             if (message is ActorRequest req)
             {
@@ -143,10 +145,18 @@ namespace Echo
 
                     return None;
                 }
-                return Optional((UserControlMessage)message);
+                rmsg = message as UserControlMessage;
+            }
+            else
+            {
+                rmsg = new UserMessage(message, sender, sender);
             }
 
-            return new UserMessage(message, sender, sender);
+            if(rmsg != null && rmsg.SessionId == null && sessionId.IsSome)
+            {
+                rmsg.SessionId = sessionId.Map(x => x.Value).IfNoneUnsafe((string)null);
+            }
+            return Optional(rmsg);
         }
 
         public static Option<Tuple<RemoteMessageDTO, Message>> GetNextMessage(ICluster cluster, ProcessId self, string key)

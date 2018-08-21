@@ -357,6 +357,7 @@ namespace Echo
             }
             else
             {
+                var sessionId = ActorContext.SessionId;
                 AskActorRes response = null;
                 using (var handle = new AutoResetEvent(false))
                 {
@@ -377,7 +378,7 @@ namespace Echo
                         ask =>
                         {
                             var inbox = ask.Inbox as ILocalActorInbox;
-                            inbox.Tell(req, sender);
+                            inbox.Tell(req, sender, sessionId);
                             handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
                         });
 
@@ -832,7 +833,7 @@ by name then use Process.deregisterByName(name).");
             {
                 if (current.Inbox is ILocalActorInbox)
                 {
-                    return new ActorDispatchLocal(current, Settings.TransactionalIO);
+                    return new ActorDispatchLocal(current, Settings.TransactionalIO, ActorContext.SessionId);
                 }
                 else
                 {
