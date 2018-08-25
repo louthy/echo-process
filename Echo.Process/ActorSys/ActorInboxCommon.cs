@@ -54,7 +54,7 @@ namespace Echo
 
                     case Message.TagSpec.Pause:
                         inbox.Pause();
-                        return InboxDirective.Pause;
+                        break; // do not return InboxDirective.Pause because system queue should never pause
 
                     case Message.TagSpec.Watch:
                         var awm = msg as SystemAddWatcherMessage;
