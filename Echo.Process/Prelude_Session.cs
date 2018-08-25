@@ -108,16 +108,12 @@ namespace Echo
         /// <returns>Optional session ID</returns>
         public static Option<SessionId> sessionId()
         {
-            if (InMessageLoop)
+            var sid = ActorContext.SessionId;
+            if (InMessageLoop && sid.IsSome)
             {
-                var sid = ActorContext.SessionId;
-                sid.IfSome(x => sessionTouch());
-                return sid;
+                sessionTouch(((SessionId)sid));
             }
-            else
-            {
-                return raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(sessionId));
-            }
+            return sid;
         }
 
         /// <summary>
@@ -248,7 +244,7 @@ namespace Echo
                 return ActorContext.Request.System.WithContext(
                     ActorContext.Request.Self,
                     ActorContext.Request.Self.Actor.Parent,
-                    Process.Sender,
+                    Sender,
                     ActorContext.Request.CurrentRequest,
                     ActorContext.Request.CurrentMsg,
                     Some(sid),
