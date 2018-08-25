@@ -96,9 +96,7 @@ namespace Echo
         /// </summary>
         /// <param name="sid">Session ID</param>
         public static Unit sessionTouch(SessionId sid) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<Unit>(nameof(sessionTouch))
-                : ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch));
+            ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch));
 
         /// <summary>
         /// Gets the current session ID
