@@ -61,8 +61,8 @@ namespace Echo
             new ForwardToProcess(pid);
 
         /// <summary>
-        /// Forward the failed message back to the Process that failed.
-        /// It will join the back of the queue.
+        /// Message remains at the front of the queue for when the process has recovered.
+        /// Could cause blocking for permanent failures.
         /// </summary>
         public static MessageDirective StayInQueue =>
             new StayInQueue();
