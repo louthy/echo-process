@@ -61,10 +61,13 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static Unit subscribe(ProcessId pid) =>
-            InMessageLoop
-                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(Self, x, pid)))
+        public static Unit subscribe(ProcessId pid)
+        {
+            var savedSelf = Self;
+            return InMessageLoop
+                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(savedSelf, x, pid)))
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribe));
+        }
 
         /// <summary>
         /// Unsubscribe from a process's publications
@@ -199,11 +202,14 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns>IObservable T</returns>
-        public static Unit subscribeState<T>(ProcessId pid) =>
-            InMessageLoop
+        public static Unit subscribeState<T>(ProcessId pid)
+        {
+            var savedSelf = Self;
+            return InMessageLoop
                 ? ActorContext.Request.Self.Actor.AddSubscription(
-                      pid,
-                      ActorContext.System(pid).ObserveState<T>(pid).Subscribe(x => tell(Self, x, pid)))
+                    pid,
+                    ActorContext.System(pid).ObserveState<T>(pid).Subscribe(x => tell(savedSelf, x, pid)))
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribeState));
+        }
     }
 }
