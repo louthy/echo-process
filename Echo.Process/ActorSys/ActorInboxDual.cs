@@ -218,15 +218,25 @@ namespace Echo
             return unit;
         }
 
-        public Unit TellUserControl(UserControlMessage msg)
+        public Unit TellUserControl(UserControlMessage msg, Option<SessionId> sessionId)
         {
             if (msg == null) throw new ArgumentNullException(nameof(msg));
 
             if (userInbox != null)
             {
+                msg.SessionId = msg.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(msg.SessionId);
                 if (IsPaused)
                 {
-                    new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).TellUserControl(msg, ProcessId.None);
+                    // We're paused, so send to our persistent queue
+                    new ActorDispatchRemote(
+                        ActorContext.System(actor.Id).Ping, 
+                        actor.Id, 
+                        cluster, 
+                        msg.SessionId == null 
+                            ? None 
+                            : Some(new SessionId(msg.SessionId)), 
+                        false)
+                       .TellUserControl(msg, ProcessId.None);
                 }
                 else
                 {

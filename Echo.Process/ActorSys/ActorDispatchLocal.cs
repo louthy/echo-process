@@ -51,10 +51,13 @@ namespace Echo
                 ? ProcessOp.IO(() => Inbox.TellSystem(message))
                 : Inbox.TellSystem(message);
 
-        public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Inbox.TellUserControl(message))
-                : Inbox.TellUserControl(message);
+        public Unit TellUserControl(UserControlMessage message, ProcessId sender)
+        {
+            var sessionId = ActorContext.SessionId;
+            return transactionalIO
+                ? ProcessOp.IO(() => Inbox.TellUserControl(message, sessionId))
+                : Inbox.TellUserControl(message, sessionId);
+        }
 
         public Unit Ask(object message, ProcessId sender) =>
             Inbox.Ask(message, sender, ActorContext.SessionId);

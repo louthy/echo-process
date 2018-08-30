@@ -115,13 +115,14 @@ namespace Echo
             return unit;
         }
 
-        public Unit TellUserControl(UserControlMessage message)
+        public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
+                    message.SessionId = message.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
                     userInbox.Post(message);
                 }
                 catch (QueueFullException)
@@ -185,7 +186,7 @@ namespace Echo
 
             // Wake up the user inbox to process any messages that have
             // been waiting patiently.
-            TellUserControl(UserControlMessage.Null);
+            TellUserControl(UserControlMessage.Null, None);
 
             return unit;
         }
