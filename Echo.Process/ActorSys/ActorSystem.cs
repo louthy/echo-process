@@ -16,6 +16,13 @@ namespace Echo
     {
         const string ClusterOnlineKey = "cluster-node-online";
 
+        enum DisposeState
+        {
+            Active,
+            Disposing,
+            Disposed
+        }
+
         ActorRequestContext userContext;
         ClusterMonitor.State clusterState;
         IDisposable startupSubscription;
@@ -26,6 +33,7 @@ namespace Echo
         ProcessSystemConfig settings;
         public AppProfile appProfile;
         ActorItem rootItem;
+        DisposeState disposeState;
 
         readonly object sync = new object();
         readonly Option<ICluster> cluster;
@@ -167,11 +175,13 @@ namespace Echo
 
         public void Dispose()
         {
+            if (disposeState != DisposeState.Active) return;
             lock (sync)
             {
-                var ri = rootItem;
-                rootItem = null;
-                if (ri != null)
+                if (disposeState != DisposeState.Active) return;
+                disposeState = DisposeState.Disposing;
+
+                if (rootItem != null)
                 {
                     try
                     {
@@ -192,8 +202,7 @@ namespace Echo
                     }
                     try
                     {
-                        var item = ri;
-                        ri.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
+                        rootItem.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
                     }
                     catch(Exception e)
                     {
@@ -201,6 +210,8 @@ namespace Echo
                     }
                     cluster.IfSome(c => c?.Dispose());
                 }
+                rootItem = null;
+                disposeState = DisposeState.Disposed;
             }
         }
 
