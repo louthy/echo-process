@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Echo
@@ -93,6 +94,8 @@ namespace Echo
         /// State stream - sent after each message loop
         /// </summary>
         IObservable<object> StateStream { get; }
+
+        CancellationTokenSource CancellationTokenSource { get; }
 
         InboxDirective ProcessMessage(object message);
         InboxDirective ProcessAsk(ActorRequest request);

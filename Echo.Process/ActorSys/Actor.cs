@@ -25,6 +25,7 @@ namespace Echo
         readonly ProcessFlags flags;
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
+        readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
         Map<string, IDisposable> subs = Map<string, IDisposable>();
         Map<string, ActorItem> children = Map<string, ActorItem>();
@@ -324,6 +325,8 @@ namespace Echo
         public Map<string, ActorItem> Children =>
             children;
 
+        public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
+
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
@@ -397,6 +400,7 @@ namespace Echo
         /// </summary>
         public Unit Shutdown(bool maintainState)
         {
+            cancellationTokenSource.Cancel();
             lock(sync)
             {
                 if (maintainState == false && Flags != ProcessFlags.Default)
@@ -952,6 +956,7 @@ namespace Echo
 
         public Unit ShutdownProcess(bool maintainState)
         {
+            cancellationTokenSource.Cancel();
             lock (sync)
             {
                 return Parent.Actor.Children.Find(Name.Value).IfSome(self =>
@@ -985,6 +990,7 @@ namespace Echo
         {
             RemoveAllSubscriptions();
             DisposeState();
+            cancellationTokenSource.Dispose();
         }
 
         void DisposeState()
