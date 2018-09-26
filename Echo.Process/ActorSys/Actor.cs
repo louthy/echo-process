@@ -722,6 +722,8 @@ namespace Echo
         {
             lock (sync)
             {
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.PushToFrontOfQueue;
+
                 var savedReq = ActorContext.Request.CurrentRequest;
                 var savedFlags = ActorContext.Request.ProcessFlags;
                 var savedMsg = ActorContext.Request.CurrentMsg;
