@@ -722,7 +722,7 @@ namespace Echo
         {
             lock (sync)
             {
-                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.PushToFrontOfQueue;
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
 
                 var savedReq = ActorContext.Request.CurrentRequest;
                 var savedFlags = ActorContext.Request.ProcessFlags;
