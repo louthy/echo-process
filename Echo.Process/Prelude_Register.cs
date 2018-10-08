@@ -82,6 +82,7 @@ namespace Echo
         ///     tell(Dispatch.RoundRobin[regd], "Hello");
         /// 
         /// </remarks>
+        /// <param name="role">Process role</param>
         /// <param name="name">Process name</param>
         /// <returns>A ProcessId that allows dispatching to the process(es).  The result
         /// would look like /disp/reg/name</returns>
@@ -162,7 +163,7 @@ namespace Echo
         /// If you wish to deregister all ProcessIds registered under a name then
         /// use Process.deregisterByName(name)
         /// </remarks>
-        /// <param name="name">Name of the process to deregister</param>
+        /// <param name="process">Process to be deregistered</param>
         public static Unit deregisterById(ProcessId process) =>
             ActorContext.System(process).DeregisterById(process);
 

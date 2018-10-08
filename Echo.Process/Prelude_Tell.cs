@@ -48,7 +48,6 @@ namespace Echo
         /// for any other reason.</returns>
         /// <param name="pid">Process ID to send to</param>
         /// <param name="message">Message to send</param>
-        /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Unit tell<T>(ProcessId pid, T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
@@ -102,9 +101,8 @@ namespace Echo
         /// Tell children the same message, delayed.
         /// </summary>
         /// <param name="message">Message to send</param>
-        /// <param name="delayFor">How long to delay sending for</param>
-        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
@@ -150,7 +148,6 @@ namespace Echo
         /// The list of children to send to are filtered by the predicate provided
         /// </summary>
         /// <param name="message">Message to send</param>
-        /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
         /// <param name="predicate">The list of children to send to are filtered by the predicate provided</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
@@ -202,7 +199,6 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         /// <param name="message">Message to send</param>
-        /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Unit tellParent<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
@@ -247,7 +243,6 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         /// <param name="message">Message to send</param>
-        /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Unit tellSelf<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>

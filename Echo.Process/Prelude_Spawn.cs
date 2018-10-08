@@ -100,7 +100,8 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
-        /// <param name="Lazy">If set to true actor will not start automatically, you need to startup(processId) manually</param>
+        /// <param name="Lazy">If set to true actor will not start automatically, you need to
+        /// startup(processId) manually</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<S, T>(
             ProcessName Name,
@@ -141,6 +142,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -170,6 +172,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -200,6 +203,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -222,8 +226,7 @@ namespace Echo
         /// <param name="Name">Name of process to spawn</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
-        /// <param name="Terminate">Message function to call when a Process [that this Process
-        /// watches] terminates</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>ProcessId</returns>
         public static ProcessId spawn<TProcess,TMsg>(
             ProcessName Name, 
@@ -276,6 +279,7 @@ namespace Echo
         /// the concrete implementation of TProcessInterface</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>TProcessInterface - The proxy for communicating with the Process</returns>
         public static TProcessInterface spawn<TProcessInterface>(
             ProcessName Name,
@@ -303,6 +307,7 @@ namespace Echo
         /// <param name="Name">Name of process to spawn</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>TProcessInterface - The proxy for communicating with the Process</returns>
         public static ProcessId spawn<TProcess>(
             ProcessName Name,

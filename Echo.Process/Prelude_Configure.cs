@@ -136,7 +136,7 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
-        /// happen once only.</param>
+        /// happen once only.
         /// <para>
         ///     object sync = new object();
         ///     bool started = false;
