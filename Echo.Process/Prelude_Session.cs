@@ -115,11 +115,10 @@ namespace Echo
         }
 
         /// <summary>
-        /// Set the meta-data to store with the session, this is typically
+        /// Set the meta-data to store with the current session, this is typically
         /// user credentials when they've logged in.  But can be anything.  It is a 
         /// key/value store that is sync'd around the cluster.
         /// </summary>
-        /// <param name="sid">Session ID</param>
         /// <param name="key">Key</param>
         /// <param name="value">Data value </param>
         public static Unit sessionSetData(string key, object value)
@@ -205,7 +204,7 @@ namespace Echo
         /// implementation will be replaced with a Dotted Version Vector system.
         /// </para>
         /// </summary>
-        /// <param name="sid">Session ID</param>
+        /// <param name="key">Key</param>
         public static Lst<T> sessionGetData<T>(string key) =>
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId

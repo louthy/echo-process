@@ -20,6 +20,7 @@ namespace Echo
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Obsolete("spawnRoundRobin is obsolete, use Router.roundRobin instead")]
@@ -44,6 +45,7 @@ namespace Echo
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Obsolete("spawnRoundRobin is obsolete, use Router.roundRobin instead")]

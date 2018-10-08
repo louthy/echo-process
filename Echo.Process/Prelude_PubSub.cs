@@ -232,7 +232,7 @@ namespace Echo
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// This should be used from within a process' message loop only
         /// </remarks>
-        /// <returns>IObservable T</returns>
+        /// <returns></returns>
         public static Unit subscribeState<T>(ProcessId pid)
         {
             var savedSelf = Self;

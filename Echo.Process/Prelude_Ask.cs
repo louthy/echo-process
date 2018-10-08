@@ -28,6 +28,7 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process to ask</param>
         /// <param name="message">Message to send</param>
+        /// <param name="sender">Sender process</param>
         /// <returns>The response to the request</returns>
         public static T ask<T>(ProcessId pid, object message, ProcessId sender) =>
             ActorContext.System(pid).Ask<T>(pid, message, sender);
@@ -47,6 +48,7 @@ namespace Echo
         /// <typeparam name="R">Type of the return value</typeparam>
         /// <param name="pid">Process to ask</param>
         /// <param name="message">Message to send</param>
+        /// <param name="sender">Sender process</param>
         /// <returns>A promise to return a response to the request</returns>
         public static Task<R> askAsync<R>(ProcessId pid, object message, ProcessId sender) =>
             InMessageLoop
@@ -59,6 +61,7 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process to ask</param>
         /// <param name="message">Message to send</param>
+        /// <param name="sender">Sender process</param>
         /// <returns>The response to the request or None if the process isn't running</returns>
         public static Option<T> askIfAlive<T>(ProcessId pid, object message, ProcessId sender) =>
             ping(pid)
