@@ -64,17 +64,49 @@ namespace Echo.Tests
                     {
                         events.Add(msg);
                         Task.Delay(100 * milliseconds).Wait();
-                        Assert.Equal(1, Process.inboxCount(Self)); // msg inbox2 will arrive before kill is executed
+                        Assert.Equal(1, inboxCount(Self)); // msg inbox2 will arrive before kill is executed
                         kill();
-                        return state;
+                        return state; // will never get here
                     });
                 tell(actor, "inbox1"); // inbox1 might arrive before StartUp-System-Message (but doesn't matter)
                 tell(actor, "inbox2"); // msg inbox2 will arrive before kill is executed
                 WaitForActor(actor);
                 Assert.False(Process.exists(actor));
-                Assert.Equal(events.Freeze(), List("setup", "inbox1", "dispose"));
+                Assert.Equal(List("setup", "inbox1", "dispose"), events.Freeze());
             }
 
+            [Fact(Timeout = 5000)]
+            // make sure that the state is not re-initialized after kill and that ask is processed cleanly (sync) until kill
+            public void NoZombieStateWhenAsked()
+            {
+                var events = new List<string>();
+                var actor = spawn<IDisposable, string>(nameof(NoZombieStateWhenAsked),
+                    () =>
+                    {
+                        events.Add("setup");
+                        return Disposable.Create(
+                            () => events.Add("dispose")
+                        );
+                    },
+                    (state, msg) =>
+                    {
+                        events.Add(msg);
+                        Task.Delay(100 * milliseconds).Wait();
+                        Assert.Equal(1, inboxCount(Self)); // msg 2 will arrive before kill is executed
+                        reply($"{msg}answer");
+                        events.Add($"{msg}answer");
+                        return state;
+                    });
+                var answer1Task = Task.Run(() => ask<string>(actor, "request1")); // request will arrive before kill is executed
+                var answer2task = Task.Run(() => ask<string>(actor, "request2")); // request will arrive before kill is executed
+                Task.Delay(50 * milliseconds).Wait();
+                kill(actor);
+                WaitForActor(actor);
+                Assert.False(Process.exists(actor));
+                Assert.Equal("request1answer", answer1Task.Result);
+                Assert.Equal(List("setup", "request1", "request1answer", "dispose"), events.Freeze());
+                Assert.Equal("ProcessException", Try(() => answer2task.Result).IfFail().With<AggregateException>(_ => _.InnerException.GetType().Name).OtherwiseReThrow());
+            }
 
             [Fact(Timeout = 5000)]
             // issue 47 / pr 49
@@ -88,6 +120,7 @@ namespace Echo.Tests
                     inboxResult++;
                 });
                 tell(actor, "test");
+                Task.Delay(50).Wait();
                 kill(actor);
                 Assert.Equal(1, inboxResult);
             }
@@ -101,9 +134,14 @@ namespace Echo.Tests
                 var actor = spawn(nameof(ActorWithCancellationToken), (string msg) =>
                 {
                     Task.Delay(100 * milliseconds).Wait(SelfProcessCancellationToken);
-                    if (!SelfProcessCancellationToken.IsCancellationRequested) inboxResult++;
+                    if (!SelfProcessCancellationToken.IsCancellationRequested)
+                    {
+                        // will never get here
+                        inboxResult++;
+                    }
                 });
                 tell(actor, "test");
+                Task.Delay(50).Wait();
                 kill(actor);
                 Assert.Equal(0, inboxResult);
             }
