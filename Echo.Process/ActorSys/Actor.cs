@@ -405,7 +405,7 @@ namespace Echo
         /// </summary>
         public Unit Shutdown(bool maintainState)
         {
-            cancellationTokenSource.Cancel();
+            cancellationTokenSource.Cancel(); // this will signal other operations not to start processing more messages (ProcessMessage) or startup again (Startup), even if they already received something from the queue
             lock(sync)
             {
                 if (maintainState == false && Flags != ProcessFlags.Default)
