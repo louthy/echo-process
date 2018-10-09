@@ -75,6 +75,11 @@ namespace Echo
         {
             lock(sync)
             {
+                if (cancellationTokenSource.IsCancellationRequested)
+                {
+                    return unit;
+                }
+
                 if (state.IsSome) return unit;
 
                 var savedReq = ActorContext.Request.CurrentRequest;
