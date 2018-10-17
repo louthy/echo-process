@@ -10,7 +10,7 @@ namespace Echo.Tests
 {
     public class IssuesTests
     {
-
+        [Collection("Initialise")]
         public class Issue31
         {
             public class AskFixture : IDisposable

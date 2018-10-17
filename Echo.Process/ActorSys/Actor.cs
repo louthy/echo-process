@@ -25,6 +25,7 @@ namespace Echo
         readonly ProcessFlags flags;
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
+        readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
         Map<string, IDisposable> subs = Map<string, IDisposable>();
         Map<string, ActorItem> children = Map<string, ActorItem>();
@@ -74,6 +75,11 @@ namespace Echo
         {
             lock(sync)
             {
+                if (cancellationTokenSource.IsCancellationRequested)
+                {
+                    return unit;
+                }
+
                 if (state.IsSome) return unit;
 
                 var savedReq = ActorContext.Request.CurrentRequest;
@@ -324,6 +330,8 @@ namespace Echo
         public Map<string, ActorItem> Children =>
             children;
 
+        public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
+
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
@@ -397,6 +405,7 @@ namespace Echo
         /// </summary>
         public Unit Shutdown(bool maintainState)
         {
+            cancellationTokenSource.Cancel(); // this will signal other operations not to start processing more messages (ProcessMessage) or startup again (Startup), even if they already received something from the queue
             lock(sync)
             {
                 if (maintainState == false && Flags != ProcessFlags.Default)
@@ -521,98 +530,113 @@ namespace Echo
 
         public InboxDirective ProcessAsk(ActorRequest request)
         {
-            var savedMsg = ActorContext.Request.CurrentMsg;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedReq = ActorContext.Request.CurrentRequest;
-
-            try
+            lock (sync)
             {
-                ActorContext.Request.CurrentRequest = request;
-                ActorContext.Request.ProcessFlags   = flags;
-                ActorContext.Request.CurrentMsg     = request.Message;
-
-                //ActorContext.AssertSession();
-
-                if (typeof(T) != typeof(string) && request.Message is string)
+                if (cancellationTokenSource.IsCancellationRequested)
                 {
-                    state = PreProcessMessageContent(request.Message).Match(
-                                Some: tmsg =>
+                    replyError(new AskException(
+                        $"Can't ask {Id.Path} because actor shutdown in progress"));
+                    return InboxDirective.Shutdown;
+                }
+
+                var savedMsg = ActorContext.Request.CurrentMsg;
+                var savedFlags = ActorContext.Request.ProcessFlags;
+                var savedReq = ActorContext.Request.CurrentRequest;
+
+                try
+                {
+                    ActorContext.Request.CurrentRequest = request;
+                    ActorContext.Request.ProcessFlags = flags;
+                    ActorContext.Request.CurrentMsg = request.Message;
+
+                    //ActorContext.AssertSession();
+
+                    if (typeof(T) != typeof(string) && request.Message is string)
+                    {
+                        state = PreProcessMessageContent(request.Message).Match(
+                            Some: tmsg =>
+                            {
+                                var stateIn = GetState();
+                                var stateOut = actorFn(stateIn, tmsg);
+                                try
                                 {
-                                    var stateIn = GetState();
-                                    var stateOut = actorFn(stateIn, tmsg);
-                                    try
+                                    if (!default(EqDefault<S>).Equals(stateOut, stateIn))
                                     {
-                                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                                        {
-                                            stateSubject.OnNext(stateOut);
-                                        }
+                                        stateSubject.OnNext(stateOut);
                                     }
-                                    catch (Exception ue)
-                                    {
-                                        // Not our errors, so just log and move on
-                                        logErr(ue);
-                                    }
-                                    return stateOut;
-                                },
-                                None: () =>
-                                {
-                                    replyError(new AskException($"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                                    return state;
                                 }
-                            );
-                }
-                else if (request.Message is T msg)
-                {
-                    var stateIn = GetState();
-                    var stateOut = actorFn(stateIn, msg);
-                    try
-                    {
-                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                        {
-                            stateSubject.OnNext(stateOut);
-                        }
-                    }
-                    catch (Exception ue)
-                    {
-                        // Not our errors, so just log and move on
-                        logErr(ue);
-                    }
-                    state = stateOut;
-                }
-                else if (request.Message is Message m)
-                {
-                    ProcessSystemMessage(m);
-                }
-                else
-                {
-                    // Failure to deserialise is not our problem, its the sender's
-                    // so we don't throw here.
-                    replyError(new AskException($"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                    return InboxDirective.Default;
-                }
+                                catch (Exception ue)
+                                {
+                                    // Not our errors, so just log and move on
+                                    logErr(ue);
+                                }
 
-                strategyState = strategyState.With(
-                    Failures: 0,
-                    LastFailure: DateTime.MaxValue,
-                    BackoffAmount: 0 * seconds
+                                return stateOut;
+                            },
+                            None: () =>
+                            {
+                                replyError(new AskException(
+                                    $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
+                                return state;
+                            }
+                        );
+                    }
+                    else if (request.Message is T msg)
+                    {
+                        var stateIn = GetState();
+                        var stateOut = actorFn(stateIn, msg);
+                        try
+                        {
+                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                            {
+                                stateSubject.OnNext(stateOut);
+                            }
+                        }
+                        catch (Exception ue)
+                        {
+                            // Not our errors, so just log and move on
+                            logErr(ue);
+                        }
+
+                        state = stateOut;
+                    }
+                    else if (request.Message is Message m)
+                    {
+                        ProcessSystemMessage(m);
+                    }
+                    else
+                    {
+                        // Failure to deserialise is not our problem, its the sender's
+                        // so we don't throw here.
+                        replyError(new AskException(
+                            $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
+                        return InboxDirective.Default;
+                    }
+
+                    strategyState = strategyState.With(
+                        Failures: 0,
+                        LastFailure: DateTime.MaxValue,
+                        BackoffAmount: 0 * seconds
                     );
 
-                ActorContext.Request.RunOps();
+                    ActorContext.Request.RunOps();
+                }
+                catch (Exception e)
+                {
+                    ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
+                    replyError(e);
+                    ActorContext.Request.RunOps();
+                    return DefaultErrorHandler(request, e);
+                }
+                finally
+                {
+                    ActorContext.Request.CurrentMsg = savedMsg;
+                    ActorContext.Request.ProcessFlags = savedFlags;
+                    ActorContext.Request.CurrentRequest = savedReq;
+                }
+
+                return InboxDirective.Default;
             }
-            catch (Exception e)
-            {
-                ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
-                replyError(e);
-                ActorContext.Request.RunOps();
-                return DefaultErrorHandler(request, e);
-            }
-            finally
-            {
-                ActorContext.Request.CurrentMsg = savedMsg;
-                ActorContext.Request.ProcessFlags = savedFlags;
-                ActorContext.Request.CurrentRequest = savedReq;
-            }
-            return InboxDirective.Default;
         }
 
         void ProcessSystemMessage(Message message)
@@ -637,6 +661,8 @@ namespace Echo
 
             lock (sync)
             {
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
+
                 var savedReq   = ActorContext.Request.CurrentRequest;
                 var savedFlags = ActorContext.Request.ProcessFlags;
                 var savedMsg   = ActorContext.Request.CurrentMsg;
@@ -718,6 +744,8 @@ namespace Echo
         {
             lock (sync)
             {
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
+
                 var savedReq = ActorContext.Request.CurrentRequest;
                 var savedFlags = ActorContext.Request.ProcessFlags;
                 var savedMsg = ActorContext.Request.CurrentMsg;
@@ -952,6 +980,7 @@ namespace Echo
 
         public Unit ShutdownProcess(bool maintainState)
         {
+            cancellationTokenSource.Cancel();
             lock (sync)
             {
                 return Parent.Actor.Children.Find(Name.Value).IfSome(self =>
@@ -985,6 +1014,7 @@ namespace Echo
         {
             RemoveAllSubscriptions();
             DisposeState();
+            cancellationTokenSource.Dispose();
         }
 
         void DisposeState()

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using static LanguageExt.Prelude;
@@ -37,6 +38,9 @@ namespace Echo
         public Unit Publish(object message) => unit;
         public IObservable<object> PublishStream => null;
         public IObservable<object> StateStream => null;
+
+        public CancellationTokenSource CancellationTokenSource => new CancellationTokenSource();
+
         public InboxDirective ProcessTerminated(ProcessId pid) => InboxDirective.Default;
         public InboxDirective ProcessMessage(object message) => InboxDirective.Default;
         public InboxDirective ProcessAsk(ActorRequest request) => InboxDirective.Default;

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Threading;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 
@@ -188,6 +189,19 @@ namespace Echo
                                   .Map( kv => kv.Value )
                                   .Head()
                 : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
+
+        /// <summary>
+        /// Gets a CancellationToken that is in state Cancel when actor will shutdown.
+        /// This can be used in message loop to e.g. avoid long running message loop blocking actor shutdown.
+        /// </summary>
+        /// <remarks>
+        /// This should be used from within a process' message loop only
+        /// </remarks>
+        public static CancellationToken SelfProcessCancellationToken =>
+            InMessageLoop 
+                ? ActorContext.SelfProcess.Actor.CancellationTokenSource.Token
+                : raiseUseInMsgLoopOnlyException<CancellationToken>(nameof(SelfProcessCancellationToken));
+
 
         /// <summary>
         /// Immediately kills the Process that is running from within its message
