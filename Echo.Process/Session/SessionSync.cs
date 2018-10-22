@@ -111,6 +111,19 @@ namespace Echo.Session
             select ses;
 
         /// <summary>
+        /// Gets an active session id using the supplementary session id
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) =>
+            (from ses in sessions
+             from vector in ses.Value.Data.Find(SupplementarySessionId.Key)
+             from v in vector.Vector
+             where v is SupplementarySessionId &&
+                   ((SupplementarySessionId)v).Value == sessionId.Value
+             select ses.Key).HeadOrNone();
+
+        /// <summary>
         /// Start a new session
         /// </summary>
         public SessionId Start(SessionId sessionId, int timeoutSeconds, Map<string,object> initialState)
