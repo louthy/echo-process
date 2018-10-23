@@ -15,6 +15,12 @@ namespace Echo
             failwith<T>($"'{what}' should be used from within a process' message loop only");
 
         /// <summary>
+        /// Use in message loop & in session exception
+        /// </summary>
+        internal static T raiseUseInMsgAndInSessionLoopOnlyException<T>(string what) =>
+            failwith<T>($"'{what}' should be used from within a process' message loop and within session only");
+
+        /// <summary>
         /// Not in message loop exception
         /// </summary>
         internal static T raiseDontUseInMessageLoopException<T>(string what) =>

@@ -144,5 +144,12 @@ namespace Echo.Session
                     SessionsNotify,
                     SessionAction.ClearData(time, sessionId, key, system, nodeName)));
         }
+
+        /// <summary>
+        /// Attempts to get a SessionId by supplementary session ID.  Only checked locally.
+        /// </summary>
+        /// <param name="supplementarySessionId"></param>
+        /// <returns></returns>
+        public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => Sync.GetSessionId(supplementarySessionId);
     }
 }

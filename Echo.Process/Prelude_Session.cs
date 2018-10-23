@@ -271,5 +271,65 @@ namespace Echo
         /// <param name="f">Action to invoke</param>
         public static Unit withSession(SessionId sid, Action f) =>
             withSession(sid, fun(f));
+
+        /// <summary>
+        /// Returns true if the current session is active, returns false if not in message loop
+        /// or session is not active.
+        /// </summary>
+        /// <returns></returns>
+        public static bool hasActiveSession() =>
+            InMessageLoop && (from sid in ActorContext.SessionId
+                              from ses in ActorContext.Request.System.Sessions.GetSession(sid)
+                              select ses).IsSome;
+
+        /// <summary>
+        /// adds a supplementary session id to existing session. If the current session already has a supplmentary session 
+        /// replace it
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Unit addSupplementarySession(SupplementarySessionId sid) =>
+            hasActiveSession()
+                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key)
+                    .HeadOrNone()
+                    .Match(
+                        Some: s =>
+                        {
+                            if (s.Value != sid.Value)
+                            {
+                                sessionClearData(SupplementarySessionId.Key);
+                                sessionSetData(SupplementarySessionId.Key, sid);
+                            }
+
+                            return unit;
+                        },
+                        None: () => sessionSetData(SupplementarySessionId.Key, sid))
+                : raiseUseInMsgAndInSessionLoopOnlyException<Unit>(nameof(addSupplementarySession));
+
+        /// <summary>
+        /// gets a echo session id which contains a supplementary session 
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Option<SessionId> getSessionBySupplementaryId(SupplementarySessionId sid) =>
+            InMessageLoop
+            ? ActorContext.Request.System.Sessions.GetSessionId(sid)
+            : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
+
+        /// <summary>
+        /// get supplementary session id for current session. If not exists, create a new one.
+        /// </summary>
+        /// <returns></returns>
+        public static SupplementarySessionId provideSupplementarySessionId() =>
+            hasActiveSession()
+                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key)
+                    .HeadOrNone()
+                    .IfNone(() =>
+                    {
+                        var sid = SupplementarySessionId.Generate();
+                        sessionSetData(SupplementarySessionId.Key, SupplementarySessionId.Generate());
+                        return sid;
+                    })
+                : raiseUseInMsgAndInSessionLoopOnlyException<SupplementarySessionId>(nameof(provideSupplementarySessionId));
     }
 }
