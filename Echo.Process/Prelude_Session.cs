@@ -89,14 +89,24 @@ namespace Echo
         /// <summary>
         /// Touch a session
         /// Time-stamps the session so that its time-to-expiry is reset and also
-        /// sets the current session ID. This should be used from outside of the 
+        /// sets the current session ID. This should be used from inside of the 
         /// Process system to 'acquire' an existing session.  This is useful for
         /// web-requests for example to set the current session ID and to indicate
         /// activity.
         /// </summary>
         /// <param name="sid">Session ID</param>
         public static Unit sessionTouch(SessionId sid) =>
-            ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch));
+            InMessageLoop
+            ? ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch))
+            : raiseUseInMsgLoopOnlyException<Unit>(nameof(sessionTouch));
+
+        /// <summary>
+        /// Sets the current session to the provided sessionid
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Unit setSession(SessionId sid) =>
+            ignore(ActorContext.SessionId = sid);
 
         /// <summary>
         /// Gets the current session ID
