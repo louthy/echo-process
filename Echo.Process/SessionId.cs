@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using LanguageExt;
+using Newtonsoft.Json;
 using System;
 using static LanguageExt.Prelude;
 
@@ -70,5 +71,19 @@ namespace Echo
             obj is SessionId
                 ? Equals((SessionId)obj)
                 : false;
+    }
+
+    /// <summary>
+    /// Supplementary session id new type
+    /// </summary>
+    public class SupplementarySessionId : NewType<SupplementarySessionId, SessionId>
+    {
+        public static string Key => $"sys-supp-session";
+        public SupplementarySessionId(string value) : base(value) { }
+
+        public static SupplementarySessionId Generate() => new SupplementarySessionId(SessionId.Generate().Value);
+
+        public new string Value => base.Value.Value;
+
     }
 }
