@@ -48,7 +48,7 @@ namespace Echo.Session
                  .Map(key =>
                     from ts in c.GetHashField<long>(key, LastAccessKey)
                     from to in c.GetHashField<int>(key, TimeoutKey)
-                    where new DateTime(ts) < now.AddSeconds(to * 2) // Multiply by 2, just to catch genuine non-active sessions
+                    where new DateTime(ts) < now.AddSeconds(-to * 2) // Multiply by 2, just to catch genuine non-active sessions
                     select c.Delete(key))
                  .Iter(id => { });
 
@@ -137,7 +137,7 @@ namespace Echo.Session
         public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)
         {
             Sync.ClearData(sessionId, key, time);
-            cluster.Iter(c => c.Delete(SessionKey(sessionId)));
+            cluster.Iter(c => c.DeleteHashField(SessionKey(sessionId), key));
 
             return cluster.Iter(c =>
                 c.PublishToChannel(

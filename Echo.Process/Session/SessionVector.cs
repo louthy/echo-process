@@ -95,7 +95,7 @@ namespace Echo.Session
             this.data = data;
             this.lastAccess = lastAccess;
             TimeoutSeconds = timeoutSeconds;
-            data = initialState.Map(obj => new ValueVector(0, List(obj)));
+            this.data = initialState.Map(obj => new ValueVector(0, List(obj)));
         }
 
         /// <summary>
