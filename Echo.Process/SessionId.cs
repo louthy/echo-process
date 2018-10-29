@@ -11,7 +11,7 @@ namespace Echo
     /// <remarks>
     /// It enforces the rules for session IDs.
     /// </remarks>
-    public struct SessionId : IEquatable<SessionId>, IComparable<SessionId>, IComparable
+    public class SessionId : Record<SessionId>
     {
         public readonly string Value;
 
@@ -42,48 +42,20 @@ namespace Echo
         public override string ToString() =>
             Value;
 
-        public override int GetHashCode() =>
-            Value.GetHashCode();
-
         public static implicit operator SessionId(string value) =>
             new SessionId(value);
 
-        public bool Equals(SessionId other) =>
-            Value.Equals(other.Value);
-
-        public int CompareTo(SessionId other) =>
-            String.Compare(Value, other.Value, StringComparison.Ordinal);
-
-        public int CompareTo(object obj) =>
-            obj == null
-                ? -1
-                : obj is SessionId
-                    ? CompareTo((SessionId)obj)
-                    : -1;
-
-        public static bool operator == (SessionId lhs, SessionId rhs) =>
-            lhs.Equals(rhs);
-
-        public static bool operator !=(SessionId lhs, SessionId rhs) =>
-            !lhs.Equals(rhs);
-
-        public override bool Equals(object obj) =>
-            obj is SessionId
-                ? Equals((SessionId)obj)
-                : false;
     }
 
     /// <summary>
     /// Supplementary session id new type
     /// </summary>
-    public class SupplementarySessionId : NewType<SupplementarySessionId, SessionId>
+    public class SupplementarySessionId : SessionId
     {
         public static string Key => $"sys-supp-session";
         public SupplementarySessionId(string value) : base(value) { }
 
         public static SupplementarySessionId Generate() => new SupplementarySessionId(SessionId.Generate().Value);
-
-        public new string Value => base.Value.Value;
 
     }
 }
