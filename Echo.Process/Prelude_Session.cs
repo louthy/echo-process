@@ -300,8 +300,7 @@ namespace Echo
         /// <returns></returns>
         public static Unit addSupplementarySession(SupplementarySessionId sid) =>
             hasActiveSession()
-                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key)
-                    .HeadOrNone()
+                ? Optional(sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrDefault())
                     .Match(
                         Some: s =>
                         {
@@ -332,8 +331,7 @@ namespace Echo
         /// <returns></returns>
         public static SupplementarySessionId provideSupplementarySessionId() =>
             hasActiveSession()
-                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key)
-                    .HeadOrNone()
+                ? Optional(sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrDefault())
                     .IfNone(() =>
                     {
                         var sid = SupplementarySessionId.Generate();
