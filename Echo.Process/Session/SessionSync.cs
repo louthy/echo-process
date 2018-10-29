@@ -70,7 +70,7 @@ namespace Echo.Session
                     Stop(incoming.SessionId);
                     break;
                 case SessionActionTag.SetData:
-                    var type = Type.GetType(incoming.Type);
+                    var type = typeof(object);//Type.GetType(incoming.Type);
                     if (type == null)
                     {
                         logErr("Session-value type not found: " + incoming.Type);
