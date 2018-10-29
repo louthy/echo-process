@@ -24,6 +24,14 @@ namespace Echo
         Map<string, Subject<RedisValue>> subscriptions = Map<string, Subject<RedisValue>>();
         object subsync = new object();
 
+        public readonly JsonSerializerSettings JsonSerializerSettings =
+            new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.All,
+                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
+                MissingMemberHandling = MissingMemberHandling.Ignore
+            };
+
         /// <summary>
         /// Ctor
         /// </summary>
@@ -293,13 +301,13 @@ namespace Echo
 
         public void HashFieldAddOrUpdate<T>(string key, string field, T value) =>
             Retry(() =>
-                Db.HashSet(key, field, JsonConvert.SerializeObject(value)));
+                Db.HashSet(key, field, JsonConvert.SerializeObject(value, JsonSerializerSettings)));
 
         public void HashFieldAddOrUpdate<T>(string key, Map<string, T> fields) =>
             Retry(() =>
                 Db.HashSet(
                     key, 
-                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v))).ToArray()
+                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v, JsonSerializerSettings))).ToArray()
                     ));
 
         public bool DeleteHashField(string key, string field) =>
@@ -315,7 +323,7 @@ namespace Echo
                 Db.HashGetAll(key)
                   .Fold(
                     Map<string, object>(),
-                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value)))
+                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value, JsonSerializerSettings)))
                   .Filter((object v) => notnull(v)));
 
         public Map<string, T> GetHashFields<T>(string key) =>
@@ -323,7 +331,7 @@ namespace Echo
                 Db.HashGetAll(key)
                   .Fold(
                     Map<string, T>(),
-                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
+                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value, JsonSerializerSettings)))
                   .Filter(v => notnull<T>(v)));
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
@@ -331,14 +339,14 @@ namespace Echo
                 Db.HashGetAll(key)
                   .Fold(
                     Map<K, T>(),
-                    (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value)))
+                    (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value, JsonSerializerSettings)))
                   .Filter(v => notnull<T>(v)));
 
         public Option<T> GetHashField<T>(string key, string field)
         {
             var res = Retry(() => Db.HashGet(key, field));
             if (res.IsNullOrEmpty) return None;
-            return JsonConvert.DeserializeObject<T>(res);
+            return JsonConvert.DeserializeObject<T>(res, JsonSerializerSettings);
         }
 
         public Map<string, T> GetHashFields<T>(string key, IEnumerable<string> fields) =>
@@ -348,7 +356,7 @@ namespace Echo
                   .Filter(x => !x.Item1.IsNullOrEmpty)
                   .Fold(
                       Map<string, T>(),
-                      (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1)))
+                      (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1, JsonSerializerSettings)))
                   .Filter(v => notnull<T>(v)));
 
         // TODO: These facts exist elsewhere - normalise
