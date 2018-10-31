@@ -128,7 +128,7 @@ namespace Echo.Session
                 time,
                 sessionId,
                 key,
-                JsonConvert.SerializeObject(value, ActorSystemConfig.Default.JsonSerializerSettings),
+                value,
                 system,
                 nodeName
             )));
