@@ -323,7 +323,7 @@ namespace Echo
                 Db.HashGetAll(key)
                   .Fold(
                     Map<string, T>(),
-                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
+                    (m, e) => Try(() => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value))).IfFail(_=> m))
                   .Filter(v => notnull<T>(v)));
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>

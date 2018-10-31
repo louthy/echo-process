@@ -116,14 +116,18 @@ namespace Echo.Session
             Sync.Touch(sessionId);
 
         private Map<string, object> LoadData(SessionId sessionId) =>
-            cluster.Map(c => c.GetHashFields(SessionKey(sessionId)))
-                   .IfNone(Map<string, object>());
+            toMap(
+                from c in cluster.ToSeq()
+                from f in c.GetHashFields<SessionDataItemDTO>(SessionKey(sessionId)).ToSeq()
+                from o in SessionDataTypeResolve.TryDeserialise(f.Value.SerialisedData, f.Value.Type).
+                            MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.Value.SerialisedData, f.Value.Type)).ToSeq()
+                select (f.Key, o));
 
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
             Sync.SetData(sessionId, key, value, time);
-            cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, value));
-
+            cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value)));
+             
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
                 time,
                 sessionId,
