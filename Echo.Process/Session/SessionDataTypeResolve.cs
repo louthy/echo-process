@@ -9,13 +9,13 @@ using static Echo.Process;
 
 namespace Echo.Session
 {
-    public static class SessionDataTypeResolve
+    static class SessionDataTypeResolve
     {
         static Map<string, Option<Type>> sessionDataTypeValid = Map<string, Option<Type>>();
         static Set<string> sessionDataTypeValidityLogged = Set<string>();
         static object sync = new object();
 
-        internal enum TypeCastFailedStatus
+        public enum TypeCastFailedStatus
         {
             TypeInvalid,
             DeserialiseFailed
@@ -58,7 +58,7 @@ namespace Echo.Session
             return unit;
         }
 
-        internal static Func<TypeCastFailedStatus, Unit> DeserialiseFailed(string value, string type) => status =>
+        public static Func<TypeCastFailedStatus, Unit> DeserialiseFailed(string value, string type) => status =>
           status == TypeCastFailedStatus.TypeInvalid ? LogTypeInvalid(type)
         : status == TypeCastFailedStatus.DeserialiseFailed ? LogDeserialiseFailed(value)
         : unit;
@@ -70,10 +70,10 @@ namespace Echo.Session
              select t)
             .ToEither(_ => TypeCastFailedStatus.DeserialiseFailed);
 
-        internal static Either<TypeCastFailedStatus, object> TryDeserialise(string value, string typeName) =>
-            (from t in GetTypeValidity(typeName)
-             from o in Deserialise(value, t)
-             select o);
+        public static Either<TypeCastFailedStatus, object> TryDeserialise(string value, string typeName) =>
+            from t in GetTypeValidity(typeName)
+            from o in Deserialise(value, t)
+            select o;
 
     }
 }
