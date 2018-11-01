@@ -215,7 +215,7 @@ namespace Echo
         /// </para>
         /// </summary>
         /// <param name="key">Key</param>
-        public static Lst<T> sessionGetData<T>(string key) =>
+        public static Seq<T> sessionGetData<T>(string key) =>
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
@@ -223,10 +223,10 @@ namespace Echo
                    select vector.Vector.Map(obj =>
                        obj is T
                            ? (T)obj
-                           : default(T)))
-                  .IfNone(List<T>())
+                           : default(T)).ToSeq())
+                  .IfNone(Seq<T>())
                   .Filter(notnull)
-                :  raiseUseInMsgLoopOnlyException<Lst<T>>(nameof(sessionGetData));
+                :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));
 
         /// <summary>
         /// Returns True if there is a session ID available.  NOTE: That
@@ -300,19 +300,7 @@ namespace Echo
         /// <returns></returns>
         public static Unit addSupplementarySession(SupplementarySessionId sid) =>
             hasActiveSession()
-                ? Optional(sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrDefault())
-                    .Match(
-                        Some: s =>
-                        {
-                            if (s.Value != sid.Value)
-                            {
-                                sessionClearData(SupplementarySessionId.Key);
-                                sessionSetData(SupplementarySessionId.Key, sid);
-                            }
-
-                            return unit;
-                        },
-                        None: () => sessionSetData(SupplementarySessionId.Key, sid))
+                ? sessionSetData(SupplementarySessionId.Key, sid)
                 : raiseUseInMsgAndInSessionLoopOnlyException<Unit>(nameof(addSupplementarySession));
 
         /// <summary>
@@ -331,7 +319,7 @@ namespace Echo
         /// <returns></returns>
         public static SupplementarySessionId provideSupplementarySessionId() =>
             hasActiveSession()
-                ? Optional(sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrDefault())
+                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
                     .IfNone(() =>
                     {
                         var sid = SupplementarySessionId.Generate();
