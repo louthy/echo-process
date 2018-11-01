@@ -66,8 +66,8 @@ namespace Echo
         public int CompareTo(object obj) =>
             obj == null
                 ? -1
-                : obj is SupplementarySessionId
-                    ? CompareTo((SupplementarySessionId)obj)
+                : obj is SupplementarySessionId sid
+                    ? CompareTo(sid)
                     : -1;
 
         public static bool operator == (SupplementarySessionId lhs, SupplementarySessionId rhs) =>
@@ -77,8 +77,6 @@ namespace Echo
             !lhs.Equals(rhs);
 
         public override bool Equals(object obj) =>
-            obj is SupplementarySessionId
-                ? Equals((SupplementarySessionId)obj)
-                : false;
+            obj is SupplementarySessionId sid && Equals(sid);
     }
 }
