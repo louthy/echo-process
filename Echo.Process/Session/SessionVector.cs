@@ -33,9 +33,9 @@ namespace Echo.Session
     public class ValueVector
     {
         public readonly long Time;
-        public readonly Lst<object> Vector;
+        public readonly Seq<object> Vector;
 
-        public ValueVector(long time, Lst<object> root)
+        public ValueVector(long time, Seq<object> root)
         {
             Time = time;
             Vector = root;
@@ -45,7 +45,7 @@ namespace Echo.Session
         {
             if(Vector.Count == 0 || time > Time)
             {
-                return new ValueVector(time, List(value));
+                return new ValueVector(time, Seq1(value));
             }
 
             if( time < Time)
@@ -67,7 +67,7 @@ namespace Echo.Session
                 switch(strategy)
                 {
                     case VectorConflictStrategy.First:  return this;
-                    case VectorConflictStrategy.Last:   return new ValueVector(time, List(value));
+                    case VectorConflictStrategy.Last:   return new ValueVector(time, Seq1(value));
                     case VectorConflictStrategy.Branch: return new ValueVector(Time, Vector.Add(value));
                     default: throw new ArgumentException("VectorConflictStrategy not supported: " + strategy);
                 }
@@ -95,7 +95,7 @@ namespace Echo.Session
             this.data = data;
             this.lastAccess = lastAccess;
             TimeoutSeconds = timeoutSeconds;
-            data = initialState.Map(obj => new ValueVector(0, List(obj)));
+            this.data = initialState.Map(obj => new ValueVector(0, Seq1(obj)));
         }
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace Echo.Session
             {
                 data = data.Find(key)
                            .Map(vector => data.AddOrUpdate(key, vector.AddValue(time, value, strategy)))
-                           .IfNone(() => data.AddOrUpdate(key, new ValueVector(time, List(value))));
+                           .IfNone(()  => data.AddOrUpdate(key, new ValueVector(time, Seq1(value))));
             }
             Touch();
         }

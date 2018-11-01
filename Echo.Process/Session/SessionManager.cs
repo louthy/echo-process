@@ -48,7 +48,7 @@ namespace Echo.Session
                  .Map(key =>
                     from ts in c.GetHashField<long>(key, LastAccessKey)
                     from to in c.GetHashField<int>(key, TimeoutKey)
-                    where new DateTime(ts) < now.AddSeconds(to * 2) // Multiply by 2, just to catch genuine non-active sessions
+                    where new DateTime(ts) < now.AddSeconds(-to * 2) // Multiply by 2, just to catch genuine non-active sessions
                     select c.Delete(key))
                  .Iter(id => { });
 
@@ -116,19 +116,23 @@ namespace Echo.Session
             Sync.Touch(sessionId);
 
         private Map<string, object> LoadData(SessionId sessionId) =>
-            cluster.Map(c => c.GetHashFields(SessionKey(sessionId)))
-                   .IfNone(Map<string, object>());
+            toMap(
+                from c in cluster.ToSeq()
+                from f in c.GetHashFieldsDropOnDeserialiseFailed<SessionDataItemDTO>(SessionKey(sessionId)).ToSeq()
+                from o in SessionDataTypeResolve.TryDeserialise(f.Value.SerialisedData, f.Value.Type)
+                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.Value.SerialisedData, f.Value.Type)).ToSeq()
+                select (f.Key, o));
 
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
             Sync.SetData(sessionId, key, value, time);
-            cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, value));
-
+            cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value)));
+             
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
                 time,
                 sessionId,
                 key,
-                JsonConvert.SerializeObject(value, ActorSystemConfig.Default.JsonSerializerSettings),
+                value,
                 system,
                 nodeName
             )));
@@ -137,7 +141,7 @@ namespace Echo.Session
         public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)
         {
             Sync.ClearData(sessionId, key, time);
-            cluster.Iter(c => c.Delete(SessionKey(sessionId)));
+            cluster.Iter(c => c.DeleteHashField(SessionKey(sessionId), key));
 
             return cluster.Iter(c =>
                 c.PublishToChannel(
