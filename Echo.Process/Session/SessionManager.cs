@@ -118,9 +118,9 @@ namespace Echo.Session
         private Map<string, object> LoadData(SessionId sessionId) =>
             toMap(
                 from c in cluster.ToSeq()
-                from f in c.GetHashFields<SessionDataItemDTO>(SessionKey(sessionId)).ToSeq()
-                from o in SessionDataTypeResolve.TryDeserialise(f.Value.SerialisedData, f.Value.Type).
-                            MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.Value.SerialisedData, f.Value.Type)).ToSeq()
+                from f in c.GetHashFieldsDropOnDeserialiseFailed<SessionDataItemDTO>(SessionKey(sessionId)).ToSeq()
+                from o in SessionDataTypeResolve.TryDeserialise(f.Value.SerialisedData, f.Value.Type)
+                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.Value.SerialisedData, f.Value.Type)).ToSeq()
                 select (f.Key, o));
 
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)

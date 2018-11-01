@@ -323,8 +323,23 @@ namespace Echo
                 Db.HashGetAll(key)
                   .Fold(
                     Map<string, T>(),
-                    (m, e) => Try(() => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value))).IfFail(_=> m))
+                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
                   .Filter(v => notnull<T>(v)));
+
+        /// <summary>
+        /// tries to deserialise redis object to T, if fail, the object is skipped.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public Map<string, T> GetHashFieldsDropOnDeserialiseFailed<T>(string key) =>
+            Retry(() =>
+                Db.HashGetAll(key)
+                .Fold(
+                  Map<string, T>(),
+                  (m, e) => Try(() => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value))).IfFail(_ => m))
+                .Filter(v => notnull<T>(v)));
+
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>
