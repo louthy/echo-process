@@ -219,13 +219,9 @@ namespace Echo
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
-                   from vector    in session.Data.Find(key)
-                   select vector.Vector.Map(obj =>
-                       obj is T
-                           ? (T)obj
-                           : default(T)).ToSeq())
-                  .IfNone(Seq<T>())
-                  .Filter(notnull)
+                   from vector    in session.Data.Find(key).ToSeq()
+                   from obj       in vector.Vector.Choose(obj => obj is T o ? Some(o) : None)
+                   select obj).ToSeq()
                 :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));
 
         /// <summary>
