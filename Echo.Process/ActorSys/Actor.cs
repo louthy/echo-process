@@ -981,7 +981,6 @@ namespace Echo
                     break;
                 case DirectiveType.Restart:
                     Restart(unPauseAfterRestart);
-                    unpause(pid); // BUG: remove this line (PR #57)
                     break;
                 case DirectiveType.Stop:
                     ShutdownProcess(false);
