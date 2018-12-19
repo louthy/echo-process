@@ -68,27 +68,23 @@ namespace Echo.Tests
                         return state;
                     }, Strategy: from x in Context
                     from y in x.Exception is ProcessSetupException 
-                        ? (x.Global.Failures < 5 ? Compose(SetBackOffAmount(1 * second), SetDirective(Directive.Restart), Redirect(MessageDirective.StayInQueue)) : SetDirective(Directive.Stop))
+                        ? Compose(SetBackOffAmount(0.1 * second), Redirect(MessageDirective.StayInQueue), SetDirective(x.Global.Failures < 3 ? Directive.Escalate : Directive.Restart))
                         : x.Global.Failures < 2
-                            ? Compose(SetBackOffAmount(1 * second), SetDirective(Directive.Resume), Redirect(MessageDirective.ForwardToSelf))
-                            : x.Global.Failures < 3
-                                ? Compose(SetBackOffAmount(1 * second), SetDirective(Directive.Restart), Redirect(MessageDirective.ForwardToSelf))
-                                : SetDirective(Directive.Stop)
+                            ? Compose(SetBackOffAmount(0.1 * second), SetDirective(Directive.Restart), Redirect(MessageDirective.StayInQueue))
+                            : SetDirective(Directive.Stop)
                     select y);
 
                 var answer = ask<string>(outer, "test");
                 Assert.Equal("TEST", answer); // make sure outer actor is running
                 tell(outer[nameof(DelayMissing)], "TEST");
                     mre.WaitOne();
+                    // Task.Delay(1000).ConfigureAwait(false).GetAwaiter().GetResult();
                 }
 
                 var expected = List(
                     (0 * second, "setup 1"),
                     (0 * second, "inbox 1"),
-                    (1 * second, "inbox 2"),
-                    (2 * second, "setup 2"),
-                    (3 * second, "setup 3"),
-                    (4 * second, "setup 4")
+                    (0.1 * second, "setup 2")
                     );
                 Assert.Equal(expected.Map(_ => _.Item2), events.Map(_ => _.Item2));
                 foreach (var timing in expected.Zip(events.Map(_ => _.Item1)))
