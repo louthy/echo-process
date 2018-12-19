@@ -517,7 +517,7 @@ namespace Echo
                 inbox.Startup(actor, parent, cluster, maxMailboxSize);
                 if (!lazy)
                 {
-                    TellSystem(actor.Id, SystemMessage.StartupProcess);
+                    TellSystem(actor.Id, SystemMessage.StartupProcess(false));
                 }
             }
             catch

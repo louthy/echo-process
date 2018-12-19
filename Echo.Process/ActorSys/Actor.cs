@@ -71,16 +71,16 @@ namespace Echo
         /// <summary>
         /// Start up - placeholder
         /// </summary>
-        public Unit Startup()
+        public InboxDirective Startup()
         {
             lock(sync)
             {
                 if (cancellationTokenSource.IsCancellationRequested)
                 {
-                    return unit;
+                    return InboxDirective.Shutdown;
                 }
 
-                if (state.IsSome) return unit;
+                if (state.IsSome) return InboxDirective.Default;
 
                 var savedReq = ActorContext.Request.CurrentRequest;
                 var savedFlags = ActorContext.Request.ProcessFlags;
@@ -106,6 +106,7 @@ namespace Echo
                         logErr(e);
                     }
 
+                    return InboxDirective.Default;
                 }
                 catch (Exception e)
                 {
@@ -120,6 +121,7 @@ namespace Echo
                     );
 
                     if(!(e is ProcessKillException)) tell(sys.Errors, e);
+                    return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause
                 }
                 finally
                 {
@@ -127,7 +129,6 @@ namespace Echo
                     ActorContext.Request.ProcessFlags = savedFlags;
                     ActorContext.Request.CurrentMsg = savedMsg;
                 }
-                return unit;
             }
         }
 
@@ -335,7 +336,7 @@ namespace Echo
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
-        public Unit Restart()
+        public Unit Restart(bool unpauseAfterRestart)
         {
             lock (sync)
             {
@@ -346,7 +347,7 @@ namespace Echo
                     kill(kid.Value.Actor.Id);
                 }
             }
-            tellSystem(Id, SystemMessage.StartupProcess);
+            tellSystem(Id, SystemMessage.StartupProcess(unpauseAfterRestart)); 
             return unit;
         }
 
@@ -865,7 +866,7 @@ namespace Echo
                         {
                             decision.Affects.Iter(p => pause(p));
                             safedelay(
-                                () => RunProcessDirective(pid, sender, ex, message, decision),
+                                () => RunProcessDirective(pid, sender, ex, message, decision, true),
                                 decision.Pause
                             );
                             return InboxDirective.Pause | RunMessageDirective(pid, sender, decision, ex, message);
@@ -873,20 +874,27 @@ namespace Echo
                         else
                         {
                             // Run the instruction for the Process (stop/restart/etc.)
-                            RunProcessDirective(pid, sender, ex, message, decision);
+                            try
+                            {
+                                RunProcessDirective(pid, sender, ex, message, decision, false);
+                            }
+                            catch (Exception e)
+                            {
+                                // Error in RunProcessDirective => log and still run RunMessageDirective
+                                logErr("Strategy exception (RunProcessDirective) in " + Id, e);
+                            }
+                            // Run the instruction for the message (dead-letters/send-to-self/...)
+                            return RunMessageDirective(pid, sender, decision, ex, message);
                         }
-
-                        // Run the instruction for the message (dead-letters/send-to-self/...)
-                        return RunMessageDirective(pid, sender, decision, ex, message);
                     },
                     None: () =>
                     {
-                        logErr("Strategy failed in " + Id);
+                        logErr("Strategy failed (no decision) in " + Id);
                         return InboxDirective.Default;
                     },
                     Fail: e =>
                     {
-                        logErr("Strategy exception in " + Id, e);
+                        logErr("Strategy exception (decision error) " + Id, e);
                         return InboxDirective.Default;
                     });
             }
@@ -933,12 +941,13 @@ namespace Echo
         }
 
         void RunProcessDirective(
-            ProcessId pid, 
-            ProcessId sender, 
-            Exception e, 
-            object message, 
-            StrategyDecision decision
-            )
+            ProcessId pid,
+            ProcessId sender,
+            Exception e,
+            object message,
+            StrategyDecision decision,
+            bool unPauseAfterRestart
+        )
         {
             var directive = decision.ProcessDirective;
 
@@ -949,6 +958,7 @@ namespace Echo
                 {
                     case DirectiveType.Escalate:
                     case DirectiveType.Resume:
+                        // Note: unpause probably won't do anything if unPauseAfterRestart==false because our strategy did not pause them (but unpause should not harm)
                         unpause(cpid);
                         break;
                     case DirectiveType.Restart:
@@ -966,11 +976,11 @@ namespace Echo
                     tellSystem(Parent.Actor.Id, SystemMessage.ChildFaulted(pid, sender, e, message), Self);
                     break;
                 case DirectiveType.Resume:
+                    // Note: unpause should not be necessary if unPauseAfterRestart==false because our strategy did not pause before (but unpause should not harm)
                     unpause(pid);
                     break;
                 case DirectiveType.Restart:
-                    Restart();
-                    unpause(pid);
+                    Restart(unPauseAfterRestart);
                     break;
                 case DirectiveType.Stop:
                     ShutdownProcess(false);
