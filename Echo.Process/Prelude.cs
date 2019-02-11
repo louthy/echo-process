@@ -247,7 +247,7 @@ namespace Echo
         /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
         /// </summary>
         public static Unit startup(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess);
+            ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess(false));
 
         /// <summary>
         /// Shutdown a specified running process.

@@ -18,11 +18,7 @@ namespace Echo
                 switch (msg.Tag)
                 {
                     case Message.TagSpec.Restart:
-                        if (inbox.IsPaused)
-                        {
-                            inbox.Unpause();
-                        }
-                        actor.Restart();
+                        actor.Restart(inbox.IsPaused);
                         break;
 
                     case Message.TagSpec.LinkChild:
@@ -40,12 +36,17 @@ namespace Echo
                         return actor.ChildFaulted(cf.Child, cf.Sender, cf.Exception, cf.Message);
 
                     case Message.TagSpec.StartupProcess:
-                        actor.Startup();
+                        var startupProcess = msg as StartupProcessMessage;
+                        var inboxDirective = actor.Startup(); // get feedback whether startup will somehow trigger Unpause itself (i.e. error => strategy => restart)
+                        if (startupProcess.UnpauseAfterStartup && !inboxDirective.HasFlag(InboxDirective.Pause))
+                        {
+                            inbox.Unpause();
+                        }
                         break;
 
                     case Message.TagSpec.ShutdownProcess:
-                        var sp = msg as ShutdownProcessMessage;
-                        actor.ShutdownProcess(sp.MaintainState);
+                        var shutdownProcess = msg as ShutdownProcessMessage;
+                        actor.ShutdownProcess(shutdownProcess.MaintainState);
                         break;
 
                     case Message.TagSpec.Unpause:
