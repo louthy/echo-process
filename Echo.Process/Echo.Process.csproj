@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
@@ -10,13 +10,14 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net46;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.0.56-beta</PackageVersion>
+    <PackageVersion>2.0.58-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
     <Summary>echo-process Actor library</Summary>
     <Copyright>Copyright (c) Paul Louth. All rights reserved.</Copyright>
-    <Description>echo-process Actor library component that works with LanguageExt.Core: A library that uses and abuses the features of C# 6 to provide a functional 'Base class library', that, if you squint, can look like extensions to the language itself. It also includes an 'Erlang like' process system (actors) that can optionally persist messages and state to Redis (note you can use it without Redis for in-app messaging). The process system additionally supports Rx streams of messages and state allowing for a complete system of reactive events and message dispatch.</Description>
+    <Summary>echo-process Actor library component that works with LanguageExt.Core.  'Erlang like' process system (actors) that can optionally persist messages and state to Redis</Summary>
+    <Description>echo-process Actor library component that works with LanguageExt.Core: An 'Erlang like' process system (actors) that can optionally persist messages and state to Redis (note you can use it without Redis for in-app messaging). The process system additionally supports Rx streams of messages and state allowing for a complete system of reactive events and message dispatch.</Description>
     <PackageTags>Echo, Process, C#, Functional, Language Extension, Monad, Option, Either, Reader, Writer, State, List, Set, Map, Queue, Memo, Memoization, Immutable, Lambda, Pattern Matching, Tuple, Actor, Process, Akka, Redis</PackageTags>
     <PackageIconUrl>https://camo.githubusercontent.com/08525ae465a9061150679d871731e77b399c2a94/687474703a2f2f7777772e34666f75722e6f72672f696d616765732f6c616e672d6578742d6c6f676f2e706e67</PackageIconUrl>
     <PackageProjectUrl>https://github.com/louthy/echo-process</PackageProjectUrl>
