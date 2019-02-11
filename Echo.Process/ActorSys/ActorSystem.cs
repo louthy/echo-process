@@ -202,7 +202,9 @@ namespace Echo
                     }
                     try
                     {
-                        rootItem.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
+                        rootItem.Actor.Children.Values
+                            .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
+                            .Iter(c => c.Actor.ShutdownProcess(true));
                     }
                     catch(Exception e)
                     {
