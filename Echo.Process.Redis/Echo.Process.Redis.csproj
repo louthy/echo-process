@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
-    <PackageVersion>2.0.58-beta</PackageVersion>
+    <PackageVersion>2.0.59-beta</PackageVersion>
     <PackageId>Echo.Process.Redis</PackageId>
     <Title>echo-process Redis Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -30,8 +30,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.1.12" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.1.12" />
+    <PackageReference Include="LanguageExt.Core" Version="3.1.15" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.1.15" />
     <PackageReference Include="StackExchange.Redis" Version="1.2.6" />
   </ItemGroup>
   <ItemGroup>
