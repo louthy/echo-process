@@ -41,7 +41,7 @@ namespace Echo
                 case Message.TagSpec.UserTerminated:    return ((TerminatedMessage)DeserialiseMsgContent(msg)).SetSystem(sys);
 
                 case Message.TagSpec.GetChildren:       return UserControlMessage.GetChildren;
-                case Message.TagSpec.StartupProcess:    return SystemMessage.StartupProcess;
+                case Message.TagSpec.StartupProcess:    return (StartupProcessMessage)DeserialiseMsgContent(msg);
                 case Message.TagSpec.ShutdownProcess:   return (ShutdownProcessMessage)DeserialiseMsgContent(msg);
 
                 case Message.TagSpec.Restart:           return SystemMessage.Restart;

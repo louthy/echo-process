@@ -60,25 +60,19 @@ namespace Echo.ActorSys
                                 Process.logErr(e);
                             }
 
-                            switch (directive)
+                            if (directive.HasFlag(InboxDirective.Shutdown))
                             {
-                                case InboxDirective.Pause:
-                                    addToFrontOfQueue = false;
+                                addToFrontOfQueue = false;
+                                Cancel();
+                            }
+                            else
+                            {
+                                addToFrontOfQueue = directive.HasFlag(InboxDirective.PushToFrontOfQueue);
+
+                                if (directive.HasFlag(InboxDirective.Pause))
+                                {
                                     Pause();
-                                    break;
-
-                                case InboxDirective.Shutdown:
-                                    addToFrontOfQueue = false;
-                                    Cancel();
-                                    return;
-
-                                case InboxDirective.PushToFrontOfQueue:
-                                    addToFrontOfQueue = true;
-                                    break;
-
-                                case InboxDirective.Default:
-                                    addToFrontOfQueue = false;
-                                    break;
+                                }
                             }
                         }
                         while (addToFrontOfQueue);
