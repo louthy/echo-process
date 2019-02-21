@@ -136,7 +136,8 @@ namespace Echo
                     );
 
                     if(!(e is ProcessKillException)) tell(sys.Errors, e);
-                    return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause
+                    return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause 
+                    // we do not return directive (maybe without Pause flag) because we do not want to unpause inbox if StartUp did not run successfully
                 }
                 finally
                 {
@@ -979,7 +980,7 @@ namespace Echo
                         unpause(cpid);
                         break;
                     case DirectiveType.Restart:
-                        restart(cpid);
+                        restart(cpid, unPauseAfterRestart);
                         break;
                     case DirectiveType.Stop:
                         kill(cpid);
