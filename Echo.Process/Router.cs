@@ -171,7 +171,7 @@ namespace Echo
             var workers  = ActorContext.System(id).Settings.GetRouterWorkerCount(id);
             var flags    = ActorContext.System(id).Settings.GetProcessFlags(id);
             var mbs      = ActorContext.System(id).Settings.GetProcessMailboxSize(id);
-            var strategy = ActorContext.System(id).Settings.GetProcessStrategy(id);
+            var strategy = ActorContext.System(id).Settings.GetProcessStrategy(id).IfNone(Process.DefaultStrategy);
             var wrkrName = ActorContext.System(id).Settings.GetRouterWorkerName(id);
 
             return type.Map(t =>
