@@ -25,6 +25,12 @@ namespace Echo
             localScheduler = LocalScheduler.Run();
         }
 
+        internal static void ShutdownLocalScheduler()
+        {
+            localScheduler.Dispose();
+            localScheduler = null;
+        }
+
 #if !NETSTANDARD
 
         /// <summary>
