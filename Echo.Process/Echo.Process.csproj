@@ -24,6 +24,7 @@
     <PackageLicenseUrl>https://github.com/louthy/echo-process/blob/master/LICENSE.md</PackageLicenseUrl>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" />
