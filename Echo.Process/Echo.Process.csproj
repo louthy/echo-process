@@ -10,13 +10,14 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net46;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.0.56-beta</PackageVersion>
+    <PackageVersion>2.0.59-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
     <Summary>echo-process Actor library</Summary>
     <Copyright>Copyright (c) Paul Louth. All rights reserved.</Copyright>
-    <Description>echo-process Actor library component that works with LanguageExt.Core: A library that uses and abuses the features of C# 6 to provide a functional 'Base class library', that, if you squint, can look like extensions to the language itself. It also includes an 'Erlang like' process system (actors) that can optionally persist messages and state to Redis (note you can use it without Redis for in-app messaging). The process system additionally supports Rx streams of messages and state allowing for a complete system of reactive events and message dispatch.</Description>
+    <Summary>echo-process Actor library component that works with LanguageExt.Core.  'Erlang like' process system (actors) that can optionally persist messages and state to Redis</Summary>
+    <Description>echo-process Actor library component that works with LanguageExt.Core: An 'Erlang like' process system (actors) that can optionally persist messages and state to Redis (note you can use it without Redis for in-app messaging). The process system additionally supports Rx streams of messages and state allowing for a complete system of reactive events and message dispatch.</Description>
     <PackageTags>Echo, Process, C#, Functional, Language Extension, Monad, Option, Either, Reader, Writer, State, List, Set, Map, Queue, Memo, Memoization, Immutable, Lambda, Pattern Matching, Tuple, Actor, Process, Akka, Redis</PackageTags>
     <PackageIconUrl>https://camo.githubusercontent.com/08525ae465a9061150679d871731e77b399c2a94/687474703a2f2f7777772e34666f75722e6f72672f696d616765732f6c616e672d6578742d6c6f676f2e706e67</PackageIconUrl>
     <PackageProjectUrl>https://github.com/louthy/echo-process</PackageProjectUrl>
@@ -38,16 +39,19 @@
     <None Remove="ActorSys\LocalScheduler.cs" />
     <None Remove="ActorSys\Scheduler.cs" />
     <None Remove="Schedule.cs" />
+    <None Remove="Session\SessionDataItemDTO.cs" />
+    <None Remove="Session\SessionDataTypeResolve.cs" />
+    <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.0.20" />
+    <PackageReference Include="LanguageExt.Core" Version="3.1.15" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
     <PackageReference Include="System.Reactive" Version="[4.0,5.0]" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.lightweight" Version="4.3.0" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.0.20" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.1.15" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net46'">
       <PackageReference Include="WindowsBase" Version="4.6.1055.0" />

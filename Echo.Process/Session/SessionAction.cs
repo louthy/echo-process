@@ -54,7 +54,16 @@ namespace Echo.Session
         public static SessionAction ClearData(long time, SessionId sessionId, string key, SystemName systemName, ProcessName nodeName) =>
             new SessionAction(SessionActionTag.ClearData, time, sessionId, systemName.Value, nodeName.Value, 0, key, null, null);
 
-        public static SessionAction SetData(long time, SessionId sessionId, string key, string data, SystemName systemName, ProcessName nodeName) =>
-            new SessionAction(SessionActionTag.SetData, time, sessionId, systemName.Value, nodeName.Value, 0, key, data, data.GetType().AssemblyQualifiedName);
+        public static SessionAction SetData(long time, SessionId sessionId, string key, object data, SystemName systemName, ProcessName nodeName) =>
+            new SessionAction(
+                SessionActionTag.SetData, 
+                time, 
+                sessionId, 
+                systemName.Value, 
+                nodeName.Value, 
+                0, 
+                key,
+                JsonConvert.SerializeObject(data), 
+                data.GetType().AssemblyQualifiedName);
     }
 }

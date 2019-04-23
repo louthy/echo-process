@@ -70,23 +70,9 @@ namespace Echo.Session
                     Stop(incoming.SessionId);
                     break;
                 case SessionActionTag.SetData:
-                    var type = Type.GetType(incoming.Type);
-                    if (type == null)
-                    {
-                        logErr("Session-value type not found: " + incoming.Type);
-                    }
-                    else
-                    {
-                        var value = Deserialise.Object(incoming.Value, type);
-                        if (value == null)
-                        {
-                            logErr("Session-value is null or failed to deserialise: " + incoming.Value);
-                        }
-                        else
-                        {
-                            SetData(incoming.SessionId, incoming.Key, value, incoming.Time);
-                        }
-                    }
+                    SessionDataTypeResolve.TryDeserialise(incoming.Value, incoming.Type)
+                        .Map(o => SetData(incoming.SessionId, incoming.Key, o, incoming.Time))
+                        .IfLeft(SessionDataTypeResolve.DeserialiseFailed(incoming.Value, incoming.Type));
                     break;
                 case SessionActionTag.ClearData:
                     ClearData(incoming.SessionId, incoming.Key, incoming.Time);

@@ -19,10 +19,10 @@ namespace Echo
         public readonly string Key;
         public readonly PersistenceType Type;
 
-        [OptOutOfEq]
+        [NonRecord]
         public readonly Func<object, object, object> Fold;
 
-        [OptOutOfEq]
+        [NonRecord]
         public readonly object Zero;
 
         protected Schedule(DateTime due, PersistenceType type, string key, Func<object, object, object> fold, object zero)

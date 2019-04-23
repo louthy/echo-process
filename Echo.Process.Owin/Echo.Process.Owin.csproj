@@ -4,11 +4,11 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net46</TargetFramework>
-    <PackageVersion>2.0.56-beta</PackageVersion>
+    <PackageVersion>2.0.59-beta</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>
-    <Summary>Owin extensions for the Echo actor library</Summary>
+    <Summary>Owin extensions for the Echo Process actor library</Summary>
     <Copyright>Copyright (c) Paul Louth. All rights reserved.</Copyright>
     <Description>WebSocket client support (via Owin) for the Echo.Process system.</Description>
     <PackageTags>Echo, Process, C#, Functional, Language Extension, Monad, Option, Either, Reader, Writer, State, List, Set, Map, Queue, Memo, Memoization, Immutable, Lambda, Pattern Matching, Tuple, Actor, Process, Akka, Redis</PackageTags>
@@ -27,7 +27,7 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.0.20" />
+    <PackageReference Include="LanguageExt.Core" Version="3.1.15" />
     <PackageReference Include="Owin.WebSocket" Version="1.7.0" />
   </ItemGroup>
   <ItemGroup>
