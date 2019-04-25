@@ -327,19 +327,20 @@ namespace Echo
                   .Filter(v => notnull<T>(v)));
 
         /// <summary>
-        /// tries to deserialise redis object to T, if fail, the object is skipped.
+        /// tries to deserialise redis object (hash field) to T, if fail, the object is skipped.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="key"></param>
         /// <returns></returns>
-        public Map<string, T> GetHashFieldsDropOnDeserialiseFailed<T>(string key) =>
-            Retry(() =>
-                Db.HashGetAll(key)
-                .Fold(
-                  Map<string, T>(),
-                  (m, e) => Try(() => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value))).IfFail(_ => m))
-                .Filter(v => notnull<T>(v)));
+        public Option<T> GetHashFieldDropOnDeserialiseFailed<T>(string key, string field)
+        {
+            var res = Retry(() => Db.HashGet(key, field));
 
+            return res.IsNullOrEmpty
+                ? None
+                : Try(() => JsonConvert.DeserializeObject<T>(res)).ToOption()
+                    .Where(notnull);
+        }
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>

@@ -137,15 +137,15 @@ namespace Echo
             {
                 var session = from sid in ActorContext.SessionId
                               from ses in ActorContext.Request.System.Sessions.GetSession(sid)
-                              select ses;
+                              select (sid, ses);
 
                 if (session.IsNone)
                 {
                     throw new Exception("Session not started");
                 }
 
-                var time = (from sess in session
-                            from data in sess.Data.Find(key)
+                var time = (from s    in session
+                            from data in s.ses.ProvideData(key, () => ActorContext.Request.System.Sessions.GetDataByKey(s.sid, key))
                             select data.Time)
                            .IfNone(0L);
 
@@ -166,18 +166,17 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var vect = (from sid in ActorContext.SessionId
+                var vect =  from sid in ActorContext.SessionId
                             from session in ActorContext.Request.System.Sessions.GetSession(sid)
                             from data in session.Data.Find(key)
-                            select Tuple(sid, data.Time))
-                           .IfNone(Tuple(default(SessionId), 0L));
+                            select (sid, session, data);
 
-                if (vect.Item2 == 0L)
-                {
-                    return unit;
-                }
-
-                return ActorContext.Request.System.Sessions.ClearData(vect.Item2, vect.Item1, key);
+                return vect.Map(s =>
+                                s.data.Match(
+                                    Left:  _ => s.session.ClearKeyValue(0, key),
+                                    Right: v => ActorContext.Request.System.Sessions.ClearData(v.Time, s.sid, key)))
+                            .IfNone(() => unit);
+                
             }
             else
             {
@@ -219,7 +218,7 @@ namespace Echo
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
-                   from vector    in session.Data.Find(key).ToSeq()
+                   from vector    in session.ProvideData(key, () => ActorContext.Request.System.Sessions.GetDataByKey(sessionId, key)).ToSeq()
                    from obj       in vector.Vector.Choose(obj => obj is T o ? Some(o) : None)
                    select obj).ToSeq()
                 :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));

@@ -64,15 +64,18 @@ namespace Echo.Session
                     Touch(incoming.SessionId);
                     break;
                 case SessionActionTag.Start:
-                    Start(incoming.SessionId, incoming.Timeout, Map<string,object>());
+                    Start(incoming.SessionId, incoming.Timeout);
                     break;
                 case SessionActionTag.Stop:
                     Stop(incoming.SessionId);
                     break;
                 case SessionActionTag.SetData:
-                    SessionDataTypeResolve.TryDeserialise(incoming.Value, incoming.Type)
-                        .Map(o => SetData(incoming.SessionId, incoming.Key, o, incoming.Time))
-                        .IfLeft(SessionDataTypeResolve.DeserialiseFailed(incoming.Value, incoming.Type));
+                    //see if the session in question is interested in the data that's incomming. 
+                    var _ = from sess in sessions.Find(incoming.SessionId)
+                            from _1   in sess.Data.Find(incoming.Key)
+                            select SessionDataTypeResolve.TryDeserialise(incoming.Value, incoming.Type)
+                                    .Map(o => SetData(incoming.SessionId, incoming.Key, o, incoming.Time))
+                                    .IfLeft(SessionDataTypeResolve.DeserialiseFailed(incoming.Value, incoming.Type));
                     break;
                 case SessionActionTag.ClearData:
                     ClearData(incoming.SessionId, incoming.Key, incoming.Time);
@@ -102,17 +105,18 @@ namespace Echo.Session
         /// <param name="sessionId"></param>
         /// <returns></returns>
         internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) =>
-            (from ses in sessions
+            (from ses    in sessions
              from vector in ses.Value.Data.Find(SupplementarySessionId.Key)
-             from v in vector.Vector
-             where v is SupplementarySessionId &&
-                   ((SupplementarySessionId)v).Value == sessionId.Value
+             from data   in vector.ToOption()
+             from value  in data.Vector
+             where value is SupplementarySessionId &&
+                   ((SupplementarySessionId)value).Value == sessionId.Value
              select ses.Key).HeadOrNone();
 
         /// <summary>
         /// Start a new session
         /// </summary>
-        public SessionId Start(SessionId sessionId, int timeoutSeconds, Map<string,object> initialState)
+        public SessionId Start(SessionId sessionId, int timeoutSeconds)
         {
             lock (sync)
             {
@@ -120,7 +124,7 @@ namespace Echo.Session
                 {
                     return sessionId;
                 }
-                var session = SessionVector.Create(timeoutSeconds, VectorConflictStrategy.First, initialState);
+                var session = SessionVector.Create(timeoutSeconds, VectorConflictStrategy.First);
                 sessions = sessions.Add(sessionId, session);
 
                 // Create a subject per session that will buffer touches so we don't push too
