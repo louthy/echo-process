@@ -50,9 +50,6 @@ namespace Echo
         public override int GetHashCode() =>
             Value.GetHashCode();
 
-        public static implicit operator SupplementarySessionId(string value) =>
-            new SupplementarySessionId(value);
-
         public static SupplementarySessionId New(string value) =>
             new SupplementarySessionId(value);
 
