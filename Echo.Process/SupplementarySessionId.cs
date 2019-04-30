@@ -16,7 +16,7 @@ namespace Echo
         /// <summary>
         /// Hashfield key for supplementary sessionid
         /// </summary>
-        public static string Key => $"sys-supp-session";
+        public const string Key = "sys-supp-session";
 
         public readonly string Value;
 

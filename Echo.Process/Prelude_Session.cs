@@ -288,7 +288,7 @@ namespace Echo
                               select ses).IsSome;
 
         /// <summary>
-        /// adds a supplementary session id to existing session. If the current session already has a supplmentary session 
+        /// Adds a supplementary session id to existing session. If the current session already has a supplmentary session 
         /// replace it
         /// </summary>
         /// <param name="sid"></param>
@@ -299,28 +299,36 @@ namespace Echo
                 : raiseUseInMsgAndInSessionLoopOnlyException<Unit>(nameof(addSupplementarySession));
 
         /// <summary>
-        /// gets a echo session id which contains a supplementary session 
+        /// Gets a echo session id which contains a supplementary session 
         /// </summary>
         /// <param name="sid"></param>
         /// <returns></returns>
         public static Option<SessionId> getSessionBySupplementaryId(SupplementarySessionId sid) =>
             InMessageLoop
-            ? ActorContext.Request.System.Sessions.GetSessionId(sid)
-            : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
+                ? ActorContext.Request.System.Sessions.GetSessionId(sid)
+                : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
 
         /// <summary>
-        /// get supplementary session id for current session. If not exists, create a new one.
+        /// Get supplementary session id for current session
+        /// </summary>
+        /// <returns></returns>
+        public static Option<SupplementarySessionId> getSupplementarySessionId() =>
+            InMessageLoop
+                ? from sid in ActorContext.SessionId
+                  from sup in ActorContext.Request.System.Sessions.GetSupplementarySessionId(sid) || sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
+                  select sup
+                : raiseUseInMsgLoopOnlyException<Option<SupplementarySessionId>>(nameof(getSupplementarySessionId));
+
+        /// <summary>
+        /// Get supplementary session id for current session. If not exists, create a new one.
         /// </summary>
         /// <returns></returns>
         public static SupplementarySessionId provideSupplementarySessionId() =>
-            ActorContext.SessionId.Match(
-                Some: sid => (ActorContext.Request.System.Sessions.GetSupplementarySessionId(sid) || sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone())
-                                .IfNone(() =>
-                                {
-                                    var supp = SupplementarySessionId.Generate();
-                                    sessionSetData(SupplementarySessionId.Key, supp);
-                                    return supp;
-                                }),
-                None: () => raiseUseInMsgAndInSessionLoopOnlyException<SupplementarySessionId>(nameof(provideSupplementarySessionId)));
+            getSupplementarySessionId().IfNone(() =>
+            {
+                var supp = SupplementarySessionId.Generate();
+                sessionSetData(SupplementarySessionId.Key, supp);
+                return supp;
+            });
     }
 }
