@@ -336,10 +336,19 @@ namespace Echo
         {
             var res = Retry(() => Db.HashGet(key, field));
 
-            return res.IsNullOrEmpty
-                ? None
-                : Try(() => JsonConvert.DeserializeObject<T>(res)).ToOption()
-                    .Where(notnull);
+            if(res.IsNullOrEmpty)
+            {
+                return None;
+            }
+
+            try
+            {
+                return Optional(JsonConvert.DeserializeObject<T>(res));
+            }
+            catch(JsonException)
+            {
+                return None;
+            }
         }
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>

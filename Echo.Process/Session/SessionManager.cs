@@ -124,8 +124,9 @@ namespace Echo.Session
             from c in cluster
             from f in c.GetHashFieldDropOnDeserialiseFailed<SessionDataItemDTO>(SessionKey(sessionId), key)
             from o in SessionDataTypeResolve.TryDeserialise(f.SerialisedData, f.Type)
-                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.SerialisedData, f.Type)).ToOption()
-            select new ValueVector(0, Seq1(o));
+                                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.SerialisedData, f.Type))
+                                            .ToOption()
+            select ValueVector.New(0, o);
         
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
@@ -158,6 +159,7 @@ namespace Echo.Session
         /// </summary>
         /// <param name="supplementarySessionId"></param>
         /// <returns></returns>
-        public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => Sync.GetSessionId(supplementarySessionId);
+        public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => 
+            Sync.GetSessionId(supplementarySessionId);
     }
 }

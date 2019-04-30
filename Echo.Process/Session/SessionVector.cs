@@ -1,4 +1,5 @@
 ﻿using LanguageExt;
+using LanguageExt.UnsafeValueAccess;
 using System;
 using static LanguageExt.Prelude;
 
@@ -35,20 +36,23 @@ namespace Echo.Session
         public readonly long Time;
         public readonly Seq<object> Vector;
 
-        public ValueVector(long time, Seq<object> root)
+        ValueVector(long time, Seq<object> root)
         {
             Time = time;
             Vector = root;
         }
 
+        public static ValueVector New(long time, object root) =>
+            new ValueVector(time, Seq1(root));
+
         public ValueVector AddValue(long time, object value, VectorConflictStrategy strategy)
         {
             if(Vector.Count == 0 || time > Time)
             {
-                return new ValueVector(time, Seq1(value));
+                return New(time, value);
             }
 
-            if( time < Time)
+            if (time < Time)
             {
                 // A value from the past has arrived, we're going to drop it because
                 // we've already moved on.
@@ -94,11 +98,10 @@ namespace Echo.Session
         /// <summary>
         /// Ctor
         /// </summary>
-        private SessionVector(DateTime lastAccess, int timeoutSeconds)
+        SessionVector(DateTime lastAccess, int timeoutSeconds)
         {
             this.lastAccess = lastAccess;
             TimeoutSeconds = timeoutSeconds;
-            this.data = Map<string, Either<Unit, ValueVector>>();
         }
 
         /// <summary>
@@ -149,7 +152,7 @@ namespace Echo.Session
                 data = (from d      in data.Find(key)
                         from vector in d.ToOption()
                         select data.AddOrUpdate(key, vector.AddValue(time, value, strategy)))
-                       .IfNone(()  => data.AddOrUpdate(key, new ValueVector(time, Seq1(value))));
+                       .IfNone(()  => data.AddOrUpdate(key, ValueVector.New(time, value)));
             }
             Touch();
         }
@@ -162,25 +165,38 @@ namespace Echo.Session
         /// <param name="key"></param>
         /// <param name="get"></param>
         /// <returns></returns>
-        public Option<ValueVector> ProvideData(string key, Func<Option<ValueVector>> get)
+        public Option<ValueVector> ProvideData(SessionId sid, string key)
         {
             Touch();
 
-            lock (sync)
+            Either<Unit, ValueVector> NoKey()
             {
-                return data.Find(key).IfNone(() =>
-                        get().Match<Either<Unit, ValueVector>>(
-                            Some: v =>
-                            {
-                                data = data.AddOrUpdate(key, v);
-                                return v;
-                            },
-                            None: () =>
-                            {
-                                data = data.AddOrUpdate(key, unit);
-                                return unit;
-                            })).ToOption();
+                var v = ActorContext.Request.System.Sessions.GetDataByKey(sid, key);
+
+                if (v.IsSome)
+                {
+                    lock (sync)
+                    {
+                        data = data.AddOrUpdate(key, (ValueVector)v);
+                    }
+                    return (ValueVector)v;
+                }
+                else
+                {
+                    lock (sync)
+                    {
+                        data = data.AddOrUpdate(key, unit);
+                    }
+                    return unit;
+                }
             }
+
+            return data.Find(key)
+                       .IfNone(NoKey)
+                       .ToOption();
         }
+
+        public Option<ValueVector> GetExistingData(string key)  =>
+            data.Find(key).Bind(d => d.ToOption());
     }
 }

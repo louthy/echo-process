@@ -145,7 +145,7 @@ namespace Echo
                 }
 
                 var time = (from s    in session
-                            from data in s.ses.ProvideData(key, () => ActorContext.Request.System.Sessions.GetDataByKey(s.sid, key))
+                            from data in s.ses.ProvideData(s.sid, key)
                             select data.Time)
                            .IfNone(0L);
 
@@ -218,7 +218,7 @@ namespace Echo
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
-                   from vector    in session.ProvideData(key, () => ActorContext.Request.System.Sessions.GetDataByKey(sessionId, key)).ToSeq()
+                   from vector    in session.ProvideData(sessionId, key).ToSeq()
                    from obj       in vector.Vector.Choose(obj => obj is T o ? Some(o) : None)
                    select obj).ToSeq()
                 :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));

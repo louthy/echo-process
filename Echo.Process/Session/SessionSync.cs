@@ -21,9 +21,10 @@ namespace Echo.Session
     {
         SystemName system;
         ProcessName nodeName;
-        Map<SessionId, SessionVector> sessions = Map<SessionId, SessionVector>();
-        Map<SessionId, Subject<Tuple<SessionId, DateTime>>> sessionTouched = Map<SessionId, Subject<Tuple<SessionId, DateTime>>>();
-        Subject<Tuple<SessionId, DateTime>> touched = new Subject<Tuple<SessionId, DateTime>>();
+        Map<SessionId, SessionVector> sessions;
+        Map<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
+        Map<SupplementarySessionId, SessionId> suppSessions;
+        Subject<(SessionId, DateTime)> touched = new Subject<(SessionId, DateTime)>();
 
         VectorConflictStrategy strategy;
         object sync = new object();
@@ -35,7 +36,8 @@ namespace Echo.Session
             this.strategy = strategy;
         }
 
-        public IObservable<Tuple<SessionId, DateTime>> Touched => touched;
+        public IObservable<(SessionId, DateTime)> Touched => 
+            touched;
 
         public void ExpiredCheck()
         {
@@ -70,12 +72,13 @@ namespace Echo.Session
                     Stop(incoming.SessionId);
                     break;
                 case SessionActionTag.SetData:
-                    //see if the session in question is interested in the data that's incomming. 
-                    var _ = from sess in sessions.Find(incoming.SessionId)
-                            from _1   in sess.Data.Find(incoming.Key)
-                            select SessionDataTypeResolve.TryDeserialise(incoming.Value, incoming.Type)
-                                    .Map(o => SetData(incoming.SessionId, incoming.Key, o, incoming.Time))
-                                    .IfLeft(SessionDataTypeResolve.DeserialiseFailed(incoming.Value, incoming.Type));
+                    // See if the session in question is interested in the data that's incoming. 
+                    var __ = from s in sessions.Find(incoming.SessionId)
+                             from _ in s.Data.Find(incoming.Key)
+                             from o in SessionDataTypeResolve.TryDeserialise(incoming.Value, incoming.Type)
+                                                             .MapLeft(SessionDataTypeResolve.DeserialiseFailed(incoming.Value, incoming.Type))
+                                                             .ToOption()
+                             select SetData(incoming.SessionId, incoming.Key, o, incoming.Time);
                     break;
                 case SessionActionTag.ClearData:
                     ClearData(incoming.SessionId, incoming.Key, incoming.Time);
@@ -105,13 +108,7 @@ namespace Echo.Session
         /// <param name="sessionId"></param>
         /// <returns></returns>
         internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) =>
-            (from ses    in sessions
-             from vector in ses.Value.Data.Find(SupplementarySessionId.Key)
-             from data   in vector.ToOption()
-             from value  in data.Vector
-             where value is SupplementarySessionId &&
-                   ((SupplementarySessionId)value).Value == sessionId.Value
-             select ses.Key).HeadOrNone();
+            suppSessions.Find(sessionId);
 
         /// <summary>
         /// Start a new session
@@ -130,7 +127,7 @@ namespace Echo.Session
                 // Create a subject per session that will buffer touches so we don't push too
                 // much over the net when not needed.  This routes to a single stream that isn't
                 // buffered.
-                var touch = new Subject<Tuple<SessionId, DateTime>>();
+                var touch = new Subject<(SessionId, DateTime)>();
                 touch.Sample(TimeSpan.FromSeconds(1))
                      .ObserveOn(TaskPoolScheduler.Default)
                      .Subscribe(touched.OnNext);
@@ -152,6 +149,18 @@ namespace Echo.Session
                 // regardless of whether something happened in the future.  Session IDs
                 // are randomly generated, so any future event with the same session ID
                 // is a deleted future.
+
+                sessions.Find(sessionId).Iter(s =>
+                {
+                    s.Data.Values.Iter(either => either.Iter((ValueVector vv) =>
+                    {
+                        if (vv.Vector.Head is SupplementarySessionId sid)
+                        {
+                            suppSessions = suppSessions.Remove(sid);
+                        }
+                    }));
+                });
+
                 sessions = sessions.Remove(sessionId);
                 sessionTouched.Find(sessionId).Iter(sub => sub.OnCompleted());
                 sessionTouched = sessionTouched.Remove(sessionId);
@@ -166,19 +175,49 @@ namespace Echo.Session
             sessions.Find(sessionId).IfSome(s =>
             {
                 s.Touch();
-                sessionTouched.Find(sessionId).Iter(sub => sub.OnNext(Tuple(sessionId, DateTime.UtcNow)));
+                sessionTouched.Find(sessionId).Iter(sub => sub.OnNext((sessionId, DateTime.UtcNow)));
             });
 
         /// <summary>
         /// Set data on the session key/value store
         /// </summary>
-        public LanguageExt.Unit SetData(SessionId sessionId, string key, object value, long vector) =>
-            sessions.Find(sessionId).Iter(s => s.SetKeyValue(vector, key, value, strategy));
+        public LanguageExt.Unit SetData(SessionId sessionId, string key, object value, long vector)
+        {
+            if(value is SupplementarySessionId supp)
+            {
+                lock (sync)
+                {
+                    suppSessions = suppSessions.AddOrUpdate(supp, sessionId);
+                }
+            }
+
+            return sessions.Find(sessionId).Iter(s => s.SetKeyValue(vector, key, value, strategy));
+        }
 
         /// <summary>
         /// Clear a session key
         /// </summary>
         public LanguageExt.Unit ClearData(SessionId sessionId, string key, long vector) =>
-            sessions.Find(sessionId).Iter(s => s.ClearKeyValue(vector, key));
+            sessions.Find(sessionId).Iter(s =>
+            {
+                s.GetExistingData(key).Iter(v =>
+                {
+                    if (v.Vector.Head is SupplementarySessionId sid)
+                    {
+                        lock (sync)
+                        {
+                            suppSessions = suppSessions.Remove(sid);
+                        }
+                    }
+                });
+
+                s.ClearKeyValue(vector, key);
+            });
+
+        /// <summary>
+        /// Clear a session key
+        /// </summary>
+        public Option<ValueVector> GetExistingData(SessionId sessionId, string key) =>
+            sessions.Find(sessionId).Bind(s => s.GetExistingData(key));
     }
 }
