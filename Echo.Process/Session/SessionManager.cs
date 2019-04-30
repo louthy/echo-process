@@ -161,5 +161,13 @@ namespace Echo.Session
         /// <returns></returns>
         public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => 
             Sync.GetSessionId(supplementarySessionId);
+
+        /// <summary>
+        /// Attempts to get a supplementary sessionId by session ID.  Only checked locally.
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        public Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) =>
+            Sync.GetSupplementarySessionId(sessionId);
     }
 }

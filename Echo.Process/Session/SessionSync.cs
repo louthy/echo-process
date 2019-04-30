@@ -23,7 +23,7 @@ namespace Echo.Session
         ProcessName nodeName;
         Map<SessionId, SessionVector> sessions;
         Map<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
-        Map<SupplementarySessionId, SessionId> suppSessions;
+        BiMap<SupplementarySessionId, SessionId> suppSessions;
         Subject<(SessionId, DateTime)> touched = new Subject<(SessionId, DateTime)>();
 
         VectorConflictStrategy strategy;
@@ -111,6 +111,14 @@ namespace Echo.Session
             suppSessions.Find(sessionId);
 
         /// <summary>
+        /// Gets a supplementary session id using an active session id
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        internal Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) =>
+            suppSessions.Find(sessionId);
+
+        /// <summary>
         /// Start a new session
         /// </summary>
         public SessionId Start(SessionId sessionId, int timeoutSeconds)
@@ -150,16 +158,10 @@ namespace Echo.Session
                 // are randomly generated, so any future event with the same session ID
                 // is a deleted future.
 
-                sessions.Find(sessionId).Iter(s =>
+                lock (sync)
                 {
-                    s.Data.Values.Iter(either => either.Iter((ValueVector vv) =>
-                    {
-                        if (vv.Vector.Head is SupplementarySessionId sid)
-                        {
-                            suppSessions = suppSessions.Remove(sid);
-                        }
-                    }));
-                });
+                    suppSessions = suppSessions.Remove(sessionId);
+                }
 
                 sessions = sessions.Remove(sessionId);
                 sessionTouched.Find(sessionId).Iter(sub => sub.OnCompleted());

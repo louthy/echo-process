@@ -313,14 +313,14 @@ namespace Echo
         /// </summary>
         /// <returns></returns>
         public static SupplementarySessionId provideSupplementarySessionId() =>
-            hasActiveSession()
-                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
-                    .IfNone(() =>
-                    {
-                        var sid = SupplementarySessionId.Generate();
-                        sessionSetData(SupplementarySessionId.Key, SupplementarySessionId.Generate());
-                        return sid;
-                    })
-                : raiseUseInMsgAndInSessionLoopOnlyException<SupplementarySessionId>(nameof(provideSupplementarySessionId));
+            ActorContext.SessionId.Match(
+                Some: sid => (ActorContext.Request.System.Sessions.GetSupplementarySessionId(sid) || sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone())
+                                .IfNone(() =>
+                                {
+                                    var supp = SupplementarySessionId.Generate();
+                                    sessionSetData(SupplementarySessionId.Key, supp);
+                                    return supp;
+                                }),
+                None: () => raiseUseInMsgAndInSessionLoopOnlyException<SupplementarySessionId>(nameof(provideSupplementarySessionId)));
     }
 }
