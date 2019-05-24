@@ -63,7 +63,7 @@ namespace Echo.Session
             switch(incoming.Tag)
             { 
                 case SessionActionTag.Touch:
-                    Touch(incoming.SessionId);
+                    MarkTouched(incoming.SessionId);
                     break;
                 case SessionActionTag.Start:
                     Start(incoming.SessionId, incoming.Timeout);
@@ -171,13 +171,22 @@ namespace Echo.Session
         }
 
         /// <summary>
-        /// Timestamp a sessions to keep it alive
+        /// Timestamp a sessions to keep it alive and publishes the change
         /// </summary>
         public LanguageExt.Unit Touch(SessionId sessionId) =>
             sessions.Find(sessionId).IfSome(s =>
             {
                 s.Touch();
                 sessionTouched.Find(sessionId).Iter(sub => sub.OnNext((sessionId, DateTime.UtcNow)));
+            });
+
+        /// <summary>
+        /// Timestamp a sessions to keep it alive locally
+        /// </summary>
+        LanguageExt.Unit MarkTouched(SessionId sessionId) =>
+            sessions.Find(sessionId).IfSome(s =>
+            {
+                s.Touch();
             });
 
         /// <summary>
