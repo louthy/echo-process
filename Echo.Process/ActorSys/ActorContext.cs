@@ -4,19 +4,23 @@ using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 using Echo.Config;
 using LanguageExt;
+using System.Threading;
 
 namespace Echo
 {
     static class ActorContext
     {
-        [ThreadStatic]
-        static SystemName context;
+        static readonly AsyncLocal<SystemName> _context = new AsyncLocal<SystemName>();
 
-        [ThreadStatic]
-        static Option<SessionId> sessionId;
+        static SystemName context
+        {
+            get => _context.Value;
+            set => _context.Value = value;
+        }
 
-        [ThreadStatic]
-        static ActorRequestContext request;
+        static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
+
+        static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
 
         static SystemName defaultSystem;
 
@@ -63,7 +67,7 @@ namespace Echo
         }
 
         public static bool InMessageLoop =>
-            request != null;
+            request.Value != null;
 
         public static SystemName[] Systems =>
             systemNames;
@@ -134,7 +138,7 @@ namespace Echo
 
         public static Unit SetContext(ActorRequestContext requestContext)
         {
-            request = requestContext;
+            request.Value = requestContext;
             return unit;
         }
 
@@ -198,18 +202,12 @@ namespace Echo
                 : DefaultSystem.UserContext.Self;
 
         public static ActorRequestContext Request =>
-            request;
+            request.Value;
 
         public static Option<SessionId> SessionId
         {
-            get
-            {
-                return sessionId;
-            }
-            set
-            {
-                sessionId = value;
-            }
+            get => sessionId.Value;
+            set => sessionId.Value = value;
         }
 
         public static Unit Publish(object message) =>
