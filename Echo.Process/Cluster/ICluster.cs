@@ -162,7 +162,7 @@ namespace Echo
         int DeleteHashFields(string key, IEnumerable<string> fields);
         Map<string, object> GetHashFields(string key);
         Map<string, T> GetHashFields<T>(string key);
-        Map<string, T> GetHashFieldsDropOnDeserialiseFailed<T>(string key);
+        Option<T> GetHashFieldDropOnDeserialiseFailed<T>(string key, string field);
         Map<K, T> GetHashFields<K, T>(string key, Func<string, K> keyBuilder);
         Option<T> GetHashField<T>(string key, string field);
         Map<string, T> GetHashFields<T>(string key, IEnumerable<string> fields);
