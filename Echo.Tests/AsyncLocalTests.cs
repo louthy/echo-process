@@ -25,8 +25,7 @@ namespace Echo.Tests
 
             Assert.True(sessionId() == sid);
         }
-
-
+        
         /// <summary>
         /// Assert that session ids are truly 'ThreadStatic'
         /// </summary>
@@ -42,8 +41,7 @@ namespace Echo.Tests
                 ThreadPool.SetMinThreads(2, 2);
                 ThreadPool.SetMaxThreads(2, 2);
 
-                var tasks = new List<Task>();
-                
+                var tasks = new List<Task>();                
 
                 for (int i = 0; i < 10; i++)
                 {
@@ -77,7 +75,6 @@ namespace Echo.Tests
             Assert.True(sessionId() == sid);
 
             //start child task
-
             var t = Task.Run(() =>
             {
                 Assert.True(sessionId() == sid);
@@ -89,6 +86,7 @@ namespace Echo.Tests
                 Assert.True(sessionId() == sid2);
 
             });
+
             Task.WaitAll(t);
 
             //make sure that our session id is still same
