@@ -3,6 +3,7 @@ using static LanguageExt.Prelude;
 using static Echo.Process;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Threading;
 using System.Reactive.Linq;
 
@@ -41,13 +42,24 @@ namespace Echo
                     {
                         inbound = inbound.Enqueue((schedule, pid, action, message, savedContext, savedSession));
                     }
+
                     return unit;
                 }
             }
         }
 
+        static void Clear()
+        {
+            lock (sync)
+            {
+                inbound = default;
+                actions = default;
+                keys = default;
+            }
+        }
+
         public static IDisposable Run() =>
-            Observable.Interval(TimeSpan.FromMilliseconds(10)).Subscribe(Process);
+            new CompositeDisposable(Disposable.Create(Clear), Observable.Interval(TimeSpan.FromMilliseconds(10)).Subscribe(Process));
 
         static void Process(long time)
         {
