@@ -53,6 +53,7 @@ namespace Echo
                 rootProcessName,
                 SystemInbox,
                 _ => this,
+                ActorSystem.NoShutdown<ActorSystemBootstrap>(),
                 null,
                 Process.DefaultStrategy,
                 ProcessFlags.Default,
@@ -165,7 +166,7 @@ namespace Echo
         {
             if (ProcessDoesNotExist(nameof(ActorCreate), parent.Actor.Id)) return null;
 
-            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), termFn, Process.DefaultStrategy, flags, Settings, System);
+            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), ActorSystem.NoShutdown<S>(), termFn, Process.DefaultStrategy, flags, Settings, System);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && Cluster.IsSome)

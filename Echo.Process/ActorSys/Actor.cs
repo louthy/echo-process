@@ -22,6 +22,7 @@ namespace Echo
         readonly Func<S, T, S> actorFn;
         readonly Func<S, ProcessId, S> termFn;
         readonly Func<IActor, S> setupFn;
+        readonly Func<S, Unit> shutdownFn;
         readonly ProcessFlags flags;
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
@@ -43,6 +44,7 @@ namespace Echo
             ProcessName name,
             Func<S, T, S> actor,
             Func<IActor, S> setup,
+            Func<S, Unit> shutdown,
             Func<S, ProcessId, S> term,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
@@ -52,6 +54,19 @@ namespace Echo
         {
             setupFn = setup ?? throw new ArgumentNullException(nameof(setup));
             actorFn = actor ?? throw new ArgumentNullException(nameof(actor));
+            shutdownFn = shutdown ?? throw new ArgumentNullException(nameof(shutdown));
+            shutdownFn = fun((S s) =>
+            {
+                try
+                {
+                    shutdown(s);
+                }
+                catch (Exception e)
+                {
+                    logErr(e);
+                }
+                return unit;
+            });
 
             this.sys = sys;
             Id = parent.Actor.Id[name];
@@ -341,6 +356,7 @@ namespace Echo
             lock (sync)
             {
                 RemoveAllSubscriptions();
+                state.IfSome(shutdownFn);
                 DisposeState();
                 foreach (var kid in Children)
                 {
@@ -434,6 +450,7 @@ namespace Echo
                 stateSubject.OnCompleted();
                 remoteSubsAcquired = false;
                 strategyState = StrategyState.Empty;
+                state.IfSome(shutdownFn);
                 DisposeState();
 
                 sys.DispatchTerminate(Id);
@@ -1023,6 +1040,7 @@ namespace Echo
         public void Dispose()
         {
             RemoveAllSubscriptions();
+            state.IfSome(shutdownFn);
             DisposeState();
             cancellationTokenSource.Dispose();
         }
