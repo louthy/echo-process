@@ -16,7 +16,7 @@ namespace Echo
         /// <summary>
         /// Hashfield key for supplementary sessionid
         /// </summary>
-        public static string Key => $"sys-supp-session";
+        public const string Key = "sys-supp-session";
 
         public readonly string Value;
 
@@ -49,9 +49,6 @@ namespace Echo
 
         public override int GetHashCode() =>
             Value.GetHashCode();
-
-        public static implicit operator SupplementarySessionId(string value) =>
-            new SupplementarySessionId(value);
 
         public static SupplementarySessionId New(string value) =>
             new SupplementarySessionId(value);

@@ -87,9 +87,8 @@ namespace Echo.Session
         public Option<SessionVector> GetSession(SessionId sessionId) =>
             Sync.GetSession(sessionId).IfNone( () =>
                 Sync.GetSession(from c in cluster
-                                from ts in c.GetHashField<long>(SessionKey(sessionId), LastAccessKey)
                                 from to in c.GetHashField<int>(SessionKey(sessionId), TimeoutKey)
-                                select Sync.Start(sessionId, to, LoadData(sessionId)))
+                                select Sync.Start(sessionId, to))
                     .IfNone(() => failwith<SessionVector>("Session doesn't exist")));
 
         const string LastAccessKey = "__last-access";
@@ -100,7 +99,7 @@ namespace Echo.Session
 
         public LanguageExt.Unit Start(SessionId sessionId, int timeoutSeconds)
         {
-            Sync.Start(sessionId, timeoutSeconds, LoadData(sessionId));
+            Sync.Start(sessionId, timeoutSeconds);
             cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), TimeoutKey, timeoutSeconds));
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Start(sessionId, timeoutSeconds, system, nodeName)));
         }
@@ -115,14 +114,20 @@ namespace Echo.Session
         public LanguageExt.Unit Touch(SessionId sessionId) =>
             Sync.Touch(sessionId);
 
-        private Map<string, object> LoadData(SessionId sessionId) =>
-            toMap(
-                from c in cluster.ToSeq()
-                from f in c.GetHashFieldsDropOnDeserialiseFailed<SessionDataItemDTO>(SessionKey(sessionId)).ToSeq()
-                from o in SessionDataTypeResolve.TryDeserialise(f.Value.SerialisedData, f.Value.Type)
-                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.Value.SerialisedData, f.Value.Type)).ToSeq()
-                select (f.Key, o));
-
+        /// <summary>
+        /// gets session meta data associated with a session id using the provided key
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public Option<ValueVector> GetDataByKey(SessionId sessionId, string key) =>
+            from c in cluster
+            from f in c.GetHashFieldDropOnDeserialiseFailed<SessionDataItemDTO>(SessionKey(sessionId), key)
+            from o in SessionDataTypeResolve.TryDeserialise(f.SerialisedData, f.Type)
+                                            .MapLeft(SessionDataTypeResolve.DeserialiseFailed(f.SerialisedData, f.Type))
+                                            .ToOption()
+            select ValueVector.New(0, o);
+        
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
             Sync.SetData(sessionId, key, value, time);
@@ -154,6 +159,15 @@ namespace Echo.Session
         /// </summary>
         /// <param name="supplementarySessionId"></param>
         /// <returns></returns>
-        public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => Sync.GetSessionId(supplementarySessionId);
+        public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => 
+            Sync.GetSessionId(supplementarySessionId);
+
+        /// <summary>
+        /// Attempts to get a supplementary sessionId by session ID.  Only checked locally.
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        public Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) =>
+            Sync.GetSupplementarySessionId(sessionId);
     }
 }

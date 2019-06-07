@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
-    <PackageVersion>2.0.59-beta</PackageVersion>
+    <PackageVersion>2.0.61-beta</PackageVersion>
     <PackageId>Echo.Process.Redis</PackageId>
     <Title>echo-process Redis Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -20,6 +20,7 @@
     <PackageLicenseUrl>https://github.com/louthy/echo-process/blob/master/LICENSE.md</PackageLicenseUrl>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" />
@@ -30,8 +31,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.1.15" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.1.15" />
+    <PackageReference Include="LanguageExt.Core" Version="3.1.21" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.1.21" />
     <PackageReference Include="StackExchange.Redis" Version="1.2.6" />
   </ItemGroup>
   <ItemGroup>

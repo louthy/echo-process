@@ -137,15 +137,15 @@ namespace Echo
             {
                 var session = from sid in ActorContext.SessionId
                               from ses in ActorContext.Request.System.Sessions.GetSession(sid)
-                              select ses;
+                              select (sid, ses);
 
                 if (session.IsNone)
                 {
                     throw new Exception("Session not started");
                 }
 
-                var time = (from sess in session
-                            from data in sess.Data.Find(key)
+                var time = (from s    in session
+                            from data in s.ses.ProvideData(s.sid, key)
                             select data.Time)
                            .IfNone(0L);
 
@@ -166,18 +166,17 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var vect = (from sid in ActorContext.SessionId
+                var vect =  from sid in ActorContext.SessionId
                             from session in ActorContext.Request.System.Sessions.GetSession(sid)
                             from data in session.Data.Find(key)
-                            select Tuple(sid, data.Time))
-                           .IfNone(Tuple(default(SessionId), 0L));
+                            select (sid, session, data);
 
-                if (vect.Item2 == 0L)
-                {
-                    return unit;
-                }
-
-                return ActorContext.Request.System.Sessions.ClearData(vect.Item2, vect.Item1, key);
+                return vect.Map(s =>
+                                s.data.Match(
+                                    Left:  _ => s.session.ClearKeyValue(0, key),
+                                    Right: v => ActorContext.Request.System.Sessions.ClearData(v.Time, s.sid, key)))
+                            .IfNone(() => unit);
+                
             }
             else
             {
@@ -219,7 +218,7 @@ namespace Echo
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
-                   from vector    in session.Data.Find(key).ToSeq()
+                   from vector    in session.ProvideData(sessionId, key).ToSeq()
                    from obj       in vector.Vector.Choose(obj => obj is T o ? Some(o) : None)
                    select obj).ToSeq()
                 :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));
@@ -289,7 +288,7 @@ namespace Echo
                               select ses).IsSome;
 
         /// <summary>
-        /// adds a supplementary session id to existing session. If the current session already has a supplmentary session 
+        /// Adds a supplementary session id to existing session. If the current session already has a supplmentary session 
         /// replace it
         /// </summary>
         /// <param name="sid"></param>
@@ -300,28 +299,36 @@ namespace Echo
                 : raiseUseInMsgAndInSessionLoopOnlyException<Unit>(nameof(addSupplementarySession));
 
         /// <summary>
-        /// gets a echo session id which contains a supplementary session 
+        /// Gets a echo session id which contains a supplementary session 
         /// </summary>
         /// <param name="sid"></param>
         /// <returns></returns>
         public static Option<SessionId> getSessionBySupplementaryId(SupplementarySessionId sid) =>
             InMessageLoop
-            ? ActorContext.Request.System.Sessions.GetSessionId(sid)
-            : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
+                ? ActorContext.Request.System.Sessions.GetSessionId(sid)
+                : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
 
         /// <summary>
-        /// get supplementary session id for current session. If not exists, create a new one.
+        /// Get supplementary session id for current session
+        /// </summary>
+        /// <returns></returns>
+        public static Option<SupplementarySessionId> getSupplementarySessionId() =>
+            InMessageLoop
+                ? from sid in ActorContext.SessionId
+                  from sup in ActorContext.Request.System.Sessions.GetSupplementarySessionId(sid) || sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
+                  select sup
+                : raiseUseInMsgLoopOnlyException<Option<SupplementarySessionId>>(nameof(getSupplementarySessionId));
+
+        /// <summary>
+        /// Get supplementary session id for current session. If not exists, create a new one.
         /// </summary>
         /// <returns></returns>
         public static SupplementarySessionId provideSupplementarySessionId() =>
-            hasActiveSession()
-                ? sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
-                    .IfNone(() =>
-                    {
-                        var sid = SupplementarySessionId.Generate();
-                        sessionSetData(SupplementarySessionId.Key, SupplementarySessionId.Generate());
-                        return sid;
-                    })
-                : raiseUseInMsgAndInSessionLoopOnlyException<SupplementarySessionId>(nameof(provideSupplementarySessionId));
+            getSupplementarySessionId().IfNone(() =>
+            {
+                var supp = SupplementarySessionId.Generate();
+                sessionSetData(SupplementarySessionId.Key, supp);
+                return supp;
+            });
     }
 }

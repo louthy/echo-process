@@ -4,19 +4,23 @@ using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 using Echo.Config;
 using LanguageExt;
+using System.Threading;
 
 namespace Echo
 {
     static class ActorContext
     {
-        [ThreadStatic]
-        static SystemName context;
+        static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
 
-        [ThreadStatic]
-        static Option<SessionId> sessionId;
+        static SystemName Context
+        {
+            get => context.Value;
+            set => context.Value = value;
+        }
 
-        [ThreadStatic]
-        static ActorRequestContext request;
+        static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
+
+        static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
 
         static SystemName defaultSystem;
 
@@ -63,7 +67,7 @@ namespace Echo
         }
 
         public static bool InMessageLoop =>
-            request != null;
+            request.Value != null;
 
         public static SystemName[] Systems =>
             systemNames;
@@ -81,9 +85,9 @@ namespace Echo
         {
             lock (sync)
             {
-                if(context == system)
+                if(Context == system)
                 {
-                    context = default(SystemName);
+                    Context = default(SystemName);
                 }
 
                 if(defaultSystem == system)
@@ -122,19 +126,19 @@ namespace Echo
 
         public static Unit SetSystem(SystemName system)
         {
-            context = system;
+            Context = system;
             return unit;
         }
 
         public static Unit SetSystem(ActorSystem system)
         {
-            context = system.SystemName;
+            Context = system.SystemName;
             return unit;
         }
 
         public static Unit SetContext(ActorRequestContext requestContext)
         {
-            request = requestContext;
+            request.Value = requestContext;
             return unit;
         }
 
@@ -166,23 +170,23 @@ namespace Echo
         {
             get
             {
-                if (!context.IsValid)
+                if (!Context.IsValid)
                 {
                     switch (systems.Length)
                     {
                         case 0:  throw new ProcessConfigException("You must call one of the  ProcessConfig.initialiseXXX functions");
-                        default: context = defaultSystem; break;
+                        default: Context = defaultSystem; break;
                     }
                 }
 
-                ActorSystem actsys = FindSystem(context);
+                ActorSystem actsys = FindSystem(Context);
                 if (actsys != null)
                 {
                     return actsys;
                 }
                 else
                 {
-                    throw new Exception("Process system ("+context+") not running");
+                    throw new Exception("Process system ("+Context+") not running");
                 }
             }
         }
@@ -198,18 +202,12 @@ namespace Echo
                 : DefaultSystem.UserContext.Self;
 
         public static ActorRequestContext Request =>
-            request;
+            request.Value;
 
         public static Option<SessionId> SessionId
         {
-            get
-            {
-                return sessionId;
-            }
-            set
-            {
-                sessionId = value;
-            }
+            get => sessionId.Value;
+            set => sessionId.Value = value;
         }
 
         public static Unit Publish(object message) =>
@@ -226,7 +224,7 @@ namespace Echo
             if (pid.Path == "/__special__/parent" && Request == null) return DefaultSystem.User;
             if (pid.Path == "/__special__/parent" && Request != null) return Request.Parent.Actor.Id;
             if (pid.Path == "/__special__/user") return DefaultSystem.User;
-            if (pid.Path == "/__special__/dead-letters") return System(context).DeadLetters;
+            if (pid.Path == "/__special__/dead-letters") return System(Context).DeadLetters;
             if (pid.Path == "/__special__/root") return DefaultSystem.Root;
             if (pid.Path == "/__special__/errors") return DefaultSystem.Errors;
             return pid;
