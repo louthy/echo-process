@@ -269,8 +269,12 @@ namespace Echo
         /// <summary>
         /// Shutdown all processes on all process-systems
         /// </summary>
-        public static Unit shutdownAll() =>
-            ActorContext.StopAllSystems();
+        public static Unit shutdownAll()
+        {
+            ProcessConfig.ShutdownLocalScheduler();
+
+            return ActorContext.StopAllSystems();
+        }
 
         /// <summary>
         /// Forces a running process to restart.  This will reset its state and drop

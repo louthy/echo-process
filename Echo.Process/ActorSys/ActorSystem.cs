@@ -16,6 +16,8 @@ namespace Echo
     {
         const string ClusterOnlineKey = "cluster-node-online";
 
+        public static Func<S, Unit> NoShutdown<S>() => (S s) => unit;
+
         enum DisposeState
         {
             Active,
@@ -429,12 +431,13 @@ namespace Echo
             ActorItem parent,
             ProcessName name,
             Func<T, Unit> actorFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy) =>
-                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), termFn, strategy, flags, maxMailboxSize, lazy);
+                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public Unit UpdateSettings(ProcessSystemConfig settings, AppProfile profile)
         {
@@ -448,39 +451,42 @@ namespace Echo
             ActorItem parent,
             ProcessName name,
             Action<T> actorFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
             ) =>
-            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), termFn, strategy, flags, maxMailboxSize, lazy);
+            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
             Func<S, T, S> actorFn,
             Func<S> setupFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
             ) =>
-            ActorCreate(parent, name, actorFn, _ => setupFn(), termFn, strategy, flags, maxMailboxSize, lazy);
+            ActorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
             Func<S, T, S> actorFn,
             Func<IActor, S> setupFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy)
         {
-            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
+            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && cluster.IsSome)
