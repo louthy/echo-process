@@ -85,11 +85,9 @@ namespace Echo.Session
         /// <param name="sessionId"></param>
         /// <returns></returns>
         public Option<SessionVector> GetSession(SessionId sessionId) =>
-            Sync.GetSession(sessionId).IfNone( () =>
-                Sync.GetSession(from c in cluster
-                                from to in c.GetHashField<int>(SessionKey(sessionId), TimeoutKey)
-                                select Sync.Start(sessionId, to))
-                    .IfNone(() => failwith<SessionVector>("Session doesn't exist")));
+            Sync.GetSession(sessionId) || Sync.GetSession(from c in cluster
+                                                          from to in c.GetHashField<int>(SessionKey(sessionId), TimeoutKey)
+                                                          select Sync.Start(sessionId, to));
 
         const string LastAccessKey = "__last-access";
         const string TimeoutKey = "__timeout";
