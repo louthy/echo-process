@@ -119,6 +119,22 @@ namespace Echo.Session
             suppSessions.Find(sessionId);
 
         /// <summary>
+        /// Updates the suppSessionMap
+        /// </summary>
+        /// <param name="suppSessionId"></param>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        internal LanguageExt.Unit UpdateSupplementarySessionId(SupplementarySessionId suppSessionId, SessionId sessionId)
+        {
+            lock (sync)
+            {
+                suppSessions = suppSessions.AddOrUpdate(suppSessionId, sessionId);
+            }
+
+            return unit;
+        }
+
+        /// <summary>
         /// Start a new session
         /// </summary>
         public SessionId Start(SessionId sessionId, int timeoutSeconds)
