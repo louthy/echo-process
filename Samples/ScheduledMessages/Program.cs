@@ -19,8 +19,8 @@ namespace ScheduledMessages
             RedisCluster.register();
             initialise("app", "schedule-test", "schedule-test1", "localhost", "0");
 
-            //RunInbox();
-            RunInboxAppendNum();
+            RunInbox();
+            //RunInboxAppendNum();
             //RunInboxAppend();
         }
 
