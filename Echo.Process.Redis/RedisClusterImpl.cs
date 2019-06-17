@@ -87,7 +87,6 @@ namespace Echo
                 if (redis == null)
                 {
                     Retry(() => redis = ConnectionMultiplexer.Connect(Config.ConnectionString));
-                    redis.PreserveAsyncOrder = false;
                     this.databaseNumber = (int)databaseNumber;
                 }
             }

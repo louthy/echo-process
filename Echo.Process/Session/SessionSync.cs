@@ -119,6 +119,22 @@ namespace Echo.Session
             suppSessions.Find(sessionId);
 
         /// <summary>
+        /// Updates the suppSessionMap
+        /// </summary>
+        /// <param name="suppSessionId"></param>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        internal LanguageExt.Unit UpdateSupplementarySessionId(SupplementarySessionId suppSessionId, SessionId sessionId)
+        {
+            lock (sync)
+            {
+                suppSessions = suppSessions.AddOrUpdate(suppSessionId, sessionId);
+            }
+
+            return unit;
+        }
+
+        /// <summary>
         /// Start a new session
         /// </summary>
         public SessionId Start(SessionId sessionId, int timeoutSeconds)
@@ -194,7 +210,7 @@ namespace Echo.Session
         /// </summary>
         public LanguageExt.Unit SetData(SessionId sessionId, string key, object value, long vector)
         {
-            if(value is SupplementarySessionId supp)
+            if(key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
             {
                 lock (sync)
                 {
@@ -211,16 +227,19 @@ namespace Echo.Session
         public LanguageExt.Unit ClearData(SessionId sessionId, string key, long vector) =>
             sessions.Find(sessionId).Iter(s =>
             {
-                s.GetExistingData(key).Iter(v =>
+                if (key == SupplementarySessionId.Key)
                 {
-                    if (v.Vector.Head is SupplementarySessionId sid)
+                    s.GetExistingData(key).Iter(v =>
                     {
-                        lock (sync)
+                        if (v.Vector.Head is SupplementarySessionId sid)
                         {
-                            suppSessions = suppSessions.Remove(sid);
+                            lock (sync)
+                            {
+                                suppSessions = suppSessions.Remove(sid);
+                            }
                         }
-                    }
-                });
+                    });
+                }
 
                 s.ClearKeyValue(vector, key);
             });

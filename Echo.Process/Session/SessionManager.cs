@@ -44,13 +44,20 @@ namespace Echo.Session
                 // Look for stranded sessions that haven't been removed properly.  This is done once only
                 // on startup because the systems should be shutting down sessions on their own.  This just
                 // catches the situation where an app-domain died without shutting down properly.
-                c.QuerySessionKeys()
-                 .Map(key =>
-                    from ts in c.GetHashField<long>(key, LastAccessKey)
-                    from to in c.GetHashField<int>(key, TimeoutKey)
-                    where new DateTime(ts) < now.AddSeconds(-to * 2) // Multiply by 2, just to catch genuine non-active sessions
-                    select c.Delete(key))
-                 .Iter(id => { });
+                var strandedSessions = c.QuerySessionKeys()
+                                        .Map(key =>
+                                                from ts in c.GetHashField<long>(key, LastAccessKey)
+                                                from to in c.GetHashField<int>(key, TimeoutKey)
+                                                where new DateTime(ts) < now.AddSeconds(-to * 2)   // Multiply by 2, just to catch genuine non-active sessions
+                                                select key).Somes().ToSeq();
+
+
+                strandedSessions.Iter(s => c.Delete(s));
+
+                c.GetHashFields(SupplementarySessionId.Key)
+                    .Where(sid => strandedSessions.Exists(k => k == SessionKey(sid as string)))
+                    .Iter(field => c.DeleteHashField(SupplementarySessionId.Key, field.Key));
+
 
                 // Remove session keys when an in-memory session ends
                 ended = SessionEnded.Subscribe(sid => Stop(sid));
@@ -85,18 +92,16 @@ namespace Echo.Session
         /// <param name="sessionId"></param>
         /// <returns></returns>
         public Option<SessionVector> GetSession(SessionId sessionId) =>
-            Sync.GetSession(sessionId).IfNone( () =>
-                Sync.GetSession(from c in cluster
-                                from to in c.GetHashField<int>(SessionKey(sessionId), TimeoutKey)
-                                select Sync.Start(sessionId, to))
-                    .IfNone(() => failwith<SessionVector>("Session doesn't exist")));
+            Sync.GetSession(sessionId) || Sync.GetSession(from c in cluster
+                                                          from to in c.GetHashField<int>(SessionKey(sessionId), TimeoutKey)
+                                                          select Sync.Start(sessionId, to));
 
         const string LastAccessKey = "__last-access";
         const string TimeoutKey = "__timeout";
-
-        private static string SessionKey(SessionId sessionId) =>
+        
+        static string SessionKey(SessionId sessionId) =>
             $"sys-session-{sessionId}";
-
+        
         public LanguageExt.Unit Start(SessionId sessionId, int timeoutSeconds)
         {
             Sync.Start(sessionId, timeoutSeconds);
@@ -108,6 +113,7 @@ namespace Echo.Session
         {
             Sync.Stop(sessionId);
             cluster.Iter(c => c.Delete(SessionKey(sessionId)));
+            deleteSuppSessionInClusterMap(sessionId);
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Stop(sessionId, system, nodeName)));
         }
 
@@ -132,6 +138,11 @@ namespace Echo.Session
         {
             Sync.SetData(sessionId, key, value, time);
             cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value)));
+
+            if(key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
+            {
+                setSuppSessionInClusterMap(supp, sessionId);
+            }
              
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
                 time,
@@ -145,6 +156,11 @@ namespace Echo.Session
 
         public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)
         {
+            if (key == SupplementarySessionId.Key)
+            {
+                deleteSuppSessionInClusterMap(sessionId);
+            }
+
             Sync.ClearData(sessionId, key, time);
             cluster.Iter(c => c.DeleteHashField(SessionKey(sessionId), key));
 
@@ -154,13 +170,31 @@ namespace Echo.Session
                     SessionAction.ClearData(time, sessionId, key, system, nodeName)));
         }
 
+        LanguageExt.Unit setSuppSessionInClusterMap(SupplementarySessionId suppSessionId, SessionId sessionId) =>
+            cluster.Iter(c => c.HashFieldAddOrUpdate(SupplementarySessionId.Key, suppSessionId.Value, sessionId.Value));
+
+        LanguageExt.Unit deleteSuppSessionInClusterMap(SessionId sessionId) =>
+            ignore(from c   in cluster.ToSeq()
+                   from key in c.GetHashFields(SupplementarySessionId.Key)
+                                .Where(o => (o as string) == sessionId.Value)
+                                .Map(v => v.Key).ToSeq()
+                   select c.DeleteHashField(SupplementarySessionId.Key, key));
+
+        Option<SessionId> getSessionIdFromSuppSessionClusterMap(SupplementarySessionId suppSessionId) =>
+            from c  in cluster
+            from s  in c.GetHashField<string>(SupplementarySessionId.Key, suppSessionId.Value).Map(v => new SessionId(v))
+            from to in c.GetHashField<int>(SessionKey(s), TimeoutKey)
+            let  _  =  Sync.UpdateSupplementarySessionId(suppSessionId, s)
+            select Sync.Start(s, to);
+
+
         /// <summary>
-        /// Attempts to get a SessionId by supplementary session ID.  Only checked locally.
+        /// Attempts to get a SessionId by supplementary session ID.  
         /// </summary>
         /// <param name="supplementarySessionId"></param>
         /// <returns></returns>
         public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => 
-            Sync.GetSessionId(supplementarySessionId);
+            Sync.GetSessionId(supplementarySessionId) || getSessionIdFromSuppSessionClusterMap(supplementarySessionId);
 
         /// <summary>
         /// Attempts to get a supplementary sessionId by session ID.  Only checked locally.
