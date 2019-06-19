@@ -23,7 +23,7 @@ namespace Echo.Session
         ProcessName nodeName;
         Map<SessionId, SessionVector> sessions;
         Map<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
-        BiMap<SupplementarySessionId, SessionId> suppSessions;
+        Map<SessionId, SupplementarySessionId> suppSessions;
         Subject<(SessionId, DateTime)> touched = new Subject<(SessionId, DateTime)>();
 
         VectorConflictStrategy strategy;
@@ -108,7 +108,7 @@ namespace Echo.Session
         /// <param name="sessionId"></param>
         /// <returns></returns>
         internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) =>
-            suppSessions.Find(sessionId);
+            suppSessions.Where(sid => sid == sessionId).Map(t => t.Key).HeadOrNone();
 
         /// <summary>
         /// Gets a supplementary session id using an active session id
@@ -124,11 +124,11 @@ namespace Echo.Session
         /// <param name="suppSessionId"></param>
         /// <param name="sessionId"></param>
         /// <returns></returns>
-        internal LanguageExt.Unit UpdateSupplementarySessionId(SupplementarySessionId suppSessionId, SessionId sessionId)
+        internal LanguageExt.Unit UpdateSupplementarySessionId(SessionId sessionId, SupplementarySessionId suppSessionId)
         {
             lock (sync)
             {
-                suppSessions = suppSessions.AddOrUpdate(suppSessionId, sessionId);
+                suppSessions = suppSessions.AddOrUpdate(sessionId, suppSessionId);
             }
 
             return unit;
@@ -214,7 +214,7 @@ namespace Echo.Session
             {
                 lock (sync)
                 {
-                    suppSessions = suppSessions.AddOrUpdate(supp, sessionId);
+                    suppSessions = suppSessions.AddOrUpdate(sessionId, supp);
                 }
             }
 
@@ -235,7 +235,7 @@ namespace Echo.Session
                         {
                             lock (sync)
                             {
-                                suppSessions = suppSessions.Remove(sid);
+                                suppSessions = suppSessions.Remove(sessionId);
                             }
                         }
                     });

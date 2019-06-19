@@ -141,7 +141,7 @@ namespace Echo.Session
 
             if(key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
             {
-                setSuppSessionInClusterMap(supp, sessionId);
+                setSuppSessionInClusterMap(sessionId, supp);
             }
              
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
@@ -170,21 +170,20 @@ namespace Echo.Session
                     SessionAction.ClearData(time, sessionId, key, system, nodeName)));
         }
 
-        LanguageExt.Unit setSuppSessionInClusterMap(SupplementarySessionId suppSessionId, SessionId sessionId) =>
-            cluster.Iter(c => c.HashFieldAddOrUpdate(SupplementarySessionId.Key, suppSessionId.Value, sessionId.Value));
+        LanguageExt.Unit setSuppSessionInClusterMap(SessionId sessionId, SupplementarySessionId suppSessionId) =>
+            cluster.Iter(c => c.HashFieldAddOrUpdate(SupplementarySessionId.Key, sessionId.Value, suppSessionId.Value));
 
         LanguageExt.Unit deleteSuppSessionInClusterMap(SessionId sessionId) =>
-            ignore(from c   in cluster.ToSeq()
-                   from key in c.GetHashFields(SupplementarySessionId.Key)
-                                .Where(o => (o as string) == sessionId.Value)
-                                .Map(v => v.Key).ToSeq()
-                   select c.DeleteHashField(SupplementarySessionId.Key, key));
+            cluster.Iter(c => c.DeleteHashField(SupplementarySessionId.Key, sessionId.Value));
 
         Option<SessionId> getSessionIdFromSuppSessionClusterMap(SupplementarySessionId suppSessionId) =>
             from c  in cluster
-            from s  in c.GetHashField<string>(SupplementarySessionId.Key, suppSessionId.Value).Map(v => new SessionId(v))
+            from s  in c.GetHashFields(SupplementarySessionId.Key)
+                        .Where(o => (o as string) == suppSessionId.Value)
+                        .Map(v => new SessionId(v.Key))
+                        .HeadOrNone()
             from to in c.GetHashField<int>(SessionKey(s), TimeoutKey)
-            let  _  =  Sync.UpdateSupplementarySessionId(suppSessionId, s)
+            let  _  =  Sync.UpdateSupplementarySessionId(s, suppSessionId)
             select Sync.Start(s, to);
 
 
