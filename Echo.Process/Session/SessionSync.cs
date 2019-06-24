@@ -23,7 +23,7 @@ namespace Echo.Session
         ProcessName nodeName;
         Map<SessionId, SessionVector> sessions;
         Map<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
-        Map<SessionId, SupplementarySessionId> suppSessions;
+        SupplementarySessions suppSessions = new SupplementarySessions();
         Subject<(SessionId, DateTime)> touched = new Subject<(SessionId, DateTime)>();
 
         VectorConflictStrategy strategy;
@@ -107,16 +107,16 @@ namespace Echo.Session
         /// </summary>
         /// <param name="sessionId"></param>
         /// <returns></returns>
-        internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) =>
-            suppSessions.Where(sid => sid == sessionId).Map(t => t.Key).HeadOrNone();
+        internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) => 
+            suppSessions.GetSessionId(sessionId);
 
         /// <summary>
         /// Gets a supplementary session id using an active session id
         /// </summary>
         /// <param name="sessionId"></param>
         /// <returns></returns>
-        internal Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) =>
-            suppSessions.Find(sessionId);
+        internal Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) => 
+            suppSessions.GetSupplementarySessionId(sessionId);
 
         /// <summary>
         /// Updates the suppSessionMap
@@ -124,15 +124,8 @@ namespace Echo.Session
         /// <param name="suppSessionId"></param>
         /// <param name="sessionId"></param>
         /// <returns></returns>
-        internal LanguageExt.Unit UpdateSupplementarySessionId(SessionId sessionId, SupplementarySessionId suppSessionId)
-        {
-            lock (sync)
-            {
-                suppSessions = suppSessions.AddOrUpdate(sessionId, suppSessionId);
-            }
-
-            return unit;
-        }
+        internal LanguageExt.Unit UpdateSupplementarySessionId(SessionId sessionId, SupplementarySessionId suppSessionId) =>
+            suppSessions.Update(sessionId, suppSessionId);
 
         /// <summary>
         /// Start a new session
@@ -173,16 +166,13 @@ namespace Echo.Session
                 // regardless of whether something happened in the future.  Session IDs
                 // are randomly generated, so any future event with the same session ID
                 // is a deleted future.
-
-                lock (sync)
-                {
-                    suppSessions = suppSessions.Remove(sessionId);
-                }
-
                 sessions = sessions.Remove(sessionId);
                 sessionTouched.Find(sessionId).Iter(sub => sub.OnCompleted());
                 sessionTouched = sessionTouched.Remove(sessionId);
             }
+
+            suppSessions.Remove(sessionId);
+
             return unit;
         }
 
@@ -212,10 +202,7 @@ namespace Echo.Session
         {
             if(key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
             {
-                lock (sync)
-                {
-                    suppSessions = suppSessions.AddOrUpdate(sessionId, supp);
-                }
+                suppSessions.Update(sessionId, supp);
             }
 
             return sessions.Find(sessionId).Iter(s => s.SetKeyValue(vector, key, value, strategy));
@@ -229,16 +216,7 @@ namespace Echo.Session
             {
                 if (key == SupplementarySessionId.Key)
                 {
-                    s.GetExistingData(key).Iter(v =>
-                    {
-                        if (v.Vector.Head is SupplementarySessionId sid)
-                        {
-                            lock (sync)
-                            {
-                                suppSessions = suppSessions.Remove(sessionId);
-                            }
-                        }
-                    });
+                    suppSessions.Remove(sessionId);
                 }
 
                 s.ClearKeyValue(vector, key);
@@ -249,5 +227,67 @@ namespace Echo.Session
         /// </summary>
         public Option<ValueVector> GetExistingData(SessionId sessionId, string key) =>
             sessions.Find(sessionId).Bind(s => s.GetExistingData(key));
+
+        /// <summary>
+        /// a two way dictionary implementation for session and supplementary sesssions
+        /// </summary>
+        class SupplementarySessions
+        {
+            Map<SessionId, SupplementarySessionId> sessionToSupp;
+            Map<SupplementarySessionId, SessionId> suppToSession;
+            object sync = new object();
+
+            /// <summary>
+            /// Gets session id from supplementary sessionId
+            /// </summary>
+            /// <param name="sessionId"></param>
+            /// <returns></returns>
+            internal Option<SessionId> GetSessionId(SupplementarySessionId sessionId) => suppToSession.Find(sessionId);
+
+            /// <summary>
+            /// Gets a supplementary session id from sessionId
+            /// </summary>
+            /// <param name="sessionId"></param>
+            /// <returns></returns>
+            internal Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) => sessionToSupp.Find(sessionId);
+
+            /// <summary>
+            /// update session id or supplementary sessionId
+            /// </summary>
+            /// <param name="sessionId"></param>
+            /// <param name="suppSessionId"></param>
+            /// <returns></returns>
+            internal LanguageExt.Unit Update(SessionId sessionId, SupplementarySessionId suppSessionId)
+            {
+                //remove old supp-sessions:
+                Remove(sessionId);
+                lock (sync)
+                {
+                    suppToSession = suppToSession.AddOrUpdate(suppSessionId, sessionId);
+                    sessionToSupp = sessionToSupp.AddOrUpdate(sessionId, suppSessionId);
+                }
+
+                return unit;
+            }
+
+            /// <summary>
+            /// remove session id from the map
+            /// </summary>
+            /// <param name="sessionId"></param>
+            /// <returns></returns>
+            internal LanguageExt.Unit Remove(SessionId sessionId)
+            {
+                var suppSessionId = sessionToSupp.Find(sessionId);
+
+                lock(sync)
+                {
+                    suppSessionId.IfSome(supp => suppToSession = suppToSession.Remove(supp));
+                    sessionToSupp = sessionToSupp.Remove(sessionId);
+                }
+
+                return unit;
+            }
+
+        }
     }
 }
