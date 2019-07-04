@@ -208,8 +208,8 @@ namespace Echo.Session
 
     static class SupplementarySessionManager
     {
-        const string sessionToSuppKey = "sys-session-supp";
-        const string suppToSessionKey = "sys-supp-session";
+        const string sessionToSuppKey = "sys-map-session-supp";
+        const string suppToSessionKey = "sys-map-supp-session";
 
         internal static LanguageExt.Unit setSuppSessionInSuppMap(this ICluster cluster, SessionId sessionId, SupplementarySessionId suppSessionId)
         {
