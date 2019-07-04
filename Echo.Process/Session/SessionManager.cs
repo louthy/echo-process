@@ -51,12 +51,9 @@ namespace Echo.Session
                                                 where new DateTime(ts) < now.AddSeconds(-to * 2)   // Multiply by 2, just to catch genuine non-active sessions
                                                 select key).Somes().ToSeq();
 
+                c.removeSessionIdFromSuppMap(strandedSessions.Map(ReverseSessionKey));
+                c.DeleteMany(strandedSessions);
 
-                strandedSessions.Iter(s =>
-                {
-                    c.removeSessionIdFromSuppMap(s);
-                    c.Delete(s);
-                });
 
 
                 // Remove session keys when an in-memory session ends
@@ -101,6 +98,8 @@ namespace Echo.Session
         
         static string SessionKey(SessionId sessionId) =>
             $"sys-session-{sessionId}";
+
+        static SessionId ReverseSessionKey(string sessionKey) => sessionKey.Substring(12);
         
         public LanguageExt.Unit Start(SessionId sessionId, int timeoutSeconds)
         {
@@ -227,6 +226,24 @@ namespace Echo.Session
             var supp = cluster.GetHashField<string>(sessionToSuppKey, sessionId.Value);
             cluster.DeleteHashField(sessionToSuppKey, sessionId.Value);
             supp.IfSome(s => cluster.DeleteHashField(suppToSessionKey, s));
+            return unit;
+        }
+
+        /// <summary>
+        /// remove multiple session ids at once
+        /// </summary>
+        /// <param name="cluster"></param>
+        /// <param name="sessionIds"></param>
+        /// <returns></returns>
+        internal static LanguageExt.Unit removeSessionIdFromSuppMap(this ICluster cluster, Seq<SessionId> sessionIds)
+        {
+            var sessionIdValues = sessionIds.Map(s => s.Value);
+
+            var supps = cluster.GetHashFields<string>(sessionToSuppKey, sessionIdValues).Values.ToSeq();
+
+            cluster.DeleteHashFields(sessionToSuppKey, sessionIdValues);
+            cluster.DeleteHashFields(suppToSessionKey, supps);
+
             return unit;
         }
 

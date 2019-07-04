@@ -209,7 +209,10 @@ namespace Echo
             Retry(() => Db.KeyDelete(key));
 
         public bool DeleteMany(params string[] keys) =>
-            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray())==keys.Length);
+            DeleteMany(keys.AsEnumerable());
+
+        public bool DeleteMany(IEnumerable<string> keys) =>
+            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray()) == keys.Count());
 
         public int QueueLength(string key) =>
             Retry(() => (int)Db.ListLength(key));

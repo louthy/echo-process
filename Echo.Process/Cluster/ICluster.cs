@@ -110,6 +110,12 @@ namespace Echo
         bool DeleteMany(params string[] keys);
 
         /// <summary>
+        /// Remove many keys
+        /// </summary>
+        /// <param name="keys">Keys</param>
+        bool DeleteMany(IEnumerable<string> keys);
+
+        /// <summary>
         /// Look at the item at the head of the queue
         /// </summary>
         T Peek<T>(string key);
