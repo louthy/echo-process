@@ -62,8 +62,12 @@ namespace Echo.Session
                 {
                     try
                     {
-                        c.HashFieldAddOrUpdate(SessionKey(tup.Item1), LastAccessKey, DateTime.UtcNow.Ticks);
-                        c.PublishToChannel(SessionsNotify, SessionAction.Touch(tup.Item1, system, nodeName));
+                        //check if the session has not been stopped in the meantime or expired
+                        if (c.Exists(SessionKey(tup.Item1)))
+                        {
+                            c.HashFieldAddOrUpdate(SessionKey(tup.Item1), LastAccessKey, DateTime.UtcNow.Ticks);
+                            c.PublishToChannel(SessionsNotify, SessionAction.Touch(tup.Item1, system, nodeName));
+                        }
                     }
                     catch(Exception e)
                     {
