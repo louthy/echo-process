@@ -38,22 +38,21 @@ namespace Echo.Session
             cluster.Iter(c =>
             {
                 notify = c.SubscribeToChannel<SessionAction>(SessionsNotify).Subscribe(act => Sync.Incoming(act));
-
+                                
                 var now = DateTime.UtcNow;
 
                 // Look for stranded sessions that haven't been removed properly.  This is done once only
                 // on startup because the systems should be shutting down sessions on their own.  This just
                 // catches the situation where an app-domain died without shutting down properly.
-                var strandedSessions = c.QuerySessionKeys()
-                                        .Map(key =>
-                                                from ts in c.GetHashField<long>(key, LastAccessKey)
-                                                from to in c.GetHashField<int>(key, TimeoutKey)
-                                                where new DateTime(ts) < now.AddSeconds(-to * 2)   // Multiply by 2, just to catch genuine non-active sessions
-                                                select key).Somes().ToSeq();
+                var strandedSessions = c.GetAllHashFieldsInBatch(c.QuerySessionKeys().ToSeq())
+                                            .Where(vals => (from ts in vals.Find(LastAccessKey).Map(v => new DateTime((long)v))
+                                                            from to in vals.Find(TimeoutKey).Map(v => (long)v)
+                                                            where ts < now.AddSeconds(-to * 2)
+                                                            select true).IfNone(false))
+                                            .Keys.ToSeq();
 
                 c.removeSessionIdFromSuppMap(strandedSessions.Map(ReverseSessionKey));
                 c.DeleteMany(strandedSessions);
-
 
 
                 // Remove session keys when an in-memory session ends

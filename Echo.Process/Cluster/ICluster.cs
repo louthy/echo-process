@@ -177,5 +177,6 @@ namespace Echo
         Set<T> GetSet<T>(string key);
         bool SetContains<T>(string key, T value);
         bool SetExpire(string key, TimeSpan time);
+        Map<string, Map<string, object>> GetAllHashFieldsInBatch(Seq<string> keys);
     }
 }

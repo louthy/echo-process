@@ -9,6 +9,7 @@ using LanguageExt;
 using static LanguageExt.Prelude;
 using System.Threading;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Echo
 {
@@ -448,6 +449,30 @@ namespace Echo
                     keys.Map(x => (string)x)
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
                         .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
+        
+        /// <summary>
+        /// retrieves all hash values for a list of keys
+        /// </summary>
+        /// <param name="keys"></param>
+        /// <returns>map of keys and their key/value map</returns>
+        public Map<string, Map<string,object>> GetAllHashFieldsInBatch(Seq<string> keys)
+        {
+            var batch = Db.CreateBatch();
+
+            var tasks = toMap(keys.Map(key => (key, batch.HashGetAllAsync(key))));
+
+            batch.Execute();
+
+            Task.WaitAll(tasks.Map(s => s.Item2).ToArray());
+
+            return toMap(
+                    tasks.Where(t => t.Status == TaskStatus.RanToCompletion)
+                         .Map(t => (t.Key, t.Value.Result))                    
+                         .Map(item => 
+                                (item.Key, 
+                                toMap(item.Result.Map(r => ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))));
+
+        }
 
         IDatabase Db => 
             redis.GetDatabase(databaseNumber);
