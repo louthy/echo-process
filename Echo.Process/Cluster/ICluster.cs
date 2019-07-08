@@ -110,6 +110,12 @@ namespace Echo
         bool DeleteMany(params string[] keys);
 
         /// <summary>
+        /// Remove many keys
+        /// </summary>
+        /// <param name="keys">Keys</param>
+        bool DeleteMany(IEnumerable<string> keys);
+
+        /// <summary>
         /// Look at the item at the head of the queue
         /// </summary>
         T Peek<T>(string key);
@@ -171,5 +177,6 @@ namespace Echo
         Set<T> GetSet<T>(string key);
         bool SetContains<T>(string key, T value);
         bool SetExpire(string key, TimeSpan time);
+        Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
     }
 }

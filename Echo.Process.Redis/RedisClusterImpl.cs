@@ -9,6 +9,7 @@ using LanguageExt;
 using static LanguageExt.Prelude;
 using System.Threading;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Echo
 {
@@ -209,7 +210,10 @@ namespace Echo
             Retry(() => Db.KeyDelete(key));
 
         public bool DeleteMany(params string[] keys) =>
-            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray())==keys.Length);
+            DeleteMany(keys.AsEnumerable());
+
+        public bool DeleteMany(IEnumerable<string> keys) =>
+            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray()) == keys.Count());
 
         public int QueueLength(string key) =>
             Retry(() => (int)Db.ListLength(key));
@@ -445,6 +449,25 @@ namespace Echo
                     keys.Map(x => (string)x)
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
                         .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
+
+        /// <summary>
+        /// retrieves all hash values for a list of keys
+        /// </summary>
+        /// <param name="keys"></param>
+        /// <returns>map of keys and their key/value map</returns>
+        public async Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
+        {
+            var batch = Db.CreateBatch();
+            var tasks = keys.Map(key => batch.HashGetAllAsync(key)
+                                             .Map(h =>
+                                                (Key: key, Value: toMap(h.Map(r =>
+                                                    ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))))
+                            .Strict();
+
+            batch.Execute();
+
+            return toMap(await Task.WhenAll(tasks));
+        }
 
         IDatabase Db => 
             redis.GetDatabase(databaseNumber);
