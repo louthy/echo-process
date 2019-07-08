@@ -53,7 +53,8 @@ namespace Echo.Session
                                     .Keys)
                     .Map(Seq)
                     .Do(strandedSessions  => SupplementarySessionManager.removeSessionIdFromSuppMap(c, strandedSessions.Map(ReverseSessionKey)))
-                    .Map(strandedSessions => c.DeleteMany(strandedSessions));
+                    .Do(strandedSessions  => c.DeleteMany(strandedSessions))
+                    .Map(strandedSessions => strandedSessions.Iter(sessionId => c.PublishToChannel(SessionsNotify, SessionAction.Stop(sessionId, system, nodeName)))); ;
                     
 
 
