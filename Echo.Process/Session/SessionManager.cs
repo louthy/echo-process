@@ -52,11 +52,11 @@ namespace Echo.Session
                                                 select key).Somes().ToSeq();
 
 
-                strandedSessions.Iter(s => c.Delete(s));
-
-                c.GetHashFields(SupplementarySessionId.Key)
-                    .Where(sid => strandedSessions.Exists(k => k == SessionKey(sid as string)))
-                    .Iter(field => c.DeleteHashField(SupplementarySessionId.Key, field.Key));
+                strandedSessions.Iter(s =>
+                {
+                    c.removeSessionIdFromSuppMap(s);
+                    c.Delete(s);
+                });
 
 
                 // Remove session keys when an in-memory session ends
@@ -112,8 +112,12 @@ namespace Echo.Session
         public LanguageExt.Unit Stop(SessionId sessionId)
         {
             Sync.Stop(sessionId);
-            cluster.Iter(c => c.Delete(SessionKey(sessionId)));
-            deleteSuppSessionInClusterMap(sessionId);
+            cluster.Iter(c =>
+            {
+                c.Delete(SessionKey(sessionId));
+                c.removeSessionIdFromSuppMap(sessionId);
+            });
+
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Stop(sessionId, system, nodeName)));
         }
 
@@ -137,12 +141,16 @@ namespace Echo.Session
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
             Sync.SetData(sessionId, key, value, time);
-            cluster.Iter(c => c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value)));
 
-            if(key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
+            cluster.Iter(c =>
             {
-                setSuppSessionInClusterMap(supp, sessionId);
-            }
+                c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value));
+
+                if (key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
+                {
+                    c.setSuppSessionInSuppMap(sessionId, supp);
+                }
+            });
              
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
                 time,
@@ -156,45 +164,38 @@ namespace Echo.Session
 
         public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)
         {
-            if (key == SupplementarySessionId.Key)
-            {
-                deleteSuppSessionInClusterMap(sessionId);
-            }
-
             Sync.ClearData(sessionId, key, time);
-            cluster.Iter(c => c.DeleteHashField(SessionKey(sessionId), key));
+
+            cluster.Iter(c =>
+            {
+                c.DeleteHashField(SessionKey(sessionId), key);
+
+                if (key == SupplementarySessionId.Key)
+                {
+                    c.removeSessionIdFromSuppMap(sessionId);
+                }
+            });
 
             return cluster.Iter(c =>
                 c.PublishToChannel(
                     SessionsNotify,
                     SessionAction.ClearData(time, sessionId, key, system, nodeName)));
         }
-
-        LanguageExt.Unit setSuppSessionInClusterMap(SupplementarySessionId suppSessionId, SessionId sessionId) =>
-            cluster.Iter(c => c.HashFieldAddOrUpdate(SupplementarySessionId.Key, suppSessionId.Value, sessionId.Value));
-
-        LanguageExt.Unit deleteSuppSessionInClusterMap(SessionId sessionId) =>
-            ignore(from c   in cluster.ToSeq()
-                   from key in c.GetHashFields(SupplementarySessionId.Key)
-                                .Where(o => (o as string) == sessionId.Value)
-                                .Map(v => v.Key).ToSeq()
-                   select c.DeleteHashField(SupplementarySessionId.Key, key));
-
-        Option<SessionId> getSessionIdFromSuppSessionClusterMap(SupplementarySessionId suppSessionId) =>
+        
+        Option<SessionId> getSessionIdFromCluster(SupplementarySessionId suppSessionId) =>
             from c  in cluster
-            from s  in c.GetHashField<string>(SupplementarySessionId.Key, suppSessionId.Value).Map(v => new SessionId(v))
+            from s  in c.getSessionIdFromSuppMap(suppSessionId)
             from to in c.GetHashField<int>(SessionKey(s), TimeoutKey)
-            let  _  =  Sync.UpdateSupplementarySessionId(suppSessionId, s)
+            let  _  =  Sync.UpdateSupplementarySessionId(s, suppSessionId)
             select Sync.Start(s, to);
-
-
+        
         /// <summary>
         /// Attempts to get a SessionId by supplementary session ID.  
         /// </summary>
         /// <param name="supplementarySessionId"></param>
         /// <returns></returns>
         public Option<SessionId> GetSessionId(SupplementarySessionId supplementarySessionId) => 
-            Sync.GetSessionId(supplementarySessionId) || getSessionIdFromSuppSessionClusterMap(supplementarySessionId);
+            Sync.GetSessionId(supplementarySessionId) || getSessionIdFromCluster(supplementarySessionId);
 
         /// <summary>
         /// Attempts to get a supplementary sessionId by session ID.  Only checked locally.
@@ -203,5 +204,33 @@ namespace Echo.Session
         /// <returns></returns>
         public Option<SupplementarySessionId> GetSupplementarySessionId(SessionId sessionId) =>
             Sync.GetSupplementarySessionId(sessionId);
+
+    }
+
+    static class SupplementarySessionManager
+    {
+        const string sessionToSuppKey = "sys-session-supp";
+        const string suppToSessionKey = "sys-supp-session";
+
+        internal static LanguageExt.Unit setSuppSessionInSuppMap(this ICluster cluster, SessionId sessionId, SupplementarySessionId suppSessionId)
+        {
+            //delete any old supp-sessions to keep in sync
+            removeSessionIdFromSuppMap(cluster, sessionId);
+
+            cluster.HashFieldAddOrUpdate(sessionToSuppKey, sessionId.Value,     suppSessionId.Value);
+            cluster.HashFieldAddOrUpdate(suppToSessionKey, suppSessionId.Value, sessionId.Value);
+            return unit;
+        }
+
+        internal static LanguageExt.Unit removeSessionIdFromSuppMap(this ICluster cluster, SessionId sessionId)
+        {
+            var supp = cluster.GetHashField<string>(sessionToSuppKey, sessionId.Value);
+            cluster.DeleteHashField(sessionToSuppKey, sessionId.Value);
+            supp.IfSome(s => cluster.DeleteHashField(suppToSessionKey, s));
+            return unit;
+        }
+
+        internal static Option<SessionId> getSessionIdFromSuppMap(this ICluster cluster, SupplementarySessionId sessionId) =>
+            cluster.GetHashField<string>(suppToSessionKey, sessionId.Value).Map(v => new SessionId(v));
     }
 }
