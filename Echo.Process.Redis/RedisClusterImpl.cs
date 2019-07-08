@@ -449,29 +449,24 @@ namespace Echo
                     keys.Map(x => (string)x)
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
                         .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
-        
+
         /// <summary>
         /// retrieves all hash values for a list of keys
         /// </summary>
         /// <param name="keys"></param>
         /// <returns>map of keys and their key/value map</returns>
-        public Map<string, Map<string,object>> GetAllHashFieldsInBatch(Seq<string> keys)
+        public async Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
         {
             var batch = Db.CreateBatch();
-
-            var tasks = toMap(keys.Map(key => (key, batch.HashGetAllAsync(key))));
+            var tasks = keys.Map(key => batch.HashGetAllAsync(key)
+                                             .Map(h =>
+                                                (Key: key, Value: toMap(h.Map(r =>
+                                                    ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))))
+                            .Strict();
 
             batch.Execute();
 
-            Task.WaitAll(tasks.Map(s => s.Item2).ToArray());
-
-            return toMap(
-                    tasks.Where(t => t.Status == TaskStatus.RanToCompletion)
-                         .Map(t => (t.Key, t.Value.Result))                    
-                         .Map(item => 
-                                (item.Key, 
-                                toMap(item.Result.Map(r => ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))));
-
+            return toMap(await Task.WhenAll(tasks));
         }
 
         IDatabase Db => 

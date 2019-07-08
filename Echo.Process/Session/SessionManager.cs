@@ -44,15 +44,17 @@ namespace Echo.Session
                 // Look for stranded sessions that haven't been removed properly.  This is done once only
                 // on startup because the systems should be shutting down sessions on their own.  This just
                 // catches the situation where an app-domain died without shutting down properly.
-                var strandedSessions = c.GetAllHashFieldsInBatch(c.QuerySessionKeys().ToSeq())
-                                            .Where(vals => (from ts in vals.Find(LastAccessKey).Map(v => new DateTime((long)v))
-                                                            from to in vals.Find(TimeoutKey).Map(v => (long)v)
-                                                            where ts < now.AddSeconds(-to * 2)
-                                                            select true).IfNone(false))
-                                            .Keys.ToSeq();
-
-                c.removeSessionIdFromSuppMap(strandedSessions.Map(ReverseSessionKey));
-                c.DeleteMany(strandedSessions);
+                c.GetAllHashFieldsInBatch(c.QuerySessionKeys().ToSeq())
+                    .Map(sessions =>
+                            sessions.Filter(vals => (from ts in vals.Find(LastAccessKey).Map(v => new DateTime((long)v))
+                                                     from to in vals.Find(TimeoutKey).Map(v => (long)v)
+                                                     where ts < now.AddSeconds(-to * 2)
+                                                     select true).IfNone(false))
+                                    .Keys)
+                    .Map(Seq)
+                    .Do(strandedSessions  => SupplementarySessionManager.removeSessionIdFromSuppMap(c, strandedSessions.Map(ReverseSessionKey)))
+                    .Map(strandedSessions => c.DeleteMany(strandedSessions));
+                    
 
 
                 // Remove session keys when an in-memory session ends
@@ -117,7 +119,7 @@ namespace Echo.Session
             cluster.Iter(c =>
             {
                 c.Delete(SessionKey(sessionId));
-                c.removeSessionIdFromSuppMap(sessionId);
+                SupplementarySessionManager.removeSessionIdFromSuppMap(c, sessionId);
             });
 
             return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.Stop(sessionId, system, nodeName)));
@@ -150,7 +152,7 @@ namespace Echo.Session
 
                 if (key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
                 {
-                    c.setSuppSessionInSuppMap(sessionId, supp);
+                    SupplementarySessionManager.setSuppSessionInSuppMap(c, sessionId, supp);
                 }
             });
              
@@ -174,7 +176,7 @@ namespace Echo.Session
 
                 if (key == SupplementarySessionId.Key)
                 {
-                    c.removeSessionIdFromSuppMap(sessionId);
+                    SupplementarySessionManager.removeSessionIdFromSuppMap(c, sessionId);
                 }
             });
 
@@ -186,7 +188,7 @@ namespace Echo.Session
         
         Option<SessionId> getSessionIdFromCluster(SupplementarySessionId suppSessionId) =>
             from c  in cluster
-            from s  in c.getSessionIdFromSuppMap(suppSessionId)
+            from s  in SupplementarySessionManager.getSessionIdFromSuppMap(c, suppSessionId)
             from to in c.GetHashField<int>(SessionKey(s), TimeoutKey)
             let  _  =  Sync.UpdateSupplementarySessionId(s, suppSessionId)
             select Sync.Start(s, to);
@@ -214,7 +216,7 @@ namespace Echo.Session
         const string sessionToSuppKey = "sys-map-session-supp";
         const string suppToSessionKey = "sys-map-supp-session";
 
-        internal static LanguageExt.Unit setSuppSessionInSuppMap(this ICluster cluster, SessionId sessionId, SupplementarySessionId suppSessionId)
+        internal static LanguageExt.Unit setSuppSessionInSuppMap(ICluster cluster, SessionId sessionId, SupplementarySessionId suppSessionId)
         {
             //delete any old supp-sessions to keep in sync
             removeSessionIdFromSuppMap(cluster, sessionId);
@@ -224,7 +226,7 @@ namespace Echo.Session
             return unit;
         }
 
-        internal static LanguageExt.Unit removeSessionIdFromSuppMap(this ICluster cluster, SessionId sessionId)
+        internal static LanguageExt.Unit removeSessionIdFromSuppMap(ICluster cluster, SessionId sessionId)
         {
             var supp = cluster.GetHashField<string>(sessionToSuppKey, sessionId.Value);
             cluster.DeleteHashField(sessionToSuppKey, sessionId.Value);
@@ -238,7 +240,7 @@ namespace Echo.Session
         /// <param name="cluster"></param>
         /// <param name="sessionIds"></param>
         /// <returns></returns>
-        internal static LanguageExt.Unit removeSessionIdFromSuppMap(this ICluster cluster, Seq<SessionId> sessionIds)
+        internal static LanguageExt.Unit removeSessionIdFromSuppMap(ICluster cluster, Seq<SessionId> sessionIds)
         {
             var sessionIdValues = sessionIds.Map(s => s.Value);
 
@@ -250,7 +252,7 @@ namespace Echo.Session
             return unit;
         }
 
-        internal static Option<SessionId> getSessionIdFromSuppMap(this ICluster cluster, SupplementarySessionId sessionId) =>
+        internal static Option<SessionId> getSessionIdFromSuppMap(ICluster cluster, SupplementarySessionId sessionId) =>
             cluster.GetHashField<string>(suppToSessionKey, sessionId.Value).Map(v => new SessionId(v));
     }
 }
