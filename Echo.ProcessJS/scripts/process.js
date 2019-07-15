@@ -278,7 +278,7 @@ var Process = (function () {
     var makeDoneThunk = function (value, ctx) {
         var thunk = makeThunk(ctx);
         setImmediate(function () { thunk.doneFn(value); });
-        thunk.wait = function (f) { f(value); };
+        thunk.wait = function () { return value; };
         return thunk;
     };
 
