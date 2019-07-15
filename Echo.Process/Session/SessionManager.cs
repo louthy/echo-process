@@ -66,9 +66,8 @@ namespace Echo.Session
                     try
                     {
                         //check if the session has not been stopped in the meantime or expired
-                        if (c.Exists(SessionKey(tup.Item1)))
+                        if(c.HashFieldAddOrUpdateIfKeyExists(SessionKey(tup.Item1), LastAccessKey, DateTime.UtcNow.Ticks))
                         {
-                            c.HashFieldAddOrUpdate(SessionKey(tup.Item1), LastAccessKey, DateTime.UtcNow.Ticks);
                             c.PublishToChannel(SessionsNotify, SessionAction.Touch(tup.Item1, system, nodeName));
                         }
                     }
@@ -145,26 +144,30 @@ namespace Echo.Session
         
         public LanguageExt.Unit SetData(long time, SessionId sessionId, string key, object value)
         {
+            var added = false;
             Sync.SetData(sessionId, key, value, time);
 
             cluster.Iter(c =>
             {
-                c.HashFieldAddOrUpdate(SessionKey(sessionId), key, SessionDataItemDTO.Create(value));
+                added = c.HashFieldAddOrUpdateIfKeyExists(SessionKey(sessionId), key, SessionDataItemDTO.Create(value));
 
-                if (key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
+                if (added && key == SupplementarySessionId.Key && value is SupplementarySessionId supp)
                 {
                     SupplementarySessionManager.setSuppSessionInSuppMap(c, sessionId, supp);
                 }
             });
-             
-            return cluster.Iter(c => c.PublishToChannel(SessionsNotify, SessionAction.SetData(
-                time,
-                sessionId,
-                key,
-                value,
-                system,
-                nodeName
-            )));
+
+            return added
+                   ? cluster.Iter(c => 
+                        c.PublishToChannel(SessionsNotify, 
+                            SessionAction.SetData(
+                                time,
+                                sessionId,
+                                key,
+                                value,
+                                system,
+                                nodeName)))
+                   : unit; ;
         }
 
         public LanguageExt.Unit ClearData(long time, SessionId sessionId, string key)

@@ -162,8 +162,43 @@ namespace Echo
 
         IEnumerable<string> QueryScheduleKeys(string system);
         bool HashFieldExists(string key, string field);
+
+        /// <summary>
+        /// adds or update the hashfield to corresponding key. Creates a new key if key does not exists
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="field"></param>
+        /// <param name="value"></param>
         void HashFieldAddOrUpdate<T>(string key, string field, T value);
+
+        /// <summary>
+        /// adds or update the hashfields to corresponding key. Creates a new key if key does not exists
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="fields"></param>
         void HashFieldAddOrUpdate<T>(string key, Map<string, T> fields);
+
+        /// <summary>
+        /// adds or update the hashfield to corresponding key. Item is not added if key does not exist.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="field"></param>
+        /// <param name="value"></param>
+        /// <returns>true if added successfully</returns>
+        bool HashFieldAddOrUpdateIfKeyExists<T>(string key, string field, T value);
+
+        /// <summary>
+        /// adds or update the hashfields to corresponding key. Item is not added if key does not exist.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="fields"></param>
+        /// <returns>true if added successfully</returns>
+        bool HashFieldAddOrUpdateIfKeyExists<T>(string key, Map<string, T> fields);
+
         bool DeleteHashField(string key, string field);
         int DeleteHashFields(string key, IEnumerable<string> fields);
         Map<string, object> GetHashFields(string key);
