@@ -302,8 +302,30 @@ namespace Echo
             Retry(() =>
                 Db.HashSet(
                     key, 
-                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v))).ToArray()
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
                     ));
+
+        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, string field, T value) =>
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(key, field, JsonConvert.SerializeObject(value));
+                return trans.Execute();
+            });
+
+        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, Map<string, T> fields) =>
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(
+                    key,
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
+                    );
+
+                return trans.Execute();
+            });
 
         public bool DeleteHashField(string key, string field) =>
             Retry(() =>
