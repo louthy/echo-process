@@ -78,7 +78,7 @@ namespace Echo.Config
                           let ps = m.GetParameters().Map(p => new FieldSpec(p.Name, () => assembly.Get(p.ParameterType))).ToArray()
                           select FuncSpec.Attrs(MakeName(m.Name), () => assembly.Get(m.ReturnType), locals => m.Invoke(null, locals.Values.ToArray()), ps);
 
-            FuncSpecs = toArray(mconcat<MSeq<FuncSpec>, IEnumerable<FuncSpec>>(props, fields, methods));
+            FuncSpecs = toArray(mconcat<MEnumerable<FuncSpec>, IEnumerable<FuncSpec>>(props, fields, methods));
 
 
             ValueParser = BuildObjectParser(FuncSpecs).Memo();
@@ -181,21 +181,23 @@ namespace Echo.Config
                                         .Map((func, variants) =>
 
                                               // Hard-coded (for now) strategy match grammar
-                                              func == "match" ? from m in p.match
-                                                                select new NamedValueToken("match", m, None)
+                                              func == "match" ? attempt(from m in p.match
+                                                                        select new NamedValueToken("match", m, None))
 
                                               // Hard-coded (for now) strategy redirect grammar
-                                            : func == "redirect" ? from r in p.redirect
-                                                                   select new NamedValueToken("redirect", r, None)
+                                            : func == "redirect" ? attempt(from r in p.redirect
+                                                                           select new NamedValueToken("redirect", r, None))
 
                                               // Attempt to parse the known properties and function definitions
-                                            : from nam in attempt(p.reserved(func))
-                                              from _ in p.symbol(":")
-                                              from tok in choice(variants.Map(variant =>
-                                                  from vals in p.arguments(nam, variant.Args)
-                                                  let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
-                                                  select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None)))
-                                              select tok).Values.ToArray()),
+                                            : attempt(
+                                                from nam in p.reserved(func)
+                                                from _ in p.symbol(":")
+                                                from tok in choice(Seq(variants.Map(variant =>
+                                                    attempt(
+                                                        from vals in p.arguments(nam, variant.Args)
+                                                        let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
+                                                        select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None)))))
+                                                select tok)).Values.ToArray()),
 
                                     // Local value definitions
                                     from vd in p.valueDef
@@ -383,7 +385,7 @@ namespace Echo.Config
                 (ProcessSystemConfigParser p) =>
                     p.brackets(
                         from xs in p.commaSep(p.expr(None, t()))
-                        select MakeTypedLst(xs.Map(x => x.Value), t().MapsTo))
+                        select MakeTypedLst(xs.Map(x => x.Value).Freeze(), t().MapsTo))
                     .label("array"),
                     LanguageExt.Map.create(
                         Types.OpT("+", () => maps[t()], (lhs, rhs) => (Lst<object>)lhs + (Lst<object>)lhs),

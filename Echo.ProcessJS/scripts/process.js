@@ -5,6 +5,12 @@
 
 var unit = "(unit)";
 
+if (!window.location.origin) {
+    window.location.origin = window.location.protocol + "//"
+        + window.location.hostname
+        + (window.location.port ? ':' + window.location.port : '');
+}
+
 var failwith = function (err) {
     console.error(err);
     throw err;
@@ -15,6 +21,22 @@ var PID = function (path) {
         Path: path
     };
 };
+
+var Some = function (value) {
+    return [].push(value);
+}
+var None = [];
+var isSome = function (value) {
+    return Object.prototype.toString.call(value) === '[object Array]' && value.length === 1;
+}
+var isNone = function (value) {
+    return !isSome(value);
+}
+var match = function (value, Some, None) {
+    return typeof value !== "undefined" && value !== null && isSome(value)
+        ? Some(value[0])
+        : None();
+}
 
 var ActorResponse = function (message, replyTo, replyFrom, requestId, isFaulted) {
     return {
@@ -44,6 +66,14 @@ var Process = (function () {
         crypto.getRandomValues(buffer);
         return buffer.join("");
     };
+
+    function isEmpty(obj) {
+        for (var prop in obj) {
+            if (obj.hasOwnProperty(prop))
+                return false;
+        }
+        return JSON.stringify(obj) === JSON.stringify({});
+    }
 
     var Connect = "procsys:conn";
     var Disconnect = function (id) {
@@ -98,6 +128,9 @@ var Process = (function () {
     var failFn = function (e) { };
     var lastPong = new Date();
     var requests = {};
+    var socketClosedIntentionally = false;
+    var backOffMax = 5000;
+    var backOffMin = 100;
 
     var actor = { "/": { children: {} } };
     var ignore = function () { };
@@ -148,6 +181,11 @@ var Process = (function () {
     var errors = inboxStart(Errors, System, ignore, function (msg) { publish(msg); }, true);
     var subscribeId = 1;
     var context = null;
+    var keepAlive = null;
+
+    var setImmediate = function (f) {
+        setTimeout(f, 0);
+    };
 
     var inloop = function () {
         return context !== null;
@@ -187,6 +225,7 @@ var Process = (function () {
     var tell = function (pid, msg, sender) {
         if (typeof pid === "undefined") failwith("tell: 'pid' not defined");
         if (typeof msg === "undefined") failwith("tell: 'msg' not defined");
+        if (msg == unit) msg = {};
 
         var ctx = {
             isAsk: false,
@@ -209,34 +248,65 @@ var Process = (function () {
         return setTimeout(function () { tell(pid, msg, self); }, delay);
     };
 
+    var makeThunk = function (ctx) {
+        return {
+            doneFn: function (e) { if (console && console.log) console.log(e) },
+            failFn: function (e) { e = e.data ? e.data : e; if (console && console.error) console.error(e) },
+            done: function (f) {
+                this.doneFn = f;
+                return this;
+            },
+            fail: function (f) {
+                this.failFn = function (e) {
+                    e = e.data ? e.data : e;
+                    f(e);
+                };
+                return this;
+            },
+            ctx: ctx
+        };
+    };
+
+    var makeErrorThunk = function (error, ctx) {
+        var thunk = makeThunk(ctx);
+        setImmediate(function () {
+            thunk.failFn(error);
+        });
+        return thunk;
+    };
+
+    var makeDoneThunk = function (value, ctx) {
+        var thunk = makeThunk(ctx);
+        setImmediate(function () { thunk.doneFn(value); });
+        thunk.wait = function () { return value; };
+        return thunk;
+    };
+
+    var send = function (message, ctx) {
+        var thunk = makeThunk(ctx);
+        try {
+            if (socket.readyState == 1 && connectionId) {
+                socket.send(message);
+            }
+            else {
+                setImmediate(function () { thunk.failFn("Socket not connected"); });
+            }
+        }
+        catch (e) {
+            setImmediate(function () { thunk.failFn(e); });
+        }
+        return thunk;
+    }
+
     var askInternal = function (pid, msg, ctx) {
         var p = actor[pid];
         if (!p || !p.inbox) {
             if (isLocal(pid)) {
-                failwith("Process doesn't exist " + pid);
-                return null;
+                return makeErrorThunk("Process doesn't exist " + pid);
             }
             else {
-                //failwith("'ask' is only available for intra-JS process calls.");
                 messageId++;
-                socket.send(Ask(connectionId, messageId, pid, ctx.sender, msg));
-
-                var thunk = {
-                    doneFn: function (msg) {
-                    },
-                    failFn: function (msg) {
-                    },
-                    done: function (f) {
-                        this.doneFn = f;
-                        return this;
-                    },
-                    fail: function (f) {
-                        this.failFn = f;
-                        return this;
-                    },
-                    ctx: ctx
-                };
-
+                var thunk = send(Ask(connectionId, messageId, pid, ctx.sender, msg), ctx);
                 requests[messageId] = thunk;
                 return thunk;
             }
@@ -249,16 +319,21 @@ var Process = (function () {
             //       the send order).  Also, this allows for blocking 'ask', which is difficult to
             //       achieve by other means.
             return withContext(ctx, function () {
-                context.reply = null;
-                if (p.stateless) {
-                    var statea = p.inbox(msg);
-                    if (typeof statea !== "undefined") p.state = statea;
+                try {
+                    context.reply = null;
+                    if (p.stateless) {
+                        var statea = p.inbox(msg);
+                        if (typeof statea !== "undefined") p.state = statea;
+                    }
+                    else {
+                        var stateb = p.inbox(p.state, msg);
+                        if (typeof stateb !== "undefined") p.state = stateb;
+                    }
+                    return makeDoneThunk(context.reply);
                 }
-                else {
-                    var stateb = p.inbox(p.state, msg);
-                    if (typeof stateb !== "undefined") p.state = stateb;
+                catch (e) {
+                    return makeErrorThunk("Process doesn't exist " + pid);
                 }
-                return context.reply;
             });
         }
     };
@@ -266,6 +341,7 @@ var Process = (function () {
     var ask = function (pid, msg) {
         if (typeof pid === "undefined") failwith("ask: 'pid' not defined");
         if (typeof msg === "undefined") failwith("ask: 'msg' not defined");
+        if (msg == unit) msg = {};
         var ctx = {
             isAsk: true,
             self: pid,
@@ -278,6 +354,7 @@ var Process = (function () {
 
     var reply = function (msg) {
         if (typeof msg === "undefined") failwith("reply: 'msg' not defined");
+        if (msg == unit) msg = {};
         context.reply = msg;
     };
 
@@ -298,7 +375,10 @@ var Process = (function () {
         var onComplete = function () { };
 
         p.subs[id] = {
-            next: function (msg) { onNext(msg); },
+            next: function (msg) {
+                if (isEmpty(msg)) msg = unit;
+                onNext(msg);
+            },
             done: function () { onComplete(); }
         };
 
@@ -319,6 +399,7 @@ var Process = (function () {
         var self = context.self;
         if (isLocal(pid)) {
             return subscribeAsync(pid).forall(function (msg) {
+                if (isEmpty(msg)) msg = unit;
                 tell(self, msg, pid);
             });
         }
@@ -326,15 +407,27 @@ var Process = (function () {
             var id = subscribeId;
             var ctx = {
                 unsubscribe: function () {
-                    socket.send(Unsubscribe(connectionId, pid, self));
+                    var self = this;
+                    try {
+                        socket.send(Unsubscribe(connectionId, pid, self));
+                    }
+                    catch (e) {
+                        setImmediate(function () { self.fail(e); });
+                    }
                     delete actor[self].obs[id];
                 },
-                next: function () { },
-                done: function () { }
+                next: function (x) { },
+                done: function () { },
+                fail: function (e) { }
             };
             actor[self].obs[id] = ctx;
             subscribeId++;
-            socket.send(Subscribe(connectionId, pid, self));
+            try {
+                socket.send(Subscribe(connectionId, pid, self));
+            }
+            catch (e) {
+                setImmediate(function () { ctx.fail(e); });
+            }
             return ctx;
         }
     };
@@ -354,6 +447,7 @@ var Process = (function () {
 
     publish = function (msg) {
         if (typeof msg === "undefined") failwith("publish: 'msg' not defined");
+        if (msg == unit) msg = {};
         if (inloop()) {
             postMessage(
                 JSON.stringify({ pid: context.self, msg: msg, processjs: "pub" }),
@@ -418,7 +512,7 @@ var Process = (function () {
     };
 
     var error = function (e, to, msg, sender) {
-        console.error(e);
+        if (console && console.error) console.error(e);
         tell(Errors, { error: e, to: to, msg: msg, sender: getSender(sender) });
     };
 
@@ -429,27 +523,37 @@ var Process = (function () {
                 deadLetter(data.pid, data.msg, data.sender);
             }
             else {
-                socket.send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, data.msg));
+                var msg = data.msg;
+                if (msg == unit) {
+                    msg = {};
+                }
+                try {
+                    send(Tell(connectionId, ++messageId, data.pid, data.ctx.sender, msg), null);
+                }
+                catch (e) {
+                    error(e, data.pid, data.msg, data.sender);
+                    deadLetter(data.pid, data.msg, data.sender);
+                }
             }
-            return;
         }
-
-        try {
-            withContext(data.ctx, function () {
-                if (p.stateless) {
-                    var statea = p.inbox(data.msg);
-                    if (typeof statea !== "undefined") p.state = statea;
-                }
-                else {
-                    var stateb = p.inbox(p.state, data.msg);
-                    if (typeof stateb !== "undefined") p.state = stateb;
-                }
-            });
-        }
-        catch (e) {
-            error(e, data.pid, data.msg, data.sender);
-            deadLetter(data.pid, data.msg, data.sender);
-            p.state = p.setup();
+        else {
+            try {
+                withContext(data.ctx, function () {
+                    if (p.stateless) {
+                        var statea = p.inbox(data.msg);
+                        if (typeof statea !== "undefined") p.state = statea;
+                    }
+                    else {
+                        var stateb = p.inbox(p.state, data.msg);
+                        if (typeof stateb !== "undefined") p.state = stateb;
+                    }
+                });
+            }
+            catch (e) {
+                error(e, data.pid, data.msg, data.sender);
+                deadLetter(data.pid, data.msg, data.sender);
+                p.state = p.setup();
+            }
         }
     };
 
@@ -486,6 +590,9 @@ var Process = (function () {
             !data.msg) {
             return;
         }
+        if (isEmpty(data.msg)) {
+            data.msg = unit;
+        }
         switch (data.processjs) {
             case "tell": receiveTell(data); break;
             case "pub": receivePub(data); break;
@@ -493,25 +600,49 @@ var Process = (function () {
     };
 
     var disconnect = function () {
-        socket.send(Disconnect(connectionId));
-        socket.close();
+        try {
+            socketClosedIntentionally = true;
+            socket.send(Disconnect(connectionId));
+            socket.close();
+        }
+        catch (e) {
+            error(e, "", "disconnect", null);
+        }
     };
 
     var unload = function () {
-        socket.send(Disconnect(connectionId));
+        disconnect();
+    };
+
+    var reconnect = function (delay) {
+        connect()
+            .done(function () {
+                console.log("reconnected");
+            })
+            .fail(function () {
+                console.log("reconnecting in " + delay + "ms");
+                delay = delay * 2;
+                if (delay > backOffMax) delay = backOffMax;
+                setTimeout(function () { reconnect(delay); }, delay);
+            });
     };
 
     var connect = function () {
+        socketClosedIntentionally = false;
+
         socket = new WebSocket(uri);
 
         socket.onopen = function (e) {
-            console.log("opened " + uri);
             socket.send(Connect);
             window.addEventListener("beforeunload", unload);
         };
 
         socket.onclose = function (e) {
             window.removeEventListener("beforeunload", unload);
+            connectionId = "";
+            if (!socketClosedIntentionally) {
+                reconnect(backOffMin);
+            }
         };
 
         socket.onmessage = function (e) {
@@ -577,16 +708,45 @@ var Process = (function () {
                     // Pong (reply of ping)
                     case "pong":
                         lastPong = new Date();
+                        if (obj.status === "False") {
+                            connectionId = "";
+
+                            try {
+                                socket.send(Connect);
+                            }
+                            catch (e) {
+                                error(e, "", "re-connect failed", null);
+                            }
+                        }
                         break;
 
                     // Disconnected
                     case "disc":
                         connectionId = obj.id === connectionId ? "" : connectionId;
+                        if (keepAlive) {
+                            clearInterval(keepAlive);
+                            keepAlive = null;
+                        }
                         break;
 
                     // Connected
                     case "conn":
                         connectionId = obj.id === "" ? connectionId : obj.id;
+
+                        if (keepAlive) {
+                            clearInterval(keepAlive);
+                        }
+                        if (connectionId !== "") {
+                            keepAlive = setInterval(function () {
+                                try {
+                                    socket.send(Ping(connectionId));
+                                }
+                                catch (e) {
+                                    error(e, "", "ping failed", null);
+                                }
+                            }, 5000);
+                        }
+
                         doneFn();
                         break;
                 }
@@ -597,7 +757,7 @@ var Process = (function () {
         };
 
         socket.onerror = function (e) {
-            console.error(e.data);
+            error(e, "", "socket error", "");
         };
 
         return {
@@ -627,17 +787,18 @@ var Process = (function () {
             "<div class='process-log-row process-log-row" + msg.TypeDisplay + "'>" +
             "<div class='log-time'>" + msg.DateDisplay + "</div>" +
             "<div class='log-type'>" + msg.TypeDisplay + "</div>" +
-            (msg.Message === null || !msg.Message.IsSome
-                ? ""
-                : "<div class='log-msg'>" + msg.Message.Value + "</div>") +
+            match(msg.Message,
+                function (value) { return "<div class='log-msg'>" + value + "</div>"; },
+                function () { return "" }) +
             "</div>" +
-            (msg.Exception === null || !msg.Exception.IsSome || !msg.Exception.Value === ""
-                ? ""
-                : "<div class='process-log-row testbed-log-rowError'><div id='log-ex-msg'>" + msg.Exception.Value + "</div></div>") +
+            match(msg.Exception,
+                function (value) { return "<div class='process-log-row testbed-log-rowError'><div class='log-ex-msg'>" + JSON.stringify(value, null, 4) + "</div></div>"; },
+                function () { return "" }) +
             "</div>";
     };
 
     var log = {
+        paused: false,
         tell: function (type, msg) {
             if (typeof type === "undefined") failwith("Log.tell: 'type' not defined");
             if (typeof msg === "undefined") failwith("Log.tell: 'msg' not defined");
@@ -650,23 +811,67 @@ var Process = (function () {
         tellWarn: function (msg) { this.tell(2, msg); },
         tellError: function (msg) { this.tell(12, msg); },
         tellDebug: function (msg) { this.tell(16, msg); },
+        injectCss: function () {
+            var css = ".process-log-row{font-family:Calibri,Droid Sans,Candara,Segoe,'Segoe UI',Optima,Arial,sans-serif;font-size:10pt;border-left:8px solid #fff;background-color:#fff;box-shadow:2px 2px 2px #aaa;padding:4px}.process-log-rowInfo{border-color:#c1eaaf}.process-log-rowWarn{border-color:#ffea99}.process-log-rowError{border-color:#e29191}.process-log-rowDebug{border-color:#a1bacc}.process-item{width:400px;margin:10px 5px 0;padding:15px;display:inline-block;background-color:#f0f0f0;vertical-align:top;min-height:15px;border-radius:5px;box-shadow:5px 5px 5px #aaa}.process-log-row .log-ex-msg,.process-log-row .log-ex-stack,.process-log-row .log-msg,.process-log-row .log-time,.process-log-row .log-type{display:inline-block;padding:2px}.process input{margin-right:4px;margin-bottom:4px}.process-log-row .log-time{width:75px}.process-log-row .log-type{width:40px}.process-log-row .log-msg{width:auto} .log-ex-msg{white-space: pre-wrap;}";
+            var style = document.createElement("style");
+            style.type = "text/css";
+            style.innerHTML = css;
+            document.getElementsByTagName("head")[0].appendChild(style);
+        },
+        updateViewWithItems: function (items) {
+            if (items && items.length > 0) {
+                var view = [];
+                for (var i = items.length - 1; i >= 0; i--) {
+                    view.push(formatItem(items[i]));
+                }
+                document.getElementById(this.id).innerHTML = view.join("");
+            }
+        },
+        refresh: function () {
+            var self = this;
+            Process.ask("/root/user/process-log", unit)
+                .done(function (items) { self.updateViewWithItems(items); });
+        },
         view: function (id, viewSize) {
+            var self = this;
+            this.injectCss();
             if (!id) failwith("Log.view: 'id' not defined");
-            return Process.spawn("process-log",
+            this.id = id;
+            this.pid = Process.spawn("process-log",
                 function () {
                     Process.subscribe("/root/user/process-log");
                     return [];
                 },
                 function (state, msg) {
-                    state.unshift(msg);
-                    $("#" + id).prepend(formatItem(msg));
-                    if (state.length > (viewSize || 50)) {
-                        state.pop();
-                        $('.process-log-msg-row:last').remove();
+                    if (!self.paused) {
+                        state.unshift(msg);
+                        $("#" + id).prepend(formatItem(msg));
+                        if (state.length > (viewSize || 50)) {
+                            state.pop();
+                            $('.process-log-msg-row:last').remove();
+                        }
+                        return state;
                     }
-                    return state;
                 }
             );
+            return this.pid;
+        },
+        pause: function (onPaused) {
+            if (this.paused) return;
+            togglePause(onPaused);
+        },
+        resume: function (onResumed) {
+            if (!this.paused) return;
+            togglePause(onResumed);
+        },
+        togglePause: function (onPaused, onResumed) {
+            if (!this.pid || !this.id) return false;
+            this.paused = !this.paused;
+            if (this.paused && onPaused) onPaused();
+            if (!this.paused && onResumed) onResumed();
+            var self = this;
+            if (!this.paused) this.refresh();
+            return this.paused;
         }
     };
 
@@ -685,6 +890,8 @@ var Process = (function () {
         publish: publish,
         reply: reply,
         receive: receive,
+        setDisconnectBackOffMax: function (value) { backOffMax = value; },
+        setDisconnectBackOffMin: function (value) { backOffMin = value; },
         spawn: spawn,
         subscribe: subscribe,
         tell: tell,
@@ -732,7 +939,9 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
         return copy;
     };
 
-    Process.spawnView = function (name, containerId, templateId, setup, inbox, shutdown) {
+    Process.spawnView = function (name, containerId, templateId, setup, inbox, shutdown, options) {
+
+        options = options || {};
 
         if (typeof setup !== "function") {
             var val = setup;
@@ -745,8 +954,11 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
 
                 var view = function (state) {
                     this.render = function (el) {
-                        ko.cleanNode($("#" + containerId)[0]);
-                        ko.applyBindings(state, el);
+                        var container = $("#" + containerId)[0];
+                        if (container) {
+                            ko.cleanNode(container);
+                        }
+                        ko.applyBindings(state, el)
                     };
                 };
 
@@ -799,7 +1011,7 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
 
                 var refresh = function (s) {
                     var el = document.createElement("div");
-                    el.innerHTML = $("#" + templateId).html();
+                    el.innerHTML = $(document.getElementById(templateId)).html();
                     (new view(s)).render(el);
                     $("#" + containerId).empty();
                     $("#" + containerId).append(el);
@@ -828,8 +1040,11 @@ if (typeof ko !== "undefined" && typeof ko.observable !== "undefined") {
             },
             // Shutdown
             function (state) {
-                ko.cleanNode($("#" + containerId)[0]);
-                $("#" + containerId).empty();
+                var $container = $("#" + containerId);
+                if ($container.length && (!options.preserveDomOnKill)) {
+                    ko.cleanNode($container[0]);
+                    $container.empty();
+                }
                 if ("function" === typeof shutdown) {
                     shutdown(state);
                 }

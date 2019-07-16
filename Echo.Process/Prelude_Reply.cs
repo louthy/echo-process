@@ -36,7 +36,7 @@ namespace Echo
                 ? unit
                 : InMessageLoop
                     ? ActorContext.Request.CurrentRequest == null
-                        ? failwith<Unit>("You can't reply to this message.  It wasn't an 'ask'.  Use isAsk to confirm whether something is an 'ask' or a 'tell'")
+                        ? failwith<Unit>("You can't reply to this message.  It wasn't an 'ask'.  Use isAsk or replyIfAsked to confirm whether something is an 'ask' or a 'tell'")
                         : ActorContext.System(default(SystemName)).Tell(
                             ActorContext.Request.CurrentRequest.ReplyTo, 
                                 new ActorResponse(
@@ -45,9 +45,9 @@ namespace Echo
                                     ActorContext.Request.Self.Actor.Id, 
                                     ActorContext.Request.CurrentRequest.RequestId,
                                     typeof(T).AssemblyQualifiedName
-                                ), 
-                                ActorContext.Request.Self.Actor.Id
-                            )
+                                ),
+                                Schedule.Immediate,
+                                ActorContext.Request.Self.Actor.Id)
                     : raiseUseInMsgLoopOnlyException<Unit>(nameof(reply));
 
         /// <summary>
@@ -79,9 +79,9 @@ namespace Echo
                                 ActorContext.Request.CurrentRequest.RequestId,
                                 exception.GetType().AssemblyQualifiedName,
                                 true
-                            ), 
-                            ActorContext.Request.Self.Actor.Id
-                        )
+                            ),
+                            Schedule.Immediate,
+                            ActorContext.Request.Self.Actor.Id)
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(reply));
 
         /// <summary>

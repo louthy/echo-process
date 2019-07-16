@@ -15,8 +15,8 @@ namespace Echo
 {
     class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
     {
-        BlockingQueue<UserControlMessage> userInbox;
-        BlockingQueue<SystemMessage> sysInbox;
+        PausableBlockingQueue<UserControlMessage> userInbox;
+        PausableBlockingQueue<SystemMessage> sysInbox;
 
         Actor<S, T> actor;
         ActorItem parent;
@@ -36,8 +36,8 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
                 : maxMailboxSize;
 
-            userInbox = new BlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new BlockingQueue<SystemMessage>(this.maxMailboxSize);
+            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
+            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
@@ -79,14 +79,15 @@ namespace Echo
                     ? Self
                     : ProcessId.NoSender;
 
-        public Unit Ask(object message, ProcessId sender)
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message).IfSome(msg => userInbox.Post(msg));
+                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
+                                           .IfSome(msg => userInbox.Post(msg));
                 }
                 catch (QueueFullException)
                 {
@@ -96,14 +97,15 @@ namespace Echo
             return unit;
         }
 
-        public Unit Tell(object message, ProcessId sender)
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message).IfSome(msg => userInbox.Post(msg));
+                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
+                                           .IfSome(msg => userInbox.Post(msg));
                 }
                 catch(QueueFullException)
                 {
@@ -113,13 +115,14 @@ namespace Echo
             return unit;
         }
 
-        public Unit TellUserControl(UserControlMessage message)
+        public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
                 try
                 {
+                    message.SessionId = message.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
                     userInbox.Post(message);
                 }
                 catch (QueueFullException)
@@ -183,7 +186,7 @@ namespace Echo
 
             // Wake up the user inbox to process any messages that have
             // been waiting patiently.
-            TellUserControl(UserControlMessage.Null);
+            TellUserControl(UserControlMessage.Null, None);
 
             return unit;
         }

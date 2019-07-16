@@ -48,6 +48,21 @@ namespace Echo.Client
             return sb.ToString();
         }
 
+        public string GetRemainingText()
+        {
+            var pos = Pos;
+            Pos = Source.Length;
+            return Source.Substring(pos);
+        }
+
+        public Either<string, string> GetRemaining()
+        {
+            var res = GetNextText();
+            return String.IsNullOrEmpty(res)
+                ? Left<string, string>("Empty field")
+                : Right<string, string>(res);
+        }
+
         public Either<string, string> GetNext()
         {
             var res = GetNextText();
@@ -69,12 +84,25 @@ namespace Echo.Client
         public Either<string, ClientMessageId> GetMessageId() =>
             GetLong().Map(ClientMessageId.New);
 
-        public Either<string, ClientConnectionId> GetConnectionId() =>
-            GetNext().Map(ClientConnectionId.New);
+        public Either<string, ClientConnectionId> GetConnectionId(string remoteIp) =>
+            GetNext()
+                .Map(ClientConnectionId.New)
+                .Bind(id => id.Value.StartsWith(remoteIp.GetHashCode().ToString() + "-")
+                    ? Right<string, ClientConnectionId>(id)
+                    : Left<string, ClientConnectionId>("Invalid client ID"));
 
         Either<string, ProcessId> FixupPID(string pidStr) =>
             String.IsNullOrWhiteSpace(pidStr) || pidStr == "/no-sender"
                 ? Right<string, ProcessId>(ProcessId.None)
-                : ProcessId.TryParse(pidStr).MapLeft(ex => ex.Message);
+                : ProcessId.TryParse(pidStr)
+                           .Map(FixupRoot)
+                           .MapLeft(ex => ex.Message);
+
+        static ProcessName rootName = new ProcessName("root");
+
+        static ProcessId FixupRoot(ProcessId pid) =>
+            pid.HeadName() == rootName
+                ? Process.Root().Append(pid.Skip(1))
+                : pid;
     }
 }

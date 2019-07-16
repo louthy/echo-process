@@ -17,14 +17,14 @@ namespace Echo
     {
         static Map<string, MethodInfo> funcs = Map<string, MethodInfo>();
 
-        static MethodInfo Nothing() =>
+        static MethodInfo Ignore() =>
             null;
 
         static MethodInfo DeserialiseFunc(Type type)
         {
             var name = type.FullName;
             var result = funcs.Find(name);
-            if (result.IsSome) return result.IfNoneUnsafe(Nothing);
+            if (result.IsSome) return result.IfNoneUnsafe(Ignore);
 
             var func = typeof(JsonConvert).GetTypeInfo()
                                    .GetDeclaredMethods("DeserializeObject")
@@ -39,6 +39,9 @@ namespace Echo
             funcs = funcs.AddOrUpdate(name, func);
             return func;
         }
+
+        public static T Object<T>(string value) =>
+            JsonConvert.DeserializeObject<T>(value);
 
         public static object Object(string value, Type type) =>
             DeserialiseFunc(type).Invoke(null, new object[] { value, ActorSystemConfig.Default.JsonSerializerSettings });

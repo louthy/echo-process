@@ -16,6 +16,15 @@ namespace Echo
     {
         const string ClusterOnlineKey = "cluster-node-online";
 
+        public static Func<S, Unit> NoShutdown<S>() => (S s) => unit;
+
+        enum DisposeState
+        {
+            Active,
+            Disposing,
+            Disposed
+        }
+
         ActorRequestContext userContext;
         ClusterMonitor.State clusterState;
         IDisposable startupSubscription;
@@ -26,6 +35,7 @@ namespace Echo
         ProcessSystemConfig settings;
         public AppProfile appProfile;
         ActorItem rootItem;
+        DisposeState disposeState;
 
         readonly object sync = new object();
         readonly Option<ICluster> cluster;
@@ -89,6 +99,7 @@ namespace Echo
             NodeName        = cluster.Map(c => c.NodeName).IfNone("user");
             AskId           = System[ActorSystemConfig.Default.AskProcessName];
             Disp            = ProcessId.Top["disp"].SetSystem(SystemName);
+            Scheduler       = System[ActorSystemConfig.Default.SchedulerName];
 
             userContext = new ActorRequestContext(
                 this,
@@ -105,6 +116,7 @@ namespace Echo
         public void Initialise()
         {
             ClusterWatch(cluster);
+            SchedulerStart(cluster);
         }
 
         public SystemName Name => SystemName;
@@ -131,7 +143,7 @@ namespace Echo
         public ClusterMonitor.State ClusterState =>
             clusterState;
 
-        private void ClusterWatch(Option<ICluster> cluster)
+        void ClusterWatch(Option<ICluster> cluster)
         {
             var monitor = System[ActorSystemConfig.Default.MonitorProcessName];
 
@@ -154,36 +166,56 @@ namespace Echo
                 });
             });
 
-            Tell(monitor, new ClusterMonitor.Msg(ClusterMonitor.MsgTag.Heartbeat), User);
+            Tell(monitor, new ClusterMonitor.Msg(ClusterMonitor.MsgTag.Heartbeat), Schedule.Immediate, User);
+        }
+
+        void SchedulerStart(Option<ICluster> cluster)
+        {
+            var pid = System[ActorSystemConfig.Default.SchedulerName];
+            cluster.IfSome(c => Tell(pid, Echo.Scheduler.Msg.Check, Schedule.Immediate, User));
         }
 
         public void Dispose()
         {
+            if (disposeState != DisposeState.Active) return;
             lock (sync)
             {
-                var ri = rootItem;
-                rootItem = null;
-                if (ri != null)
+                if (disposeState != DisposeState.Active) return;
+                disposeState = DisposeState.Disposing;
+
+                if (rootItem != null)
                 {
                     try
                     {
                         Ping.Dispose();
                     }
-                    catch { }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
                     try
                     {
                         startupSubscription?.Dispose();
                         startupSubscription = null;
                     }
-                    catch { }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
                     try
                     {
-                        var item = ri;
-                        ri.Actor.Children.Iter(c => c.Actor.ShutdownProcess(true));
+                        rootItem.Actor.Children.Values
+                            .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
+                            .Iter(c => c.Actor.ShutdownProcess(true));
                     }
-                    catch { }
+                    catch(Exception e)
+                    {
+                        logErr(e);
+                    }
                     cluster.IfSome(c => c?.Dispose());
                 }
+                rootItem = null;
+                disposeState = DisposeState.Disposed;
             }
         }
 
@@ -340,6 +372,7 @@ namespace Echo
             }
             else
             {
+                var sessionId = ActorContext.SessionId;
                 AskActorRes response = null;
                 using (var handle = new AutoResetEvent(false))
                 {
@@ -360,7 +393,7 @@ namespace Echo
                         ask =>
                         {
                             var inbox = ask.Inbox as ILocalActorInbox;
-                            inbox.Tell(req, sender);
+                            inbox.Tell(req, sender, sessionId);
                             handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
                         });
 
@@ -398,12 +431,13 @@ namespace Echo
             ActorItem parent,
             ProcessName name,
             Func<T, Unit> actorFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy) =>
-                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), termFn, strategy, flags, maxMailboxSize, lazy);
+                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public Unit UpdateSettings(ProcessSystemConfig settings, AppProfile profile)
         {
@@ -417,39 +451,42 @@ namespace Echo
             ActorItem parent,
             ProcessName name,
             Action<T> actorFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
             ) =>
-            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), termFn, strategy, flags, maxMailboxSize, lazy);
+            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
             Func<S, T, S> actorFn,
             Func<S> setupFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
             ) =>
-            ActorCreate(parent, name, actorFn, _ => setupFn(), termFn, strategy, flags, maxMailboxSize, lazy);
+            ActorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
             Func<S, T, S> actorFn,
             Func<IActor, S> setupFn,
+            Func<S, Unit> shutdownFn,
             Func<S, ProcessId, S> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy)
         {
-            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
+            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && cluster.IsSome)
@@ -488,7 +525,7 @@ namespace Echo
                 inbox.Startup(actor, parent, cluster, maxMailboxSize);
                 if (!lazy)
                 {
-                    TellSystem(actor.Id, SystemMessage.StartupProcess);
+                    TellSystem(actor.Id, SystemMessage.StartupProcess(false));
                 }
             }
             catch
@@ -504,6 +541,7 @@ namespace Echo
         public ProcessId Root { get; }
         public ProcessId User { get; }
         public ProcessId Errors { get; }
+        public ProcessId Scheduler { get; }
         public ProcessId DeadLetters { get; }
         public ProcessId Disp { get; }
         public readonly ProcessId RootJS;
@@ -513,10 +551,10 @@ namespace Echo
 
         public Option<ActorItem> GetJsItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey("js"))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey("js"))
             {
-                return Some(children.Value["js"]);
+                return Some(children["js"]);
             }
             else
             {
@@ -526,14 +564,14 @@ namespace Echo
 
         public Option<ActorItem> GetAskItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
-                var sys = children.Value[ActorSystemConfig.Default.SystemProcessName.Value];
+                var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
                 children = sys.Actor.Children;
-                if (children.Value.ContainsKey(ActorSystemConfig.Default.AskProcessName.Value))
+                if (children.ContainsKey(ActorSystemConfig.Default.AskProcessName.Value))
                 {
-                    return Some(children.Value[ActorSystemConfig.Default.AskProcessName.Value]);
+                    return Some(children[ActorSystemConfig.Default.AskProcessName.Value]);
                 }
                 else
                 {
@@ -548,14 +586,14 @@ namespace Echo
 
         public Option<ActorItem> GetInboxShutdownItem()
         {
-            var children = rootItem?.Actor?.Children;
-            if (notnull(children) && children.Value.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
+            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
-                var sys = children.Value[ActorSystemConfig.Default.SystemProcessName.Value];
+                var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
                 children = sys.Actor.Children;
-                if (children.Value.ContainsKey(ActorSystemConfig.Default.InboxShutdownProcessName.Value))
+                if (children.ContainsKey(ActorSystemConfig.Default.InboxShutdownProcessName.Value))
                 {
-                    return Some(children.Value[ActorSystemConfig.Default.InboxShutdownProcessName.Value]);
+                    return Some(children[ActorSystemConfig.Default.InboxShutdownProcessName.Value]);
                 }
                 else
                 {
@@ -720,17 +758,25 @@ by name then use Process.deregisterByName(name).");
             {
                 ActorContext.SessionId = sessionId;
 
-                ActorContext.SetContext(new ActorRequestContext(
-                    this,
-                    self,
-                    sender,
-                    parent,
-                    msg,
-                    request,
-                    ProcessFlags.Default,
-                    Settings.TransactionalIO ? ProcessOpTransaction.Start(self.Actor.Id) : null)
-                );
+                ActorContext.SetContext(
+                    new ActorRequestContext(
+                        this,
+                        self,
+                        sender,
+                        parent,
+                        msg,
+                        request,
+                        ProcessFlags.Default,
+                        Settings.TransactionalIO 
+                            ? ProcessOpTransaction.Start(self.Actor.Id) 
+                            : null));
+
                 return f();
+            }
+            catch(Exception e)
+            {
+                logErr(e);
+                throw;
             }
             finally
             {
@@ -806,7 +852,7 @@ by name then use Process.deregisterByName(name).");
             {
                 if (current.Inbox is ILocalActorInbox)
                 {
-                    return new ActorDispatchLocal(current, Settings.TransactionalIO);
+                    return new ActorDispatchLocal(current, Settings.TransactionalIO, ActorContext.SessionId);
                 }
                 else
                 {
@@ -827,8 +873,8 @@ by name then use Process.deregisterByName(name).");
         public Unit Ask(ProcessId pid, object message, ProcessId sender) =>
             GetDispatcher(pid).Ask(message, sender.IsValid ? sender : Self);
 
-        public Unit Tell(ProcessId pid, object message, ProcessId sender) =>
-            GetDispatcher(pid).Tell(message, sender.IsValid ? sender : Self, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User);
+        public Unit Tell(ProcessId pid, object message, Schedule schedule, ProcessId sender) =>
+            GetDispatcher(pid).Tell(message, schedule, sender.IsValid ? sender : Self, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User);
 
         public Unit TellUserControl(ProcessId pid, UserControlMessage message) =>
             GetDispatcher(pid).TellUserControl(message, Self);

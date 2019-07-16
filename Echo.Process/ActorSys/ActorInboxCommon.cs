@@ -1,90 +1,12 @@
-﻿//using Microsoft.FSharp.Control;
-//using Microsoft.FSharp.Core;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System;
 using static LanguageExt.Prelude;
 using static Echo.Process;
-using System.Reflection;
 using LanguageExt;
 
 namespace Echo
 {
     static class ActorInboxCommon
     {
-//        static FSharpFunc<A, B> ToFSharpFunc<A, B>(Func<A, B> f)
-//        {
-//#if COREFX
-//            return (FSharpFunc<A, B>)typeof(FSharpFunc<A, B>)
-//                        .GetTypeInfo()
-//                        .GetDeclaredMethods("op_Implicit")
-//                        .Where(m => m.ReturnType == typeof(FSharpFunc<A, B>))
-//                        .Single()
-//                        .Invoke(null, new[] { f });
-//#else
-//            return FuncConvert.ToFSharpFunc<A,B>(new Converter<A, B>(f));
-//#endif
-//        }
-
-//        public static FSharpAsync<A> CreateAsync<A>(Func<Task<A>> f) =>
-//            FSharpAsync.FromContinuations(
-//                FuncConvert.ToFSharpFunc<Tuple<FSharpFunc<A, Microsoft.FSharp.Core.Unit>, FSharpFunc<Exception, Microsoft.FSharp.Core.Unit>, FSharpFunc<OperationCanceledException, Microsoft.FSharp.Core.Unit>>>(
-//                    conts =>
-//                    {
-//                        f().ContinueWith(task =>
-//                        {
-//                            try { conts.Item1.Invoke(task.Result); }
-//                            catch (Exception e) { conts.Item2.Invoke(e); }
-//                        });
-//                    }));
-
-//        public static FSharpMailboxProcessor<TMsg> Mailbox<TMsg>(CancellationToken cancelToken, Action<TMsg> handler)
-//        {
-//            var body = ToFSharpFunc<FSharpMailboxProcessor<TMsg>, FSharpAsync<Microsoft.FSharp.Core.Unit>>(
-//                mbox =>
-//                    CreateAsync<Microsoft.FSharp.Core.Unit>(async () =>
-//                    {
-//                        while (!cancelToken.IsCancellationRequested)
-//                        {
-//                            try
-//                            {
-//                                var msg = await FSharpAsync.StartAsTask(mbox.Receive(FSharpOption<int>.None), FSharpOption<TaskCreationOptions>.None, FSharpOption<CancellationToken>.Some(cancelToken));
-//                                if (notnull(msg) && !cancelToken.IsCancellationRequested)
-//                                {
-//                                    handler(msg);
-//                                }
-//                            }
-//                            catch (TaskCanceledException)
-//                            {
-//                                // We're being shutdown, ignore.
-//                            }
-//                            catch (Exception e)
-//                            {
-//                                logSysErr(e);
-//                            }
-//                        }
-//                        return null;
-//                    })
-//            );
-
-//            return FSharpMailboxProcessor<TMsg>.Start(body, FSharpOption<CancellationToken>.None);
-//        }
-
-//        public static FSharpMailboxProcessor<string> StartNotifyMailbox(CancellationToken cancelToken, Action<string> handler) =>
-//            Mailbox<string>(cancelToken, msg =>
-//            {
-//                try
-//                {
-//                    handler(msg);
-//                }
-//                catch (Exception e)
-//                {
-//                    logSysErr(e);
-//                }
-//            });
-
-
         public static InboxDirective SystemMessageInbox<S,T>(Actor<S,T> actor, IActorInbox inbox, SystemMessage msg, ActorItem parent)
         {
             var session = msg.SessionId == null
@@ -96,11 +18,7 @@ namespace Echo
                 switch (msg.Tag)
                 {
                     case Message.TagSpec.Restart:
-                        if (inbox.IsPaused)
-                        {
-                            inbox.Unpause();
-                        }
-                        actor.Restart();
+                        actor.Restart(inbox.IsPaused);
                         break;
 
                     case Message.TagSpec.LinkChild:
@@ -118,12 +36,17 @@ namespace Echo
                         return actor.ChildFaulted(cf.Child, cf.Sender, cf.Exception, cf.Message);
 
                     case Message.TagSpec.StartupProcess:
-                        actor.Startup();
+                        var startupProcess = msg as StartupProcessMessage;
+                        var inboxDirective = actor.Startup(); // get feedback whether startup will somehow trigger Unpause itself (i.e. error => strategy => restart)
+                        if (startupProcess.UnpauseAfterStartup && !inboxDirective.HasFlag(InboxDirective.Pause))
+                        {
+                            inbox.Unpause();
+                        }
                         break;
 
                     case Message.TagSpec.ShutdownProcess:
-                        var sp = msg as ShutdownProcessMessage;
-                        actor.ShutdownProcess(sp.MaintainState);
+                        var shutdownProcess = msg as ShutdownProcessMessage;
+                        actor.ShutdownProcess(shutdownProcess.MaintainState);
                         break;
 
                     case Message.TagSpec.Unpause:
@@ -132,7 +55,7 @@ namespace Echo
 
                     case Message.TagSpec.Pause:
                         inbox.Pause();
-                        return InboxDirective.Pause;
+                        break; // do not return InboxDirective.Pause because system queue should never pause
 
                     case Message.TagSpec.Watch:
                         var awm = msg as SystemAddWatcherMessage;
@@ -190,7 +113,7 @@ namespace Echo
             return InboxDirective.Default;
         }
 
-        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message)
+        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message, Option<SessionId> sessionId)
         {
             if (message == null)
             {
@@ -198,6 +121,8 @@ namespace Echo
                 tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg, message));
                 return None;
             }
+
+            UserControlMessage rmsg = null;
 
             if (message is ActorRequest req)
             {
@@ -214,16 +139,25 @@ namespace Echo
                             req.RequestId,
                             typeof(Exception).AssemblyQualifiedName,
                             true
-                        ), 
+                        ),
+                        Schedule.Immediate,
                         self
                     );
 
                     return None;
                 }
-                return Optional((UserControlMessage)message);
+                rmsg = message as UserControlMessage;
+            }
+            else
+            {
+                rmsg = new UserMessage(message, sender, sender);
             }
 
-            return new UserMessage(message, sender, sender);
+            if(rmsg != null && rmsg.SessionId == null && sessionId.IsSome)
+            {
+                rmsg.SessionId = sessionId.Map(x => x.Value).IfNoneUnsafe((string)null);
+            }
+            return Optional(rmsg);
         }
 
         public static Option<Tuple<RemoteMessageDTO, Message>> GetNextMessage(ICluster cluster, ProcessId self, string key)
@@ -299,5 +233,11 @@ namespace Echo
 
         public static string ClusterStatePubSubKey(ProcessId pid) =>
             ClusterKey(pid) + "-state-pubsub";
+
+        public static string ClusterScheduleKey(ProcessId pid) =>
+            $"/__schedule{ClusterKey(pid)}-user-schedule";
+
+        public static string ClusterScheduleNotifyKey(ProcessId pid) =>
+            ClusterScheduleKey(pid) + "-notify";
     }
 }

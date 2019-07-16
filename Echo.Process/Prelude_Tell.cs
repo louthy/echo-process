@@ -4,6 +4,7 @@ using System.Reactive.Linq;
 using static LanguageExt.Prelude;
 using static LanguageExt.Map;
 using LanguageExt;
+using System.Collections;
 
 namespace Echo
 {
@@ -29,7 +30,7 @@ namespace Echo
         public static Unit tell<T>(ProcessId pid, T message, ProcessId sender = default(ProcessId)) =>
             message is UserControlMessage
                 ? ActorContext.System(pid).TellUserControl(pid, message as UserControlMessage)
-                : ActorContext.System(pid).Tell(pid, message, sender);
+                : ActorContext.System(pid).Tell(pid, message, Schedule.Immediate, sender);
 
         /// <summary>
         /// Send a message to a process
@@ -47,10 +48,22 @@ namespace Echo
         /// for any other reason.</returns>
         /// <param name="pid">Process ID to send to</param>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Unit tell<T>(ProcessId pid, T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+            ActorContext.System(pid).Tell(pid, message, schedule, sender);
+
+        /// <summary>
+        /// Send a message at a specified time in the future
+        /// </summary>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tell<T>(ProcessId pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tell(pid, message, sender), delayFor);
+        public static Unit tell<T>(ProcessId pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+            ActorContext.System(pid).Tell(pid, message, Schedule.Ephemeral(delayFor), sender);
 
         /// <summary>
         /// Send a message at a specified time in the future
@@ -65,8 +78,8 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="delayUntil">Date and time to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tell<T>(ProcessId pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tell(pid, message, sender), delayUntil);
+        public static Unit tell<T>(ProcessId pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+            ActorContext.System(pid).Tell(pid, message, Schedule.Ephemeral(delayUntil), sender);
 
         /// <summary>
         /// Tell children the same message
@@ -88,12 +101,23 @@ namespace Echo
         /// Tell children the same message, delayed.
         /// </summary>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        public static Unit tellChildren<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+            Children.Values.Iter(child => tell(child, message, schedule, sender));
+
+        /// <summary>
+        /// Tell children the same message, delayed.
+        /// </summary>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable tellChildren<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tellChildren(message, sender), delayFor);
+        public static Unit tellChildren<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+            Children.Values.Iter(child => tell(child, message, delayFor, sender));
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -106,8 +130,8 @@ namespace Echo
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable tellChildren<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tellChildren(message, sender), delayUntil);
+        public static Unit tellChildren<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+            Children.Values.Iter(child => tell(child, message, delayUntil, sender));
 
         /// <summary>
         /// Tell children the same message
@@ -124,13 +148,26 @@ namespace Echo
         /// The list of children to send to are filtered by the predicate provided
         /// </summary>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="predicate">The list of children to send to are filtered by the predicate provided</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        public static Unit tellChildren<T>(T message, Schedule schedule, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
+            filter(Children, predicate).Values.Iter(child => tell(child, message, schedule, sender));
+
+        /// <summary>
+        /// Tell children the same message, delayed.
+        /// The list of children to send to are filtered by the predicate provided
+        /// </summary>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="predicate">The list of children to send to are filtered by the predicate provided</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable tellChildren<T>(T message, TimeSpan delayFor, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tellChildren(message, predicate, sender), delayFor);
+        public static Unit tellChildren<T>(T message, TimeSpan delayFor, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
+            filter(Children, predicate).Values.Iter(child => tell(child, message, delayFor, sender));
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -145,8 +182,8 @@ namespace Echo
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable tellChildren<T>(T message, DateTime delayUntil, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            safedelay(() => tellChildren(message, predicate, sender), delayUntil);
+        public static Unit tellChildren<T>(T message, DateTime delayUntil, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
+            filter(Children, predicate).Values.Iter(child => tell(child, message, delayUntil, sender));
 
         /// <summary>
         /// Send a message to the parent process
@@ -162,9 +199,20 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Unit tellParent<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+            tell(Parent, message, schedule, sender);
+
+        /// <summary>
+        /// Send a message to the parent process at a specified time in the future
+        /// </summary>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tellParent<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+        public static Unit tellParent<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
             tell(Parent, message, delayFor, sender);
 
         /// <summary>
@@ -178,9 +226,8 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="delayUntil">Date and time to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tellParent<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+        public static Unit tellParent<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
             tell(Parent, message, delayUntil, sender);
-
 
         /// <summary>
         /// Send a message to ourself
@@ -196,9 +243,20 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Unit tellSelf<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+            tell(Self, message, schedule, sender);
+
+        /// <summary>
+        /// Send a message to ourself at a specified time in the future
+        /// </summary>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tellSelf<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+        public static Unit tellSelf<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
             tell(Self, message, delayFor, sender);
 
         /// <summary>
@@ -212,7 +270,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="delayUntil">Date and time to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-        public static IDisposable tellSelf<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+        public static Unit tellSelf<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
             tell(Self, message, delayUntil, sender);
 
         /// <summary>

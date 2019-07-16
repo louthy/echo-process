@@ -102,7 +102,7 @@ namespace Echo
             new ProcessName(value);
 
         public bool Equals(ProcessName other) =>
-            Value.Equals(other.Value);
+            ReferenceEquals(Value, other.Value) || Value.Equals(other.Value);
 
         public int CompareTo(ProcessName other) =>
             String.Compare(Value, other.Value, StringComparison.Ordinal);
@@ -121,8 +121,6 @@ namespace Echo
             !lhs.Equals(rhs);
 
         public override bool Equals(object obj) =>
-            obj is ProcessName
-                ? Equals((ProcessName)obj)
-                : false;
+            obj is ProcessName pname && Equals(pname);
     }
 }

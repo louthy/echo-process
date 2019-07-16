@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>netcoreapp2.0</TargetFrameworks>
+        <FileVersion>2.0.0.0</FileVersion>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <LangVersion>7.3</LangVersion>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Remove="Echo.Tests.nuget.props" />
+        <None Remove="Echo.Tests.project.lock.json" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
+        <PackageReference Include="Nito.AsyncEx.Core" Version="1.0.0-rc2-001" />
+        <PackageReference Include="System.Net.Http" Version="4.3.3" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.6.0-preview-20180207-05" />
+        <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+        <PackageReference Include="xunit" Version="2.4.0" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+        <PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
+        <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
+        <PackageReference Include="LanguageExt.Core" Version="3.1.24" />
+        <PackageReference Include="LanguageExt.Parsec" Version="3.1.24" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <Service Include="{82a7f48d-3b50-4b1e-b82e-3ada8210c358}" />
+    </ItemGroup>
+</Project>

@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Linq;
-using System.Threading;
 using System.Reflection;
 using static Echo.Process;
 using static LanguageExt.Prelude;
 //using Microsoft.FSharp.Control;
-using Newtonsoft.Json;
 using Echo.ActorSys;
 using LanguageExt;
 
@@ -14,27 +12,29 @@ namespace Echo
     class ActorInboxRemote<S,T> : IActorInbox
     {
         ICluster cluster;
-        BlockingQueue<string> userNotify;
+        PausableBlockingQueue<string> userNotify;
         Actor<S, T> actor;
         ActorItem parent;
         int maxMailboxSize;
+        int scheduledItems;
         object sync = new object();
 
         public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             if (cluster.IsNone) throw new Exception("Remote inboxes not supported when there's no cluster");
-            //this.tokenSource = new CancellationTokenSource();
             this.actor = (Actor<S, T>)process;
             this.cluster = cluster.IfNoneUnsafe(() => null);
 
-            this.maxMailboxSize = maxMailboxSize;
+            this.maxMailboxSize = maxMailboxSize == -1
+                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
+                : maxMailboxSize;
+
             this.parent = parent;
 
-            userNotify = new BlockingQueue<string>(this.maxMailboxSize);
+            userNotify = new PausableBlockingQueue<string>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); return InboxDirective.Default; });
-            userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterSystemInboxKey(actor.Id), false); return InboxDirective.Default; });
 
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
@@ -75,6 +75,18 @@ namespace Echo
             // We want the check done asyncronously, in case the setup function creates child processes that
             // won't exist if we invoke directly.
             cluster.PublishToChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id), Guid.NewGuid().ToString());
+        }
+
+        void SubscribeToScheduleInboxChannel()
+        {
+            cluster.UnsubscribeChannel(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id));
+            cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id)).Subscribe(msg => scheduledItems++);
+            // We want the check done asyncronously, in case the setup function creates child processes that
+            // won't exist if we invoke directly.
+
+            // TODO: Consider the implications of race condition here --- will probably need some large 'clear out' process that does a query
+            //       on the cluster.  Or maybe this internal counter isn't the best approach.
+            scheduledItems = cluster.GetHashFields(ActorInboxCommon.ClusterScheduleKey(actor.Id)).Count; 
         }
 
         public bool IsPaused

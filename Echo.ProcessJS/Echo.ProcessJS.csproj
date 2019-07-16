@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
@@ -6,8 +6,8 @@
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>net461;netstandard1.6</TargetFrameworks>
-    <PackageVersion>2.0.0-alpha</PackageVersion>
+    <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
+    <PackageVersion>2.0.68-beta</PackageVersion>
     <PackageId>Echo.ProcessJS</PackageId>
     <Title>echo-process Javascript Client</Title>
     <Authors>Paul Louth</Authors>
@@ -20,6 +20,7 @@
     <PackageLicenseUrl>https://github.com/louthy/echo-process/blob/master/LICENSE.md</PackageLicenseUrl>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" />
@@ -30,11 +31,13 @@
       <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="process.js" />
+    <Content Include="scripts\process.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="2.0.14-alpha" />
-    <PackageReference Include="LanguageExt.Parsec" Version="2.0.14-alpha" />
+    <PackageReference Include="LanguageExt.Core" Version="3.1.24" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.1.24" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

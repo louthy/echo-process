@@ -1,10 +1,10 @@
 ﻿using LanguageExt;
+using static LanguageExt.Prelude;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-
-using static LanguageExt.Prelude;
+using static Echo.Process;
 
 namespace Echo
 {
@@ -12,11 +12,13 @@ namespace Echo
     {
         public readonly ILocalActorInbox Inbox;
         public readonly IActor Actor;
+        public readonly Option<SessionId> SessionId;
         readonly bool transactionalIO;
 
-        public ActorDispatchLocal(ActorItem actor, bool transactionalIO)
+        public ActorDispatchLocal(ActorItem actor, bool transactionalIO, Option<SessionId> sessionId)
         {
             this.transactionalIO = transactionalIO;
+            SessionId = sessionId;
             Inbox = actor.Inbox as ILocalActorInbox;
             if (Inbox == null) throw new ArgumentException("Invalid (not local) ActorItem passed to LocalActorDispatch.");
             Actor = actor.Actor;
@@ -38,33 +40,37 @@ namespace Echo
         public Either<string, bool> CanAccept<T>() =>
             Inbox.CanAcceptMessageType<T>();
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
-            transactionalIO
-                ? Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender)
-                : ProcessOp.IO(() => Inbox.Tell(Inbox.ValidateMessageType(message, sender), sender));
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag)
+        {
+            var sessionId = ActorContext.SessionId;
+            return LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender, sessionId), message);
+        }
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO
-                ? Inbox.TellSystem(message)
-                : ProcessOp.IO(() => Inbox.TellSystem(message));
+                ? ProcessOp.IO(() => Inbox.TellSystem(message))
+                : Inbox.TellSystem(message);
 
-        public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            transactionalIO
-                ? Inbox.TellUserControl(message)
-                : ProcessOp.IO(() => Inbox.TellUserControl(message));
+        public Unit TellUserControl(UserControlMessage message, ProcessId sender)
+        {
+            var sessionId = ActorContext.SessionId;
+            return transactionalIO
+                ? ProcessOp.IO(() => Inbox.TellUserControl(message, sessionId))
+                : Inbox.TellUserControl(message, sessionId);
+        }
 
         public Unit Ask(object message, ProcessId sender) =>
-            Inbox.Ask(message, sender);
+            Inbox.Ask(message, sender, ActorContext.SessionId);
 
         public Unit Kill() =>
             transactionalIO
-                ? ShutdownProcess(false)
-                : ProcessOp.IO(() => ShutdownProcess(false));
+                ? ProcessOp.IO(() => ShutdownProcess(false))
+                : ShutdownProcess(false);
 
         public Unit Shutdown() =>
             transactionalIO
-                ? ShutdownProcess(true)
-                : ProcessOp.IO(() => ShutdownProcess(true));
+                ? ProcessOp.IO(() => ShutdownProcess(true))
+                : ShutdownProcess(true);
 
         Unit ShutdownProcess(bool maintainState) =>
             ActorContext.System(Actor.Id).WithContext(
@@ -86,31 +92,31 @@ namespace Echo
 
         public Unit Publish(object message) =>
             transactionalIO
-                ? Actor.Publish(message)
-                : ProcessOp.IO(() => Actor.Publish(message));
+                ? ProcessOp.IO(() => Actor.Publish(message))
+                : Actor.Publish(message);
 
         public int GetInboxCount() =>
             Inbox.Count;
 
         public Unit Watch(ProcessId pid) =>
             transactionalIO
-                ? Actor.AddWatcher(pid)
-                : ProcessOp.IO(() => Actor.AddWatcher(pid));
+                ? ProcessOp.IO(() => Actor.AddWatcher(pid))
+                : Actor.AddWatcher(pid);
 
         public Unit UnWatch(ProcessId pid) =>
             transactionalIO
-                ? Actor.RemoveWatcher(pid)
-                : ProcessOp.IO(() => Actor.RemoveWatcher(pid));
+                ? ProcessOp.IO(() => Actor.RemoveWatcher(pid))
+                : Actor.RemoveWatcher(pid);
 
         public Unit DispatchWatch(ProcessId watching) =>
             transactionalIO
-                ? Actor.DispatchWatch(watching)
-                : ProcessOp.IO(() => Actor.DispatchWatch(watching));
+                ? ProcessOp.IO(() => Actor.DispatchWatch(watching))
+                : Actor.DispatchWatch(watching);
 
         public Unit DispatchUnWatch(ProcessId watching) =>
             transactionalIO
-                ? Actor.DispatchUnWatch(watching)
-                : ProcessOp.IO(() => Actor.DispatchUnWatch(watching));
+                ? ProcessOp.IO(() => Actor.DispatchUnWatch(watching))
+                : Actor.DispatchUnWatch(watching);
 
         public bool IsLocal => 
             true;

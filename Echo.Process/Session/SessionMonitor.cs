@@ -21,13 +21,13 @@ namespace Echo.Session
         /// </summary>
         /// <param name="sessionManager">Process ID of the session manager</param>
         /// <param name="checkFreq">Frequency to check</param>
-        public static Tuple<SessionSync, Time> Setup(SessionSync sync, Time checkFreq) =>
-            Tuple(sync, checkFreq);
+        public static (SessionSync, Time) Setup(SessionSync sync, Time checkFreq) =>
+            (sync, checkFreq);
 
         /// <summary>
         /// Inbox
         /// </summary>
-        public static Tuple<SessionSync, Time> Inbox(Tuple<SessionSync, Time> state, Unit _)
+        public static (SessionSync, Time) Inbox((SessionSync, Time) state, Unit _)
         {
             try
             {

@@ -61,10 +61,13 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static Unit subscribe(ProcessId pid) =>
-            InMessageLoop
-                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(Self, x, pid)))
+        public static Unit subscribe(ProcessId pid)
+        {
+            var savedSelf = Self;
+            return InMessageLoop
+                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(savedSelf, x, pid)))
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribe));
+        }
 
         /// <summary>
         /// Unsubscribe from a process's publications
@@ -167,7 +170,22 @@ namespace Echo
         public static IObservable<T> observe<T>(ProcessId pid) =>
             InMessageLoop
                 ? raiseDontUseInMessageLoopException<IObservable<T>>(nameof(observe))
-                : ActorContext.System(pid).Observe<T>(pid);
+                : observeUnsafe<T>(pid);
+
+        /// <summary>
+        /// Get an IObservable for a process publish stream.  When a process calls 'publish' it emits
+        /// messages on the observable returned by this method.
+        /// </summary>
+        /// <remarks>
+        /// The process can publish any number of types, any published messages not of type T will be ignored.
+        /// 
+        /// Because this call is asychronous it could allow access to the message loop, that's why this 
+        /// function is labelled `Unsafe`.  Careful disposing and capture of free variables is required to not
+        /// break the principles of actors.
+        /// </remarks>
+        /// <returns>IObservable T</returns>
+        public static IObservable<T> observeUnsafe<T>(ProcessId pid) =>
+            ActorContext.System(pid).Observe<T>(pid);
 
         /// <summary>
         /// Get an IObservable for a process's state stream.  When a process state updates at the end of its
@@ -185,8 +203,24 @@ namespace Echo
         public static IObservable<T> observeState<T>(ProcessId pid) =>
             InMessageLoop
                 ? raiseDontUseInMessageLoopException<IObservable<T>>(nameof(observeState))
-                : ActorContext.System(pid).ObserveState<T>(pid);
+                : observeStateUnsafe<T>(pid);
 
+        /// <summary>
+        /// Get an IObservable for a process's state stream.  When a process state updates at the end of its
+        /// message loop it announces it on the stream returned from this method.  You should use this for 
+        /// notification only.  Never modify the state object belonging to a process.  Best practice is to make
+        /// the state type immutable.
+        /// </summary>
+        /// <remarks>
+        /// The process can publish any number of types, any published messages not of type T will be ignored.
+        /// 
+        /// Because this call is asychronous it could allow access to the message loop, that's why this 
+        /// function is labelled `Unsafe`.  Careful disposing and capture of free variables is required to not
+        /// break the principles of actors.
+        /// </remarks>
+        /// <returns>IObservable T</returns>
+        public static IObservable<T> observeStateUnsafe<T>(ProcessId pid) =>
+            ActorContext.System(pid).ObserveState<T>(pid);
 
         /// <summary>
         /// Subscribes our inbox to another process state publish stream.  
@@ -198,12 +232,15 @@ namespace Echo
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// This should be used from within a process' message loop only
         /// </remarks>
-        /// <returns>IObservable T</returns>
-        public static Unit subscribeState<T>(ProcessId pid) =>
-            InMessageLoop
+        /// <returns></returns>
+        public static Unit subscribeState<T>(ProcessId pid)
+        {
+            var savedSelf = Self;
+            return InMessageLoop
                 ? ActorContext.Request.Self.Actor.AddSubscription(
-                      pid,
-                      ActorContext.System(pid).ObserveState<T>(pid).Subscribe(x => tell(Self, x, pid)))
+                    pid,
+                    ActorContext.System(pid).ObserveState<T>(pid).Subscribe(x => tell(savedSelf, x, pid)))
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribeState));
+        }
     }
 }

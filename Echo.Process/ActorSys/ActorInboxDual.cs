@@ -23,8 +23,8 @@ namespace Echo
     /// </summary>
     class ActorInboxDual<S, T> : IActorInbox, ILocalActorInbox
     {
-        BlockingQueue<UserControlMessage> userInbox;
-        BlockingQueue<SystemMessage> sysInbox;
+        PausableBlockingQueue<UserControlMessage> userInbox;
+        PausableBlockingQueue<SystemMessage> sysInbox;
 
         ICluster cluster;
         Actor<S, T> actor;
@@ -43,13 +43,12 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id) 
                 : maxMailboxSize;
 
-            userInbox = new BlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new BlockingQueue<SystemMessage>(this.maxMailboxSize);
+            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
+            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
             userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
             sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
-
 
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
@@ -147,11 +146,11 @@ namespace Echo
             return unit;
         }
 
-        public Unit Ask(object message, ProcessId sender)
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (userInbox != null)
             {
-                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
                                 .IfSome(msg =>
                                 {
                                     if (IsPaused)
@@ -174,17 +173,17 @@ namespace Echo
             return unit;
         }
 
-        public Unit Tell(object message, ProcessId sender)
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInbox != null)
             {
-                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message)
+                ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
                                 .IfSome(msg =>
                                 {
                                     if (IsPaused)
                                     {
-                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Tell(message, sender, Message.TagSpec.User);
+                                        new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).Tell(message, Schedule.Immediate, sender, Message.TagSpec.User);
                                     }
                                     else
                                     {
@@ -219,15 +218,25 @@ namespace Echo
             return unit;
         }
 
-        public Unit TellUserControl(UserControlMessage msg)
+        public Unit TellUserControl(UserControlMessage msg, Option<SessionId> sessionId)
         {
             if (msg == null) throw new ArgumentNullException(nameof(msg));
 
             if (userInbox != null)
             {
+                msg.SessionId = msg.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(msg.SessionId);
                 if (IsPaused)
                 {
-                    new ActorDispatchRemote(ActorContext.System(actor.Id).Ping, actor.Id, cluster, ActorContext.SessionId, false).TellUserControl(msg, ProcessId.None);
+                    // We're paused, so send to our persistent queue
+                    new ActorDispatchRemote(
+                        ActorContext.System(actor.Id).Ping, 
+                        actor.Id, 
+                        cluster, 
+                        msg.SessionId == null 
+                            ? None 
+                            : Some(new SessionId(msg.SessionId)), 
+                        false)
+                       .TellUserControl(msg, ProcessId.None);
                 }
                 else
                 {
@@ -261,7 +270,7 @@ namespace Echo
             cluster = null;
         }
 
-        public void CheckRemoteInbox(string key, ICluster cluster, ProcessId self, BlockingQueue<SystemMessage> sysInbox, BlockingQueue<UserControlMessage> userInbox, bool pausable)
+        public void CheckRemoteInbox(string key, ICluster cluster, ProcessId self, PausableBlockingQueue<SystemMessage> sysInbox, PausableBlockingQueue<UserControlMessage> userInbox, bool pausable)
         {
             try
             {

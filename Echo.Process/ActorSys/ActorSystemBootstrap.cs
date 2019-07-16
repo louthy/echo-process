@@ -32,6 +32,7 @@ namespace Echo
         ActorItem system;
         ActorItem deadLetters;
         ActorItem errors;
+        ActorItem scheduler;
         ActorItem inboxShutdown;
         ActorItem sessionMonitor;
         ActorItem ask;
@@ -52,6 +53,7 @@ namespace Echo
                 rootProcessName,
                 SystemInbox,
                 _ => this,
+                ActorSystem.NoShutdown<ActorSystemBootstrap>(),
                 null,
                 Process.DefaultStrategy,
                 ProcessFlags.Default,
@@ -114,14 +116,19 @@ namespace Echo
             js              = ActorCreate<ProcessId, RelayMsg>(root, "js", RelayActor.Inbox, () => System.User["process-hub-js"], null, ProcessFlags.Default);
 
             // Second tier
-            sessionMonitor  = ActorCreate<Tuple<SessionSync, Time>, Unit>(system, Config.Sessions, SessionMonitor.Inbox, () => SessionMonitor.Setup(Sync, Settings.SessionTimeoutCheckFrequency), null, ProcessFlags.Default);
+            sessionMonitor  = ActorCreate<(SessionSync, Time), Unit>(system, Config.Sessions, SessionMonitor.Inbox, () => SessionMonitor.Setup(Sync, Settings.SessionTimeoutCheckFrequency), null, ProcessFlags.Default);
             deadLetters     = ActorCreate<DeadLetter>(system, Config.DeadLettersProcessName, publish, null, ProcessFlags.Default);
             errors          = ActorCreate<Exception>(system, Config.ErrorsProcessName, publish, null, ProcessFlags.Default);
             monitor         = ActorCreate<ClusterMonitor.State, ClusterMonitor.Msg>(system, Config.MonitorProcessName, ClusterMonitor.Inbox, () => ClusterMonitor.Setup(System), null, ProcessFlags.Default);
 
+            Cluster.Iter(c =>
+            {
+                scheduler = ActorCreate<Scheduler.State, Scheduler.Msg>(system, Config.SchedulerName, Scheduler.Inbox, () => Scheduler.State.Empty, null, ProcessFlags.ListenRemoteAndLocal);
+            });
+
             inboxShutdown   = ActorCreate<IActorInbox>(system, Config.InboxShutdownProcessName, inbox => inbox.Shutdown(), null, ProcessFlags.Default, 100000);
 
-            reply = ask     = ActorCreate<Tuple<long, Dictionary<long, AskActorReq>>, object>(system, Config.AskProcessName, AskActor.Inbox, AskActor.Setup, null, ProcessFlags.ListenRemoteAndLocal);
+            reply = ask     = ActorCreate<(long, Dictionary<long, AskActorReq>), object>(system, Config.AskProcessName, AskActor.Inbox, AskActor.Setup, null, ProcessFlags.ListenRemoteAndLocal);
 
             logInfo("Process system startup complete");
 
@@ -159,7 +166,7 @@ namespace Echo
         {
             if (ProcessDoesNotExist(nameof(ActorCreate), parent.Actor.Id)) return null;
 
-            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), termFn, Process.DefaultStrategy, flags, Settings, System);
+            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), ActorSystem.NoShutdown<S>(), termFn, Process.DefaultStrategy, flags, Settings, System);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && Cluster.IsSome)

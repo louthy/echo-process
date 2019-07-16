@@ -89,7 +89,7 @@ namespace Echo
         /// <summary>
         /// Touch a session
         /// Time-stamps the session so that its time-to-expiry is reset and also
-        /// sets the current session ID. This should be used from outside of the 
+        /// sets the current session ID. This should be used from inside of the 
         /// Process system to 'acquire' an existing session.  This is useful for
         /// web-requests for example to set the current session ID and to indicate
         /// activity.
@@ -97,8 +97,16 @@ namespace Echo
         /// <param name="sid">Session ID</param>
         public static Unit sessionTouch(SessionId sid) =>
             InMessageLoop
-                ? raiseDontUseInMessageLoopException<Unit>(nameof(sessionTouch))
-                : ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch));
+            ? ignore((ActorContext.SessionId = sid).Map(ActorContext.Request.System.Sessions.Touch))
+            : raiseUseInMsgLoopOnlyException<Unit>(nameof(sessionTouch));
+
+        /// <summary>
+        /// Sets the current session to the provided sessionid
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Unit setSession(SessionId sid) =>
+            ignore(ActorContext.SessionId = sid);
 
         /// <summary>
         /// Gets the current session ID
@@ -108,24 +116,19 @@ namespace Echo
         /// <returns>Optional session ID</returns>
         public static Option<SessionId> sessionId()
         {
-            if (InMessageLoop)
+            var sid = ActorContext.SessionId;
+            if (InMessageLoop && sid.IsSome)
             {
-                var sid = ActorContext.SessionId;
-                sid.IfSome(x => sessionTouch());
-                return sid;
+                sessionTouch(((SessionId)sid));
             }
-            else
-            {
-                return raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(sessionId));
-            }
+            return sid;
         }
 
         /// <summary>
-        /// Set the meta-data to store with the session, this is typically
+        /// Set the meta-data to store with the current session, this is typically
         /// user credentials when they've logged in.  But can be anything.  It is a 
         /// key/value store that is sync'd around the cluster.
         /// </summary>
-        /// <param name="sid">Session ID</param>
         /// <param name="key">Key</param>
         /// <param name="value">Data value </param>
         public static Unit sessionSetData(string key, object value)
@@ -134,15 +137,15 @@ namespace Echo
             {
                 var session = from sid in ActorContext.SessionId
                               from ses in ActorContext.Request.System.Sessions.GetSession(sid)
-                              select ses;
+                              select (sid, ses);
 
                 if (session.IsNone)
                 {
                     throw new Exception("Session not started");
                 }
 
-                var time = (from sess in session
-                            from data in sess.Data.Find(key)
+                var time = (from s    in session
+                            from data in s.ses.ProvideData(s.sid, key)
                             select data.Time)
                            .IfNone(0L);
 
@@ -163,18 +166,17 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var vect = (from sid in ActorContext.SessionId
+                var vect =  from sid in ActorContext.SessionId
                             from session in ActorContext.Request.System.Sessions.GetSession(sid)
                             from data in session.Data.Find(key)
-                            select Tuple(sid, data.Time))
-                           .IfNone(Tuple(default(SessionId), 0L));
+                            select (sid, session, data);
 
-                if (vect.Item2 == 0L)
-                {
-                    return unit;
-                }
-
-                return ActorContext.Request.System.Sessions.ClearData(vect.Item2, vect.Item1, key);
+                return vect.Map(s =>
+                                s.data.Match(
+                                    Left:  _ => s.session.ClearKeyValue(0, key),
+                                    Right: v => ActorContext.Request.System.Sessions.ClearData(v.Time, s.sid, key)))
+                            .IfNone(() => unit);
+                
             }
             else
             {
@@ -211,19 +213,15 @@ namespace Echo
         /// implementation will be replaced with a Dotted Version Vector system.
         /// </para>
         /// </summary>
-        /// <param name="sid">Session ID</param>
-        public static Lst<T> sessionGetData<T>(string key) =>
+        /// <param name="key">Key</param>
+        public static Seq<T> sessionGetData<T>(string key) =>
             InMessageLoop
                 ? (from sessionId in ActorContext.SessionId
                    from session   in ActorContext.Request.System.Sessions.GetSession(sessionId)
-                   from vector    in session.Data.Find(key)
-                   select vector.Vector.Map(obj =>
-                       obj is T
-                           ? (T)obj
-                           : default(T)))
-                  .IfNone(List<T>())
-                  .Filter(notnull)
-                :  raiseUseInMsgLoopOnlyException<Lst<T>>(nameof(sessionGetData));
+                   from vector    in session.ProvideData(sessionId, key).ToSeq()
+                   from obj       in vector.Vector.Choose(obj => obj is T o ? Some(o) : None)
+                   select obj).ToSeq()
+                :  raiseUseInMsgLoopOnlyException<Seq<T>>(nameof(sessionGetData));
 
         /// <summary>
         /// Returns True if there is a session ID available.  NOTE: That
@@ -241,17 +239,33 @@ namespace Echo
         /// <param name="sid">Session ID</param>
         /// <param name="f">Function to invoke</param>
         /// <returns>Result of the function</returns>
-        public static R withSession<R>(SessionId sid, Func<R> f) =>
-            InMessageLoop
-                ? ActorContext.Request.System.WithContext(
+        public static R withSession<R>(SessionId sid, Func<R> f)
+        {
+            if (InMessageLoop)
+            {
+                return ActorContext.Request.System.WithContext(
                     ActorContext.Request.Self,
                     ActorContext.Request.Self.Actor.Parent,
-                    Process.Sender,
+                    Sender,
                     ActorContext.Request.CurrentRequest,
                     ActorContext.Request.CurrentMsg,
                     Some(sid),
-                    f)
-                : raiseUseInMsgLoopOnlyException<R>(nameof(withSession));
+                    f);
+            }
+            else
+            {
+                var savedSessionId = ActorContext.SessionId;
+                try
+                {
+                    ActorContext.SessionId = sid;
+                    return f();
+                }
+                finally
+                {
+                    ActorContext.SessionId = savedSessionId;
+                }
+            }
+        }
 
         /// <summary>
         /// Acquires a session ID for the duration of invocation of the 
@@ -262,5 +276,59 @@ namespace Echo
         /// <param name="f">Action to invoke</param>
         public static Unit withSession(SessionId sid, Action f) =>
             withSession(sid, fun(f));
+
+        /// <summary>
+        /// Returns true if the current session is active, returns false if not in message loop
+        /// or session is not active.
+        /// </summary>
+        /// <returns></returns>
+        public static bool hasActiveSession() =>
+            InMessageLoop && (from sid in ActorContext.SessionId
+                              from ses in ActorContext.Request.System.Sessions.GetSession(sid)
+                              select ses).IsSome;
+
+        /// <summary>
+        /// Adds a supplementary session id to existing session. If the current session already has a supplmentary session 
+        /// replace it
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Unit addSupplementarySession(SupplementarySessionId sid) =>
+            hasActiveSession()
+                ? sessionSetData(SupplementarySessionId.Key, sid)
+                : raiseUseInMsgAndInSessionLoopOnlyException<Unit>(nameof(addSupplementarySession));
+
+        /// <summary>
+        /// Gets a echo session id which contains a supplementary session 
+        /// </summary>
+        /// <param name="sid"></param>
+        /// <returns></returns>
+        public static Option<SessionId> getSessionBySupplementaryId(SupplementarySessionId sid) =>
+            InMessageLoop
+                ? ActorContext.Request.System.Sessions.GetSessionId(sid)
+                : raiseUseInMsgLoopOnlyException<Option<SessionId>>(nameof(getSessionBySupplementaryId));
+
+        /// <summary>
+        /// Get supplementary session id for current session
+        /// </summary>
+        /// <returns></returns>
+        public static Option<SupplementarySessionId> getSupplementarySessionId() =>
+            InMessageLoop
+                ? from sid in ActorContext.SessionId
+                  from sup in ActorContext.Request.System.Sessions.GetSupplementarySessionId(sid) || sessionGetData<SupplementarySessionId>(SupplementarySessionId.Key).LastOrNone()
+                  select sup
+                : raiseUseInMsgLoopOnlyException<Option<SupplementarySessionId>>(nameof(getSupplementarySessionId));
+
+        /// <summary>
+        /// Get supplementary session id for current session. If not exists, create a new one.
+        /// </summary>
+        /// <returns></returns>
+        public static SupplementarySessionId provideSupplementarySessionId() =>
+            getSupplementarySessionId().IfNone(() =>
+            {
+                var supp = SupplementarySessionId.Generate();
+                sessionSetData(SupplementarySessionId.Key, supp);
+                return supp;
+            });
     }
 }

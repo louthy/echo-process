@@ -13,7 +13,7 @@ namespace Echo
     {
         const int responseActors = 20;
 
-        public static Tuple<long,Dictionary<long, AskActorReq>> Inbox(Tuple<long, Dictionary<long, AskActorReq>> state, object msg)
+        public static (long RequestId, Dictionary<long, AskActorReq> Requests) Inbox((long RequestId, Dictionary<long, AskActorReq> Requests) state, object msg)
         {
             var reqId = state.Item1;
             var dict = state.Item2;
@@ -23,8 +23,16 @@ namespace Echo
                 reqId++;
 
                 var req = (AskActorReq)msg;
-                ActorContext.System(req.To).Ask(req.To, new ActorRequest(req.Message, req.To, Self, reqId), Self);
-                dict.Add(reqId, req);
+                try
+                {
+                    ActorContext.System(req.To).Ask(req.To, new ActorRequest(req.Message, req.To, Self, reqId), Self);
+                    dict.Add(reqId, req);
+                }
+                catch(Exception e)
+                {
+                    req.Complete(new AskActorRes(new ProcessException($"Process issue: {e.Message}", req.To.Path, req.ReplyTo.Path, e), req.ReplyType));
+                    logUserErr(e.Message);
+                }
             }
             else
             {
@@ -88,13 +96,11 @@ namespace Echo
                 }
             }
 
-            return new Tuple<long, Dictionary<long, AskActorReq>>(reqId, dict);
+            return (reqId, dict);
         }
 
-        public static Tuple<long, Dictionary<long, AskActorReq>> Setup()
-        {
-            return Tuple(1L, new Dictionary<long, AskActorReq>());
-        }
+        public static (long, Dictionary<long, AskActorReq>) Setup() =>
+            (1L, new Dictionary<long, AskActorReq>());
     }
 
     internal class AskActorReq

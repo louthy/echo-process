@@ -4,6 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using System.Text;
 using LanguageExt;
+using static LanguageExt.Prelude;
 
 namespace Echo
 {
@@ -277,7 +278,7 @@ namespace Echo
             else
             {
                 var newParts = new ProcessName[parts.Length + 1];
-                Array.Copy(parts, newParts, parts.Length);
+                global::System.Array.Copy(parts, newParts, parts.Length);
                 newParts[parts.Length] = name;
                 return new ProcessId(newParts, System, name, $"{Path}{Sep}{name.Value}");
             }
@@ -300,7 +301,7 @@ namespace Echo
             else
             {
                 var newParts = new ProcessName[parts.Length + 1];
-                Array.Copy(parts, newParts, parts.Length);
+                global::System.Array.Copy(parts, newParts, parts.Length);
                 newParts[parts.Length] = sel;
                 return new ProcessId(newParts, System, sel, $"{Path}{Sep}{sel.Value}");
             }
@@ -355,7 +356,7 @@ namespace Echo
         /// </summary>
         /// <param name="value">String representation of the process ID</param>
         public static implicit operator ProcessId(string value) =>
-            value == null
+            isnull(value)
                 ? ProcessId.NoSender
                 : new ProcessId(value);
 
@@ -412,15 +413,13 @@ namespace Echo
         /// Equality check
         /// </summary>
         public bool Equals(ProcessId other) =>
-            Path.Equals(other.Path);
+            ReferenceEquals(Path, other.Path) || Path.Equals(other.Path);
 
         /// <summary>
         /// Equality check
         /// </summary>
         public override bool Equals(object obj) =>
-            obj is ProcessId
-                ? Equals((ProcessId)obj)
-                : false;
+            obj is ProcessId pid && Equals(pid);
 
         /// <summary>
         /// Equality operator
@@ -522,8 +521,20 @@ namespace Echo
                 ? new ProcessId(value.Parts, system, Name, Path)
                 : this;
 
-        public bool StartsWith(ProcessId head) =>
-            this.Path.StartsWith(head.Path);
+        public bool StartsWith(ProcessId head)
+        {
+            if (head.Count() > Count()) return false;
+            if (head.value == null && value == null) return true;
+            if (head.value == null || value == null) return false;
+
+            var iterA = head.value.Parts.AsEnumerable().GetEnumerator();
+            var iterB = value.Parts.AsEnumerable().GetEnumerator();
+            while(iterA.MoveNext() && iterB.MoveNext())
+            {
+                if (iterA.Current != iterB.Current) return false;
+            }
+            return true;
+        }
 
         static R failwith<R>(string message)
         {

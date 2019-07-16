@@ -1,10 +1,12 @@
 ﻿using LanguageExt;
 using LanguageExt.UnitsOfMeasure;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Threading;
 using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 
@@ -189,6 +191,19 @@ namespace Echo
                 : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
 
         /// <summary>
+        /// Gets a CancellationToken that is in state Cancel when actor will shutdown.
+        /// This can be used in message loop to e.g. avoid long running message loop blocking actor shutdown.
+        /// </summary>
+        /// <remarks>
+        /// This should be used from within a process' message loop only
+        /// </remarks>
+        public static CancellationToken SelfProcessCancellationToken =>
+            InMessageLoop 
+                ? ActorContext.SelfProcess.Actor.CancellationTokenSource.Token
+                : raiseUseInMsgLoopOnlyException<CancellationToken>(nameof(SelfProcessCancellationToken));
+
+
+        /// <summary>
         /// Immediately kills the Process that is running from within its message
         /// loop.  It does this by throwing a ProcessKillException which is caught
         /// and triggers the shutdown of the Process.  Any Process that has a 
@@ -229,6 +244,12 @@ namespace Echo
             ActorContext.System(pid).Kill(pid, false);
 
         /// <summary>
+        /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
+        /// </summary>
+        public static Unit startup(ProcessId pid) =>
+            ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess(false));
+
+        /// <summary>
         /// Shutdown a specified running process.
         /// Forces the specified Process to shutdown.  The shutdown message jumps 
         /// ahead of any messages already in the process's queue.  Any Process
@@ -248,8 +269,12 @@ namespace Echo
         /// <summary>
         /// Shutdown all processes on all process-systems
         /// </summary>
-        public static Unit shutdownAll() =>
-            ActorContext.StopAllSystems();
+        public static Unit shutdownAll()
+        {
+            ProcessConfig.ShutdownLocalScheduler();
+
+            return ActorContext.StopAllSystems();
+        }
 
         /// <summary>
         /// Forces a running process to restart.  This will reset its state and drop

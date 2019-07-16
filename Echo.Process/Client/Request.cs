@@ -26,7 +26,7 @@ namespace Echo.Client
         /// 
         /// </param>
         /// <returns></returns>
-        public static Either<string, Req> Parse(string msg, Map<ClientConnectionId, ClientConnection> activeConnections)
+        public static Either<string, Req> Parse(string msg, string remoteIp, Map<ClientConnectionId, ClientConnection> activeConnections)
         {
             try
             {
@@ -34,30 +34,30 @@ namespace Echo.Client
 
                 return from hdr in parse.Header()
                        from typ in parse.GetNext()
-                       from res in typ == "tell" ? from connid in parse.GetConnectionId()
+                       from res in typ == "tell" ? from connid in parse.GetConnectionId(remoteIp)
                                                    from msgid  in parse.GetMessageId()
                                                    from to     in parse.GetProcessId()
                                                    from sender in parse.GetProcessId()
-                                                   from body   in parse.GetNext()
+                                                   from body   in parse.GetRemaining()
                                                    select TellReq.Create(connid, msgid, to, sender, body, activeConnections)
 
-                                : typ == "ask"   ? from connid in parse.GetConnectionId()
+                                : typ == "ask"   ? from connid in parse.GetConnectionId(remoteIp)
                                                    from msgid in parse.GetMessageId()
                                                    from to in parse.GetProcessId()
                                                    from sender in parse.GetProcessId()
-                                                   from body in parse.GetNext()
+                                                   from body in parse.GetRemaining()
                                                    select AskReq.Create(connid, msgid, to, sender, body, activeConnections)
 
                                 : typ == "conn"  ? Right<string, Req>(ConnectReq.Default)
 
                                 : typ == "diss"  ? DisconnectReq.Create(ClientConnectionId.New(parse.GetNextText()), activeConnections)
 
-                                : typ == "sub"   ? from connid in parse.GetConnectionId()
+                                : typ == "sub"   ? from connid in parse.GetConnectionId(remoteIp)
                                                    from pub    in parse.GetProcessId()
                                                    from sub    in parse.GetProcessId()
                                                    select SubscribeReq.Create(connid, pub, sub, activeConnections)
 
-                                : typ == "usub"  ? from connid in parse.GetConnectionId()
+                                : typ == "usub"  ? from connid in parse.GetConnectionId(remoteIp)
                                                    from pub    in parse.GetProcessId()
                                                    from sub    in parse.GetProcessId()
                                                    select UnSubscribeReq.Create(connid, pub, sub, activeConnections)
@@ -140,7 +140,7 @@ namespace Echo.Client
             if (conn.IsNone) return "Invalid connection-id";
 
             var msgObj = (from type in validMessageTypes(to)
-                          let obj = JsonConvert.DeserializeObject(msg, type, ActorSystemConfig.Default.JsonSerializerSettings)
+                          let obj = Deserialise.Object(msg, type)
                           where obj != null
                           select obj)
                          .FirstOrDefault();
@@ -179,7 +179,7 @@ namespace Echo.Client
             if (conn.IsNone) return "Invalid connection-id";
 
             var msgObj = (from type in validMessageTypes(to)
-                          let obj = JsonConvert.DeserializeObject(msg, type, ActorSystemConfig.Default.JsonSerializerSettings)
+                          let obj = Deserialise.Object(msg, type)
                           where obj != null
                           select obj)
                          .FirstOrDefault();

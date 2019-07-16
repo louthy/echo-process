@@ -1,4 +1,5 @@
 ﻿using LanguageExt;
+using LanguageExt.UnsafeValueAccess;
 using System;
 using static LanguageExt.Prelude;
 
@@ -33,22 +34,25 @@ namespace Echo.Session
     public class ValueVector
     {
         public readonly long Time;
-        public readonly Lst<object> Vector;
+        public readonly Seq<object> Vector;
 
-        public ValueVector(long time, Lst<object> root)
+        ValueVector(long time, Seq<object> root)
         {
             Time = time;
             Vector = root;
         }
 
+        public static ValueVector New(long time, object root) =>
+            new ValueVector(time, Seq1(root));
+
         public ValueVector AddValue(long time, object value, VectorConflictStrategy strategy)
         {
             if(Vector.Count == 0 || time > Time)
             {
-                return new ValueVector(time, List(value));
+                return New(time, value);
             }
 
-            if( time < Time)
+            if (time < Time)
             {
                 // A value from the past has arrived, we're going to drop it because
                 // we've already moved on.
@@ -67,7 +71,7 @@ namespace Echo.Session
                 switch(strategy)
                 {
                     case VectorConflictStrategy.First:  return this;
-                    case VectorConflictStrategy.Last:   return new ValueVector(time, List(value));
+                    case VectorConflictStrategy.Last:   return new ValueVector(time, Seq1(value));
                     case VectorConflictStrategy.Branch: return new ValueVector(Time, Vector.Add(value));
                     default: throw new ArgumentException("VectorConflictStrategy not supported: " + strategy);
                 }
@@ -79,29 +83,33 @@ namespace Echo.Session
     {
         public readonly int TimeoutSeconds;
 
-        Map<string, ValueVector> data;
+        /// <summary>
+        /// only stores the data that the particular node is interested in. 
+        /// Unit if the node is interested in data but does not have a value yet.
+        /// </summary>
+        Map<string, Either<Unit, ValueVector>> data;
         DateTime lastAccess;
         DateTime expires;
         object sync = new object();
 
-        public static SessionVector Create(int timeout, VectorConflictStrategy strategy, Map<string,object> initialState) =>
-            new SessionVector(Map<string, ValueVector>(), DateTime.UtcNow, timeout, initialState);
+        public static SessionVector Create(int timeout, VectorConflictStrategy strategy) =>
+            new SessionVector(DateTime.UtcNow, timeout);
 
         /// <summary>
         /// Ctor
         /// </summary>
-        public SessionVector(Map<string, ValueVector> data, DateTime lastAccess, int timeoutSeconds, Map<string, object> initialState)
+        SessionVector(DateTime lastAccess, int timeoutSeconds)
         {
-            this.data = data;
             this.lastAccess = lastAccess;
             TimeoutSeconds = timeoutSeconds;
-            data = initialState.Map(obj => new ValueVector(0, List(obj)));
         }
 
         /// <summary>
         /// Key/value store for the session
+        /// only stores the data that  the particular node is interested in. 
+        /// Unit if the node is interested in data but does not have a value yet.        
         /// </summary>
-        public Map<string, ValueVector> Data => data;
+        public Map<string, Either<Unit, ValueVector>> Data => data;
 
         /// <summary>
         /// UTC date of last access
@@ -141,11 +149,54 @@ namespace Echo.Session
         {
             lock (sync)
             {
-                data = data.Find(key)
-                           .Map(vector => data.AddOrUpdate(key, vector.AddValue(time, value, strategy)))
-                           .IfNone(() => data.AddOrUpdate(key, new ValueVector(time, List(value))));
+                data = (from d      in data.Find(key)
+                        from vector in d.ToOption()
+                        select data.AddOrUpdate(key, vector.AddValue(time, value, strategy)))
+                       .IfNone(()  => data.AddOrUpdate(key, ValueVector.New(time, value)));
             }
             Touch();
         }
+
+        /// <summary>
+        /// Checks local cache for a session data key. If does not exists uses get (redis) to
+        /// retrieve the data. If data does not exist, an entry is still added to local cache as Unit (Left)
+        /// to allow syncing with other published data update messages later.
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="get"></param>
+        /// <returns></returns>
+        public Option<ValueVector> ProvideData(SessionId sid, string key)
+        {
+            Touch();
+
+            Either<Unit, ValueVector> NoKey()
+            {
+                var v = ActorContext.Request.System.Sessions.GetDataByKey(sid, key);
+
+                if (v.IsSome)
+                {
+                    lock (sync)
+                    {
+                        data = data.AddOrUpdate(key, (ValueVector)v);
+                    }
+                    return (ValueVector)v;
+                }
+                else
+                {
+                    lock (sync)
+                    {
+                        data = data.AddOrUpdate(key, unit);
+                    }
+                    return unit;
+                }
+            }
+
+            return data.Find(key)
+                       .IfNone(NoKey)
+                       .ToOption();
+        }
+
+        public Option<ValueVector> GetExistingData(string key)  =>
+            data.Find(key).Bind(d => d.ToOption());
     }
 }

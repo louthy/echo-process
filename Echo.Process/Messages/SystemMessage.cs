@@ -14,7 +14,7 @@ namespace Echo
         public static SystemMessage UnlinkChild(ProcessId pid) => new SystemUnLinkChildMessage(pid);
         public static SystemMessage ChildFaulted(ProcessId pid, ProcessId sender, Exception ex, object msg) => new SystemChildFaultedMessage(pid, sender, ex, msg);
         public static SystemMessage ShutdownProcess(bool maintainState) => new ShutdownProcessMessage(maintainState);
-        public static SystemMessage StartupProcess => new StartupProcessMessage();
+        public static SystemMessage StartupProcess(bool unpauseAfterStartup) => new StartupProcessMessage(unpauseAfterStartup);
         public static SystemMessage Restart => new SystemRestartMessage();
         public static SystemMessage Pause => new SystemPauseMessage();
         public static SystemMessage Unpause => new SystemUnpauseMessage();
@@ -27,6 +27,15 @@ namespace Echo
     class StartupProcessMessage : SystemMessage
     {
         public override TagSpec Tag => TagSpec.StartupProcess;
+        public StartupProcessMessage(bool unpauseAfterStartup)
+        {
+            UnpauseAfterStartup = unpauseAfterStartup;
+        }
+
+        public readonly bool UnpauseAfterStartup;
+
+        public override string ToString() =>
+            $"StartupProcess({UnpauseAfterStartup})";
     }
 
     class SystemPauseMessage : SystemMessage

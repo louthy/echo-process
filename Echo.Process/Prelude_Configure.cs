@@ -5,12 +5,33 @@ using Echo.Config;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
+#if !NETSTANDARD
+using System.Web;
+#endif
 
 namespace Echo
 {
     public static class ProcessConfig
     {
         static object sync = new object();
+        static IDisposable localScheduler;
+
+        static void InitLocalScheduler()
+        {
+            if(localScheduler != null)
+            {
+                localScheduler.Dispose();
+            }
+            localScheduler = LocalScheduler.Run();
+        }
+
+        internal static void ShutdownLocalScheduler()
+        {
+            localScheduler.Dispose();
+            localScheduler = null;
+        }
+
+#if !NETSTANDARD
 
         /// <summary>
         /// Process system configuration initialisation
@@ -19,38 +40,9 @@ namespace Echo
         /// has loaded the system won't re-load the config until you call ProcessConfig.unload() by 
         /// ProcessConfig.initialiseWeb(...)
         /// </summary>
-        /// <param name="hostName">
-        /// <para>Web-site host-name: i.e. www.example.com - you would usually call this when you 
-        /// have your first Request object:  HttpContext.Request.Url.Host</para>
-        /// <para>
-        ///     i.e.
-        /// </para>
-        /// <para>
-        ///     object sync = new object();
-        ///     bool started = false;
-        ///     
-        ///             static bool started = false;
-        ///             static object sync = new object();
-        ///             
-        ///             protected void Application_BeginRequest(Object sender, EventArgs e)
-        ///             {
-        ///                 if (!started)
-        ///                 {
-        ///                     lock (sync)
-        ///                     {
-        ///                         if (!started)
-        ///                         {
-        ///                             ProcessConfig.initialiseWeb(HttpContext.Request.Url.Host);
-        ///                             started = true;
-        ///                         }
-        ///                     }
-        ///                 }
-        ///             }
-        /// </para>
-        /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string hostName, IEnumerable<FuncSpec> strategyFuncs = null) =>
-            initialiseWeb(hostName, () => { }, strategyFuncs);
+        public static Unit initialiseWeb(IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(() => { }, strategyFuncs);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -65,9 +57,29 @@ namespace Echo
         /// </summary>
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
-        /// <param name="hostName">
-        /// <para>Web-site host-name: i.e. www.example.com - you would usually call this when you 
-        /// have your first Request object:  HttpContext.Request.Url.Host</para>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        {
+            lock (sync)
+            {
+                if (HttpContext.Current == null) throw new NotSupportedException("There must be a valid HttpContext.Current to call ProcessConfig.initialiseWeb()");
+                return initialiseFileSystem(hostName(HttpContext.Current), setup, strategyFuncs, AppDomain.CurrentDomain.BaseDirectory);
+            }
+        }
+#endif
+
+
+        /// <summary>
+        /// Process system configuration initialisation
+        /// This will look for `cluster.conf` and `process.conf` files in the web application folder, you should call this
+        /// function from within `Application_BeginRequest` of `Global.asax` or in the `Configuration` function of an OWIN 
+        /// `Startup` type.  
+        /// </summary>
+        /// <param name="nodeName">
+        /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
+        /// have your first Request object:  `HttpContext.Request.Url.Host`.  Could also be the site-
+        /// name: `System.Web.Hosting.HostingEnvironment.SiteName`.  Anything that will identify this
+        /// node, and allow for multiple staging environments to be configured in the `cluster.conf`</para>
         /// <para>
         ///     i.e.
         /// </para>
@@ -95,11 +107,71 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string hostName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(nodeName, () => { }, strategyFuncs);
+
+        /// <param name="nodeName">
+        /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
+        /// have your first Request object:  `HttpContext.Request.Url.Host`.  Could also be the site-
+        /// name: `System.Web.Hosting.HostingEnvironment.SiteName`.  Anything that will identify this
+        /// node, and allow for multiple staging environments to be configured in the `cluster.conf`</para>
+        /// <para>
+        ///     i.e.
+        /// </para>
+        /// <para>
+        ///     object sync = new object();
+        ///     bool started = false;
+        ///     
+        ///             static bool started = false;
+        ///             static object sync = new object();
+        ///             
+        ///             protected void Application_BeginRequest(Object sender, EventArgs e)
+        ///             {
+        ///                 if (!started)
+        ///                 {
+        ///                     lock (sync)
+        ///                     {
+        ///                         if (!started)
+        ///                         {
+        ///                             ProcessConfig.initialiseWeb(HttpContext.Request.Url.Host);
+        ///                             started = true;
+        ///                         }
+        ///                     }
+        ///                 }
+        ///             }
+        /// </para>
+        /// </param>
+        /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
+        /// happen once only.
+        /// <para>
+        ///     object sync = new object();
+        ///     bool started = false;
+        ///     
+        ///             static bool started = false;
+        ///             static object sync = new object();
+        ///             
+        ///             protected void Application_BeginRequest(Object sender, EventArgs e)
+        ///             {
+        ///                 if (!started)
+        ///                 {
+        ///                     lock (sync)
+        ///                     {
+        ///                         if (!started)
+        ///                         {
+        ///                             ProcessConfig.initialiseWeb(HttpContext.Request.Url.Host);
+        ///                             started = true;
+        ///                         }
+        ///                     }
+        ///                 }
+        ///             }
+        /// </para>
+        /// </param>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(hostName, setup, strategyFuncs);
+                return initialiseFileSystem(nodeName, setup, strategyFuncs, appPath);
             }
         }
 
@@ -171,11 +243,15 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                var appPath = "";
+#if !NETSTANDARD
+                appPath = appPath ?? AppDomain.CurrentDomain.BaseDirectory;
+#endif
+
+                appPath = appPath ?? "";
                 var clusterPath = Path.Combine(appPath, "cluster.conf");
                 var processPath = Path.Combine(appPath, "process.conf");
 
@@ -279,6 +355,8 @@ namespace Echo
         {
             lock (sync)
             {
+                InitLocalScheduler();
+
                 config.Cluster.Match(
                     Some: _ =>
                     {
@@ -370,7 +448,7 @@ namespace Echo
         /// <returns>Optional configuration setting value</returns>
         public static T read<T>(string name, string prop, T defaultValue, SystemName system = default(SystemName)) =>
             InMessageLoop
-                ? ActorContext.Request.Ops.Read(name, prop, ActorContext.Request.ProcessFlags, defaultValue)
+                ? ActorContext.System(Self).Settings.GetProcessSetting(Self, name, prop, defaultValue, ActorContext.Request.ProcessFlags)
                 : ActorContext.System(system).Settings.GetRoleSetting(name, prop, defaultValue);
 
         /// <summary>
@@ -434,8 +512,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.Write(value, name, prop, ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .WriteSettingOverride(ActorInboxCommon.ClusterSettingsKey(Self), value, name, prop, ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
@@ -454,8 +533,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.Clear(name, prop, ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .ClearSettingOverride(ActorInboxCommon.ClusterSettingsKey(Self), name, prop, ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
@@ -471,8 +551,9 @@ namespace Echo
         {
             if (InMessageLoop)
             {
-                var trans = ActorContext.Request.Ops;
-                ActorContext.Request.SetOps(trans.ClearAll(ActorContext.Request.ProcessFlags));
+                ActorContext.System(Self)
+                            .Settings
+                            .ClearSettingsOverride(ActorInboxCommon.ClusterSettingsKey(Self), ActorContext.Request.ProcessFlags);
                 return unit;
             }
             else
@@ -483,5 +564,13 @@ namespace Echo
 
         static T clusterSettingMissing<T>(string name) =>
             failwith<T>("Cluster setting missing: " + name);
+
+#if !NETSTANDARD
+        static string hostName(HttpContext context) =>
+            context.Request.Url.Host == "localhost"
+                ? System.Environment.MachineName
+                : context.Request.Url.Host;
+#endif
+
     }
 }

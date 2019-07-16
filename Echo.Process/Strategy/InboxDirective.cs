@@ -8,6 +8,6 @@ namespace Echo
         Default = 0,
         PushToFrontOfQueue = 1,
         Pause = 2,
-        Shutdown = 3
+        Shutdown = 4
     }
 }

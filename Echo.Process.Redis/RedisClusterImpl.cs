@@ -9,6 +9,7 @@ using LanguageExt;
 using static LanguageExt.Prelude;
 using System.Threading;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Echo
 {
@@ -87,7 +88,6 @@ namespace Echo
                 if (redis == null)
                 {
                     Retry(() => redis = ConnectionMultiplexer.Connect(Config.ConnectionString));
-                    redis.PreserveAsyncOrder = false;
                     this.databaseNumber = (int)databaseNumber;
                 }
             }
@@ -163,7 +163,7 @@ namespace Echo
                     }
                  })
                 .Where(x => x.IsSome)
-                .Select(x => x.IfNoneUnsafe(null));
+                .Select(x => x.IfNoneUnsafe(Ignore<Object>));
  
         public IObservable<T> SubscribeToChannel<T>(string channelName) =>
             GetSubject(channelName)
@@ -178,7 +178,9 @@ namespace Echo
                     }
                  })
                 .Where(x => x.IsSome)
-                .Select(x => x.IfNoneUnsafe(null));
+                .Select(x => x.IfNoneUnsafe(Ignore<T>));
+
+        T Ignore<T>() => default(T);
 
         public void UnsubscribeChannel(string channelName)
         {
@@ -208,7 +210,10 @@ namespace Echo
             Retry(() => Db.KeyDelete(key));
 
         public bool DeleteMany(params string[] keys) =>
-            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray())==keys.Length);
+            DeleteMany(keys.AsEnumerable());
+
+        public bool DeleteMany(IEnumerable<string> keys) =>
+            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray()) == keys.Count());
 
         public int QueueLength(string key) =>
             Retry(() => (int)Db.ListLength(key));
@@ -256,7 +261,7 @@ namespace Echo
                                  catch { return OptionUnsafe<T>.None; }
                              })
                              .Where( x => x.IsSome)
-                             .Select( x => x.IfNoneUnsafe(null) )
+                             .Select( x => x.IfNoneUnsafe(Ignore<T>) )
                              .ToList());
             }
             else
@@ -297,8 +302,30 @@ namespace Echo
             Retry(() =>
                 Db.HashSet(
                     key, 
-                    fields.Map((k, v) => new HashEntry(k, JsonConvert.SerializeObject(v))).ToArray()
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
                     ));
+
+        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, string field, T value) =>
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(key, field, JsonConvert.SerializeObject(value));
+                return trans.Execute();
+            });
+
+        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, Map<string, T> fields) =>
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(
+                    key,
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
+                    );
+
+                return trans.Execute();
+            });
 
         public bool DeleteHashField(string key, string field) =>
             Retry(() =>
@@ -323,6 +350,31 @@ namespace Echo
                     Map<string, T>(),
                     (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
                   .Filter(v => notnull<T>(v)));
+
+        /// <summary>
+        /// tries to deserialise redis object (hash field) to T, if fail, the object is skipped.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public Option<T> GetHashFieldDropOnDeserialiseFailed<T>(string key, string field)
+        {
+            var res = Retry(() => Db.HashGet(key, field));
+
+            if(res.IsNullOrEmpty)
+            {
+                return None;
+            }
+
+            try
+            {
+                return Optional(JsonConvert.DeserializeObject<T>(res));
+            }
+            catch(JsonException)
+            {
+                return None;
+            }
+        }
 
         public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>
@@ -372,6 +424,13 @@ namespace Echo
                 select strKey);
 
         /// <summary>
+        /// Finds all schedule keys
+        /// </summary>
+        /// <returns>Session keys</returns>
+        public IEnumerable<string> QueryScheduleKeys(string system) =>
+            QueryKeys($"/__schedule/{system}/*", "", "");
+
+        /// <summary>
         /// Finds all session keys
         /// </summary>
         /// <returns>Session keys</returns>
@@ -413,6 +472,25 @@ namespace Echo
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
                         .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
 
+        /// <summary>
+        /// retrieves all hash values for a list of keys
+        /// </summary>
+        /// <param name="keys"></param>
+        /// <returns>map of keys and their key/value map</returns>
+        public async Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
+        {
+            var batch = Db.CreateBatch();
+            var tasks = keys.Map(key => batch.HashGetAllAsync(key)
+                                             .Map(h =>
+                                                (Key: key, Value: toMap(h.Map(r =>
+                                                    ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))))
+                            .Strict();
+
+            batch.Execute();
+
+            return toMap(await Task.WhenAll(tasks));
+        }
+
         IDatabase Db => 
             redis.GetDatabase(databaseNumber);
 
@@ -430,11 +508,7 @@ namespace Echo
 
         static T Retry<T>(Func<T> f)
         {
-            try
-            {
-                return f();
-            }
-            catch (TimeoutException)
+            T retry()
             {
                 using (var ev = new AutoResetEvent(false))
                 {
@@ -444,7 +518,7 @@ namespace Echo
                         {
                             return f();
                         }
-                        catch (TimeoutException)
+                        catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
                         {
                             if (i == TimeoutRetries)
                             {
@@ -462,45 +536,19 @@ namespace Echo
                         }
                     }
                 }
-            }
-        }
+            };
 
-        static void Retry(Action f)
-        {
             try
             {
-                f();
-                return;
+                return f();
             }
-            catch (TimeoutException)
+            catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
             {
-                using (var ev = new AutoResetEvent(false))
-                {
-                    for (int i = 1; ; i++)
-                    {
-                        try
-                        {
-                            f();
-                            return;
-                        }
-                        catch (TimeoutException)
-                        {
-                            if (i == TimeoutRetries)
-                            {
-                                throw;
-                            }
-                            // Backing off wait time
-                            // 0 - immediately
-                            // 1 - 100 ms
-                            // 2 - 400 ms
-                            // 3 - 900 ms
-                            // 4 - 1600 ms
-                            // Maximum wait == 3000ms
-                            ev.WaitOne(i * i * 100);
-                        }
-                    }
-                }
+                return retry();
             }
         }
+
+        static void Retry(Action f) =>
+            Retry(() => { f(); return unit; });
     }
 }

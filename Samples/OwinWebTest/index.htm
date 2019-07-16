@@ -7,29 +7,52 @@
     <body>
         <style>
             .panel {
-                border:solid 2px #9c3939;
-                margin:5px;
-                padding:5px;
+                position: relative;
+                border: solid 2px #9c3939;
+                margin: 5px;
+                padding: 5px;
+            }
+            #left {
+                position:absolute;
+                top:0px;
+                left:0px;
+                right:50%;
+                bottom:0px;
+                overflow:auto;
+            }
+            #right {
+                position: absolute;
+                top: 0px;
+                left: 50%;
+                right: 0px;
+                bottom: 0px;
+                overflow: auto;
             }
         </style>
 
-        <div class="panel">
-            <input id="inp" value="" />
-            <button onclick="Process.tell('/root-js/user/echo', { tag: 'send', value: document.getElementById('inp').value })">Send</button>
-            <div id="output"></div>
-        </div>
+        <div id="left">
+            <div class="panel">
+                <input id="inp" value="" />
+                <button onclick="Process.tell('/root-js/user/echo', { tag: 'send', value: document.getElementById('inp').value })">Send</button>
+                <div id="output"></div>
+            </div>
 
-        <div class="panel">
-            <input id="inp2" value="" />
-            <button onclick="hello()">Ask</button>
-            <div id="output2"></div>
-        </div>
+            <div class="panel">
+                <input id="inp2" value="" />
+                <button onclick="hello()">Ask</button>
+                <div id="output2"></div>
+            </div>
 
-        <div class="panel">
-            <div id="output3"></div>
+            <div class="panel">
+                <div id="output3"></div>
+            </div>
         </div>
-
+        <div id="right">
+            <div id="log">
+            </div>
+        </div>
         <script src="scripts/process.js" type="text/javascript"></script>
+        <script src="scripts/jquery-3.1.1.min.js" type="text/javascript"></script>
         <script type="text/javascript">
 
             var output;
@@ -74,6 +97,9 @@
                                    output.innerHTML += "<div>" + msg + "</div>";
                                    return state;
                                });
+
+                           Process.Log.view("log", 200);
+                           Process.Log.tellInfo("Started");
                        });
             };
         </script>

@@ -86,38 +86,74 @@ namespace Echo
             }
         }
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
-            Tell(message, sender, "user", Message.Type.User, tag);
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+            Tell(message, schedule, sender, "user", Message.Type.User, tag);
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            Tell(message, sender, "user", Message.Type.UserControl, message.Tag);
+            Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             transactionalIO
                 ? ignore(Cluster.PublishToChannel(
                       ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
-                      RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId)))
+                      RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0)))
                 : ProcessOp.IO(() =>
                   {
                       var clientsReached = Cluster.PublishToChannel(
                           ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
-                          RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId));
+                          RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0));
                       return unit;
                   });
 
-        public Unit Tell(object message, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
-            transactionalIO
-                ? TellNoIO(message, sender, inbox, type, tag)
-                : ProcessOp.IO(() => TellNoIO(message, sender, inbox, type, tag));
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
+            schedule == Schedule.Immediate
+                ? transactionalIO
+                    ? TellNoIO(message, sender, inbox, type, tag)
+                    : ProcessOp.IO(() => TellNoIO(message, sender, inbox, type, tag))
+                : schedule.Type == Schedule.PersistenceType.Ephemeral
+                    ? LocalScheduler.Push(schedule, ProcessId, m => TellNoIO(m, sender, inbox, type, tag), message)
+                    : DoSchedule(message, schedule, sender, type, tag);
 
         Unit TellNoIO(object message, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag)
         {
             ValidateMessageType(message, sender);
-            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId);
+            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, 0);
             var inboxKey = ActorInboxCommon.ClusterInboxKey(ProcessId, inbox);
             var inboxNotifyKey = ActorInboxCommon.ClusterInboxNotifyKey(ProcessId, inbox);
             Cluster.Enqueue(inboxKey, dto);
             var clientsReached = Cluster.PublishToChannel(inboxNotifyKey, dto.MessageId);
+            return unit;
+        }
+
+        Unit DoSchedule(object message, Schedule schedule, ProcessId sender, Message.Type type, Message.TagSpec tag) =>
+            transactionalIO
+                ? DoScheduleNoIO(message, sender, schedule, type, tag)
+                : ProcessOp.IO(() => DoScheduleNoIO(message, sender, schedule, type, tag));
+
+        Unit DoScheduleNoIO(object message, ProcessId sender, Schedule schedule, Message.Type type, Message.TagSpec tag)
+        {
+            var inboxKey = ActorInboxCommon.ClusterScheduleKey(ProcessId);
+            var id = schedule.Key ?? Guid.NewGuid().ToString();
+            var current = Cluster.GetHashField<RemoteMessageDTO>(inboxKey, id);
+
+            message = current.Match(
+                Some: last =>
+                {
+                    var a = MessageSerialiser.DeserialiseMsg(last, ProcessId) as UserMessage;
+                    var m = a == null
+                        ? message
+                        : schedule.Fold(a.Content, message);
+                    return m;
+                },
+                None: () => schedule.Fold(schedule.Zero, message));
+
+            ValidateMessageType(message, sender);
+
+            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
+
+            tell(ProcessId.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.AddToSchedule(inboxKey, id, dto));
+
+            //Cluster.HashFieldAddOrUpdate(inboxKey, id, dto);
             return unit;
         }
 

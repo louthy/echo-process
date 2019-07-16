@@ -19,12 +19,13 @@ namespace Echo
         public readonly ProcessName InboxShutdownProcessName     = "inbox-shutdown";
         public readonly ProcessName Sessions                     = "sessions";
         public readonly ProcessName MonitorProcessName           = "monitor";
+        public readonly ProcessName SchedulerName                = "scheduler";
 
         public readonly JsonSerializerSettings JsonSerializerSettings =
             new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All,
-                TypeNameAssemblyFormat = FormatterAssemblyStyle.Simple,
+                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
                 MissingMemberHandling = MissingMemberHandling.Ignore
             };
 

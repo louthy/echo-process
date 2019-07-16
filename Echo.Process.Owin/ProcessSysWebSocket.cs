@@ -32,14 +32,13 @@ namespace Echo
             }
             catch(Exception e)
             {
-                // TODO: logErr(e);
-                Console.WriteLine(e.Message);
+                logErr(e);
             }
         }
 
         public override async Task OnMessageReceived(ArraySegment<byte> message, WebSocketMessageType type) =>
-            await Req.Parse(Encoding.UTF8.GetString(message.Array, message.Offset, message.Count), ProcessHub.Connections).MatchAsync(
-                Right: async msg =>
+            await Req.Parse(Encoding.UTF8.GetString(message.Array, message.Offset, message.Count), Context.Request.RemoteIpAddress, ProcessHub.Connections).MatchAsync(
+                RightAsync: async msg =>
                 {
                     switch (msg)
                     {
@@ -79,17 +78,16 @@ namespace Echo
                                     await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"askr\",\"id\":\"{req.Id}\",\"mid\":\"{req.MessageId}\",\"fail\":\"Invalid route\"}}"), true);
                                 }
                             }
-                            catch
+                            catch(Exception e)
                             {
                                 await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"askr\",\"id\":\"{req.Id}\",\"mid\":\"{req.MessageId}\",\"fail\":\"Error\"}}"), true);
-                                // TODO:
-                                //logSysErr(e);
+                                logErr(e);
                             }
                             return unit;
                         }
 
                         case ConnectReq req:
-                            var conn = ProcessHub.OpenConnection(Tell);
+                            var conn = ProcessHub.OpenConnection(Context.Request.RemoteIpAddress, Tell);
                             await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"conn\",\"id\":\"{conn}\"}}"), true);
                             return unit;
 
@@ -109,17 +107,15 @@ namespace Echo
                             return unit;
 
                         case PingReq req:
-                            ProcessHub.TouchConnection(req.Id);
-                            await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"pong\",\"id\":\"{req.Id}\"}}"), true);
+                            await SendText(Encoding.UTF8.GetBytes($"{{\"tag\":\"pong\",\"id\":\"{req.Id}\",\"status\":\"{ProcessHub.TouchConnection(req.Id)}\"}}"), true);
                             return unit;
 
                         default:
-                            // TODO:
-                            //logSysErr($"Unknown message type in switch: {msg?.GetType()?.FullName}");
+                            logErr($"Unknown message type in switch: {msg?.GetType()?.FullName}");
                             return unit;
                     }
                 },
-                Left: err => /*TODO: logUserErr(err)*/ unit);
+                Left: err => { logUserErr(err); return unit; });
 
         static ProcessId FixRootName(ProcessId pid) =>
             pid.Take(1).Name.Value == "root"

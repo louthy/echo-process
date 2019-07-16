@@ -75,8 +75,8 @@ namespace Echo
         public Unit Publish(object message) =>
             IterRoleMembers(d => d.Publish(message));
 
-        public Unit Tell(object message, ProcessId sender, Message.TagSpec tag) =>
-            IterRoleMembers(d => d.Tell(message, sender, tag));
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
+            IterRoleMembers(d => d.Tell(message, schedule, sender, tag));
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             IterRoleMembers(d => d.TellSystem(message, sender));

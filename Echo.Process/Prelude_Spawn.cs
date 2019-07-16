@@ -100,6 +100,8 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
+        /// <param name="Lazy">If set to true actor will not start automatically, you need to
+        /// startup(processId) manually</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<S, T>(
             ProcessName Name,
@@ -109,7 +111,9 @@ namespace Echo
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<S, ProcessId, S> Terminated = null,
-            SystemName System = default(SystemName)
+            Func<S, Unit> Shutdown = null,
+            SystemName System = default(SystemName),
+            bool Lazy = false
             )
         {
             if (System.IsValid && ActorContext.Request != null) throw new ProcessException("When spawning you can only specify a System from outside of a Process", ActorContext.Self[Name].Path, "");
@@ -122,7 +126,7 @@ namespace Echo
                 ? sys.UserContext.Self
                 : ActorContext.SelfProcess;
 
-            return sys.ActorCreate(parent, Name, Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, false);
+            return sys.ActorCreate(parent, Name, Inbox, Setup, Shutdown, Terminated, Strategy, Flags, MaxMailboxSize, Lazy);
         }
 
         /// <summary>
@@ -139,6 +143,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -168,6 +173,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -179,9 +185,10 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
+            Func<S, Unit> Shutdown = null,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            Range(0, Count).Map(n => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{n}", Inbox, Setup, Terminated, Strategy, Flags, MaxMailboxSize, false)).ToList();
+            Range(0, Count).Map(n => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{n}", Inbox, Setup, Shutdown, Terminated, Strategy, Flags, MaxMailboxSize, false)).ToList();
 
         /// <summary>
         /// Create N child processes.
@@ -198,6 +205,7 @@ namespace Echo
         /// <param name="Inbox">Function that is the process</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -208,9 +216,10 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
+            Func<S, Unit> Shutdown = null,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            Spec.Map((id,state) => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{id}", Inbox, state, Terminated, Strategy, Flags, MaxMailboxSize, false)).Values.ToList();
+            Spec.Map((id,state) => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{id}", Inbox, state, Shutdown, Terminated, Strategy, Flags, MaxMailboxSize, false)).Values.ToList();
 
         /// <summary>
         /// Spawn by type
@@ -220,8 +229,7 @@ namespace Echo
         /// <param name="Name">Name of process to spawn</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
-        /// <param name="Terminate">Message function to call when a Process [that this Process
-        /// watches] terminates</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>ProcessId</returns>
         public static ProcessId spawn<TProcess,TMsg>(
             ProcessName Name, 
@@ -274,6 +282,7 @@ namespace Echo
         /// the concrete implementation of TProcessInterface</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>TProcessInterface - The proxy for communicating with the Process</returns>
         public static TProcessInterface spawn<TProcessInterface>(
             ProcessName Name,
@@ -301,6 +310,7 @@ namespace Echo
         /// <param name="Name">Name of process to spawn</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Maximum inbox size</param>
         /// <returns>TProcessInterface - The proxy for communicating with the Process</returns>
         public static ProcessId spawn<TProcess>(
             ProcessName Name,

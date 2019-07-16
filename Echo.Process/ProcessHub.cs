@@ -8,9 +8,20 @@ namespace Echo
 {
     public static class ProcessHub
     {
+        const int ConnectionCutOffMinutes = 5;
+
         static readonly object sync = new object();
         static Func<ProcessId, bool> routeValidator = _ => false;
         static Map<ClientConnectionId, ClientConnection> connections = Map<ClientConnectionId, ClientConnection>();
+
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        static ProcessHub()
+        {
+            // Runs every minute checking for orphaned connections
+            Monitor();
+        }
 
         /// <summary>
         /// Inject a function that validates incoming message destinations 
@@ -29,20 +40,60 @@ namespace Echo
         public static Map<ClientConnectionId, ClientConnection> Connections => connections;
 
         /// <summary>
+        /// Monitor open connections that should be closed
+        /// </summary>
+        static void Monitor()
+        {
+            try
+            {
+                var conns = Connections;
+
+                foreach(var conn in conns)
+                {
+                    if((DateTime.UtcNow - conn.Value.LastAccess).TotalMinutes >= ConnectionCutOffMinutes)
+                    {
+                        try
+                        {
+                            CloseConnection(conn.Key);
+                        }
+                        catch (Exception e)
+                        {
+                            logErr(e);
+                        }
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                logErr(e);
+            }
+            finally
+            {
+                delay(Monitor, 60 * seconds);
+            }
+        }
+
+        /// <summary>
         /// Register a connection by ID
         /// </summary>
         /// <param name="id">Client connection ID</param>
         /// <param name="conn">Connection ID</param>
-        public static ClientConnectionId OpenConnection(Action<ClientMessageDTO> tell)
-        {
-            var id = ClientConnectionId.Generate();
-            var conn = ClientConnection.New(id, tell);
-            lock (sync)
+        public static ClientConnectionId OpenConnection(string remoteIp, Action<ClientMessageDTO> tell) =>
+            EnsureConnection(ClientConnectionId.Generate(remoteIp), tell);
+
+        /// <summary>
+        /// Keep an existing connection alive
+        /// </summary>
+        public static ClientConnectionId EnsureConnection(ClientConnectionId id, Action<ClientMessageDTO> tell) =>
+            connections.Find(id).Map(c => c.Id).IfNone(() =>
             {
-                connections = connections.AddOrUpdate(id, conn);
-            }
-            return id;
-        }
+                var conn = ClientConnection.New(id, tell);
+                lock (sync)
+                {
+                    connections = connections.AddOrUpdate(id, conn);
+                }
+                return id;
+            });
 
         /// <summary>
         /// Register a connection by ID

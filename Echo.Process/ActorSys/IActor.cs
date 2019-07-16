@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Echo
@@ -43,12 +44,14 @@ namespace Echo
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
-        Unit Restart();
+        /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
+        Unit Restart(bool unpauseAfterRestart);
 
         /// <summary>
         /// Startup
         /// </summary>
-        Unit Startup();
+        /// <returns>returns InboxDirective.Pause if Startup will unpause inbox (via some strategy error handling). Otherwise InboxDirective.Default</returns>
+        InboxDirective Startup();
 
         /// <summary>
         /// Shutdown
@@ -93,6 +96,8 @@ namespace Echo
         /// State stream - sent after each message loop
         /// </summary>
         IObservable<object> StateStream { get; }
+
+        CancellationTokenSource CancellationTokenSource { get; }
 
         InboxDirective ProcessMessage(object message);
         InboxDirective ProcessAsk(ActorRequest request);

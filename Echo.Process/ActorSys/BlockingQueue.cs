@@ -1,14 +1,11 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Echo.ActorSys
 {
-    internal class BlockingQueue<T> : IDisposable
+    public class BlockingQueue<T> : IDisposable
     {
         readonly EventWaitHandle wait = new AutoResetEvent(true);
         readonly object sync = new object();
@@ -18,7 +15,8 @@ namespace Echo.ActorSys
         volatile int bufferTail = 0;
         volatile T[] buffer;
         volatile int bufferSize;
-        const int InitialBufferSize = 64;
+        volatile bool fullBuffer;
+        const int InitialBufferSize = 16;
 
         public readonly int Capacity;
 
@@ -27,6 +25,7 @@ namespace Echo.ActorSys
 
         public BlockingQueue(int capacity = 100000)
         {
+            capacity = capacity < 1 ? 100000 : capacity;
             buffer = new T[InitialBufferSize];
             bufferSize = InitialBufferSize;
             Capacity = capacity;
@@ -34,18 +33,18 @@ namespace Echo.ActorSys
 
         public IDisposable ReceiveAsync<S>(S state, Func<S, T, InboxDirective> handler)
         {
-            Task.Run(() =>
+            Task.Factory.StartNew(() =>
             {
                 var s = state;
                 try
                 {
-                    Receive(msg => handler((S)s, msg));
+                    Receive(msg => handler(s, msg));
                 }
                 catch (Exception e)
                 {
                     Process.logErr(e);
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             return this;
         }
 
@@ -55,8 +54,6 @@ namespace Echo.ActorSys
             {
                 cancelled = false;
                 paused = false;
-                bufferHead = 0;
-                bufferTail = 0;
 
                 while (!cancelled)
                 {
@@ -71,23 +68,27 @@ namespace Echo.ActorSys
 
                         T item = default(T);
                         var directive = default(InboxDirective);
-
-                        lock (sync)
-                        {
-                            item = buffer[bufferTail];
-                        }
+                        item = buffer[bufferTail];
 
                         try
                         {
                             directive = handler(item);
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
                             Process.logErr(e);
                         }
 
                         if (directive == InboxDirective.Pause)
                         {
+                            lock (sync)
+                            {
+                                buffer[bufferTail] = default(T);
+                                bufferTail++;
+                                fullBuffer = bufferHead == bufferTail;
+                                if (bufferTail >= bufferSize) bufferTail = 0;
+                            }
+
                             Pause();
                         }
                         else if (directive == InboxDirective.Shutdown)
@@ -103,6 +104,7 @@ namespace Echo.ActorSys
                                 {
                                     buffer[bufferTail] = default(T);
                                     bufferTail++;
+                                    fullBuffer = bufferHead == bufferTail;
                                     if (bufferTail >= bufferSize) bufferTail = 0;
                                 }
                             }
@@ -122,22 +124,27 @@ namespace Echo.ActorSys
             }
         }
 
-        public int Count => bufferHead >= bufferTail
-            ? bufferHead - bufferTail
-            : bufferSize - bufferTail + bufferHead;
+        public int Count =>
+            bufferHead > bufferTail
+                ? bufferHead - bufferTail
+                : bufferHead < bufferTail
+                    ? bufferSize - bufferTail + bufferHead
+                    : fullBuffer
+                        ? bufferSize
+                        : 0;
 
         public void Post(T value)
         {
-            var count = Count;
-            if(count >= Capacity) throw new QueueFullException();
+            lock (sync)
+            {
+                var count = Count;
+                if (count >= Capacity) throw new QueueFullException();
 
-            if (count < bufferSize)
-            {
-                PostToQueue(value);
-            }
-            else
-            {
-                lock (sync)
+                if (count < bufferSize)
+                {
+                    PostToQueue(value);
+                }
+                else
                 {
                     if (Count < bufferSize)
                     {
@@ -147,31 +154,34 @@ namespace Echo.ActorSys
                         return;
                     }
 
-                    // Create a new buffer that's twice the size of our current one
-                    var old = buffer;
-                    var oldTail = bufferTail;
-                    var newBufferSize = bufferSize <<= 1;
-                    buffer = new T[newBufferSize];
-
-                    // Copy the old buffer from the current head position to the end
-                    // to the end of the new buffer
-                    var endBlockSize = old.Length - bufferHead;
-                    var endBlockPos = newBufferSize - endBlockSize;
-                    Array.Copy(old, bufferHead, buffer, endBlockPos, endBlockSize);
-
-                    // Set the tail (the last message) to the start of that end block
-                    // in the new buffer.  This leaves the head point (where the next 
-                    // message will be put) where it is, and therefore we have a new
-                    // chunk of empty space to write into.
-                    bufferTail = endBlockPos;
-                    bufferSize = newBufferSize;
-
-                    Console.WriteLine($"Buffer doubled from {old.Length} to {newBufferSize}. Head: {bufferHead} Old tail: {oldTail} New tail: {bufferTail}");
+                    DoubleBufferSize();
 
                     // Recall this Post function to add the message
                     PostToQueue(value);
                 }
             }
+        }
+
+        private void DoubleBufferSize()
+        {
+            // Create a new buffer that's twice the size of our current one
+            var old = buffer;
+            var oldTail = bufferTail;
+            var newBufferSize = bufferSize <<= 1;
+            buffer = new T[newBufferSize];
+
+            // Copy the old buffer from the current head position to the end
+            // to the end of the new buffer
+            var endBlockSize = old.Length - bufferHead;
+            var endBlockPos = newBufferSize - endBlockSize;
+            System.Array.Copy(old, bufferHead, buffer, endBlockPos, endBlockSize);
+
+            // Set the tail (the last message) to the start of that end block
+            // in the new buffer.  This leaves the head point (where the next 
+            // message will be put) where it is, and therefore we have a new
+            // chunk of empty space to write into.
+            bufferTail = endBlockPos;
+            bufferSize = newBufferSize;
         }
 
         private void PostToQueue(T value)
@@ -182,6 +192,7 @@ namespace Echo.ActorSys
             {
                 bufferHead = 0;
             }
+            fullBuffer = bufferHead == bufferTail;
             if (!paused)
             {
                 wait.Set();
@@ -191,6 +202,8 @@ namespace Echo.ActorSys
         public void Cancel()
         {
             cancelled = true;
+            bufferHead = 0;
+            bufferTail = 0;
             wait.Set();
         }
 

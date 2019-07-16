@@ -225,8 +225,8 @@ namespace Echo
                 var nodeMap = Nodes(leaf);
 
                 var nodes = fwd
-                    ? MSeq<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values)
-                    : MSeq<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values).Reverse(); //< TODO: Inefficient
+                    ? MEnumerable<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values)
+                    : MEnumerable<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values).Reverse(); //< TODO: Inefficient
 
                 foreach (var node in nodes)
                 {
