@@ -76,7 +76,7 @@ namespace Echo.Tests
             initialiseFileSystem();
 
             var parent = spawn<string>("parent", ParentInbox);
-            for (int i = 0; i < 1000; i++)
+            for (int i = 0; i < 10; i++)
             {
                 tell(parent, "tell");
                 tell(parent, "kill");
