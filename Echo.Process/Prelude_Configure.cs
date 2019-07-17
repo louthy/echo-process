@@ -301,9 +301,9 @@ namespace Echo
                 StartFromConfig(new ProcessSystemConfig(
                     systemName,
                     nodeName.Value,
-                    Map<string, ValueToken>(),
-                    Map<ProcessId, ProcessToken>(),
-                    Map<string, State<StrategyContext, Unit>>(),
+                    HashMap<string, ValueToken>(),
+                    HashMap<ProcessId, ProcessToken>(),
+                    HashMap<string, State<StrategyContext, Unit>>(),
                     new ClusterToken(
                         None,
                         List(
@@ -340,7 +340,7 @@ namespace Echo
             {
                 var parser = new ProcessSystemConfigParser(nodeName.IfNone(""), new Types(), strategyFuncs);
                 var configs = String.IsNullOrWhiteSpace(configText)
-                    ? Map(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
+                    ? HashMap(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
                     : parser.ParseConfigText(configText);
 
                 nodeName.Map(_ => configs.Filter(c => c.NodeName == nodeName).Iter(StartFromConfig))
@@ -490,8 +490,8 @@ namespace Echo
         /// <param name="prop">If the setting is a complex value (like a map or record), then 
         /// this selects the property of the setting to access</param>
         /// <returns>Optional configuration setting value</returns>
-        public static Map<string, T> readMap<T>(string name, string prop = "value") =>
-            read(name, prop, Map<string, T>());
+        public static HashMap<string, T> readMap<T>(string name, string prop = "value") =>
+            read(name, prop, HashMap<string, T>());
 
         /// <summary>
         /// Write a setting

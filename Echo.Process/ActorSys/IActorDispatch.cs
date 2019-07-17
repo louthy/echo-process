@@ -12,7 +12,7 @@ namespace Echo
         Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag);
         Unit TellSystem(SystemMessage message, ProcessId sender);
         Unit TellUserControl(UserControlMessage message, ProcessId sender);
-        Map<string, ProcessId> GetChildren();
+        HashMap<string, ProcessId> GetChildren();
         Unit Publish(object message);
         Unit Kill();
         Unit Shutdown();

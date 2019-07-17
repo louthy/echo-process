@@ -87,7 +87,7 @@ namespace Echo
                 () => Actor.ShutdownProcess(maintainState)
             );
 
-        public Map<string, ProcessId> GetChildren() =>
+        public HashMap<string, ProcessId> GetChildren() =>
             Actor.Children.Map(a => a.Actor.Id);
 
         public Unit Publish(object message) =>

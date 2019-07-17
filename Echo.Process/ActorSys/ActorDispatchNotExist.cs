@@ -19,8 +19,8 @@ namespace Echo
         private T Raise<T>(ProcessId sender) =>
             raise<T>(new ProcessException($"Doesn't exist ({ProcessId})", sender.Path, sender.Path, null));
 
-        public Map<string, ProcessId> GetChildren() =>
-            Map<string, ProcessId>();
+        public HashMap<string, ProcessId> GetChildren() =>
+            HashMap<string, ProcessId>();
 
         public IObservable<T> Observe<T>() =>
             Observable.Empty<T>();

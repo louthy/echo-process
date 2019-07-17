@@ -24,7 +24,7 @@ namespace Echo
             this.transactionalIO = transactionalIO;
         }
 
-        public Map<string, ProcessId> GetChildren()
+        public HashMap<string, ProcessId> GetChildren()
         {
             throw new NotImplementedException();
         }

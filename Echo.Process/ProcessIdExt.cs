@@ -17,7 +17,7 @@ public static class ProcessIdExtensions
     /// <summary>
     /// Get the child processes of this process
     /// </summary>
-    public static Map<string, ProcessId> GetChildren(this ProcessId self) =>
+    public static HashMap<string, ProcessId> GetChildren(this ProcessId self) =>
         Process.children(self);
 
     /// <summary>

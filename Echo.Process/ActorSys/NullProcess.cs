@@ -20,7 +20,7 @@ namespace Echo
             System = system;
         }
 
-        public Map<string, ActorItem> Children => Map<string, ActorItem>();
+        public HashMap<string, ActorItem> Children => HashMap<string, ActorItem>();
         public ProcessId Id => ProcessId.Top.SetSystem(System);
         public ProcessFlags Flags => ProcessFlags.Default;
         public ProcessName Name => "$";

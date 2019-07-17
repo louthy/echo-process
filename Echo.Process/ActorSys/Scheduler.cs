@@ -79,10 +79,10 @@ namespace Echo
             return state;
         }
 
-        static Map<string, Map<string, RemoteMessageDTO>> GetScheduled(ICluster cluster) =>
+        static HashMap<string, HashMap<string, RemoteMessageDTO>> GetScheduled(ICluster cluster) =>
             cluster.QueryScheduleKeys(cluster.NodeName.Value)
                    .ToList()
-                   .Fold(Map<string, Map<string, RemoteMessageDTO>>(), 
+                   .Fold(HashMap<string, HashMap<string, RemoteMessageDTO>>(), 
                     (s, key) =>
                         s.AddOrUpdate(key, cluster.GetHashFields<RemoteMessageDTO>(key)));
 
@@ -116,8 +116,8 @@ namespace Echo
         {
             public static readonly State Empty = new State(None);
 
-            public readonly Option<Map<string, Map<string, RemoteMessageDTO>>> Scheduled;
-            public State(Option<Map<string, Map<string, RemoteMessageDTO>>> scheduled)
+            public readonly Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> Scheduled;
+            public State(Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> scheduled)
             {
                 Scheduled = scheduled;
             }
