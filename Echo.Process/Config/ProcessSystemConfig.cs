@@ -25,13 +25,13 @@ namespace Echo.Config
         public readonly SystemName SystemName;
         public readonly Option<ClusterToken> Cluster;
         public readonly string NodeName = "";
-        readonly Map<string, ValueToken> roleSettings;
-        readonly Map<ProcessId, ProcessToken> processSettings;
-        readonly Map<string, State<StrategyContext, Unit>> stratSettings;
+        readonly HashMap<string, ValueToken> roleSettings;
+        readonly HashMap<ProcessId, ProcessToken> processSettings;
+        readonly HashMap<string, State<StrategyContext, Unit>> stratSettings;
         readonly object sync = new object();
         readonly Types types;
 
-        Map<string, Map<string, object>> settingOverrides;
+        HashMap<string, HashMap<string, object>> settingOverrides;
         Time timeout = 30 * seconds;
         Time sessionTimeoutCheck = 60 * seconds;
         int maxMailboxSize = 100000;
@@ -41,9 +41,9 @@ namespace Echo.Config
             new ProcessSystemConfig(
                 default(SystemName),
                 "root",
-                Map<string, ValueToken>(),
-                Map<ProcessId, ProcessToken>(),
-                Map<string, State<StrategyContext, Unit>>(),
+                HashMap<string, ValueToken>(),
+                HashMap<ProcessId, ProcessToken>(),
+                HashMap<string, State<StrategyContext, Unit>>(),
                 null,
                 new Types()
             );
@@ -51,16 +51,16 @@ namespace Echo.Config
         public ProcessSystemConfig(
             SystemName systemName,
             string nodeName,
-            Map<string, ValueToken> roleSettings,
-            Map<ProcessId, ProcessToken> processSettings,
-            Map<string, State<StrategyContext, Unit>> stratSettings,
+            HashMap<string, ValueToken> roleSettings,
+            HashMap<ProcessId, ProcessToken> processSettings,
+            HashMap<string, State<StrategyContext, Unit>> stratSettings,
             ClusterToken cluster,
             Types types
             )
         {
             SystemName = systemName;
             NodeName = nodeName;
-            this.settingOverrides = Map<string, Map<string, object>>();
+            this.settingOverrides = HashMap<string, HashMap<string, object>>();
             this.roleSettings = roleSettings;
             this.processSettings = processSettings;
             this.stratSettings = stratSettings;
@@ -74,7 +74,7 @@ namespace Echo.Config
         internal Option<State<StrategyContext, Unit>> GetStrategy(string name) =>
             stratSettings.Find(name);
 
-        internal Option<Map<string, object>> GetProcessSettingsOverrides(ProcessId pid) =>
+        internal Option<HashMap<string, object>> GetProcessSettingsOverrides(ProcessId pid) =>
             settingOverrides.Find(pid.Path);
 
         /// <summary>
@@ -145,14 +145,13 @@ namespace Echo.Config
         /// <returns></returns>
         internal T GetProcessSetting<T>(ProcessId pid, string name, string prop, T defaultValue, ProcessFlags flags)
         {
-            var empty = Map<string, ValueToken>();
+            var empty = HashMap<string, ValueToken>();
 
-            var settingsMaps = new[] {
+            var settingsMaps = Seq(
                     processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
                     processSettings.Find(RolePid(pid)).Map(token => token.Settings).IfNone(empty),
                     roleSettings,
-                    Cluster.Map(c => c.Settings).IfNone(empty)
-                };
+                    Cluster.Map(c => c.Settings).IfNone(empty));
 
             return GetSettingGeneral(settingsMaps, ActorInboxCommon.ClusterSettingsKey(pid), name, prop, defaultValue, flags);
         }
@@ -167,14 +166,13 @@ namespace Echo.Config
         /// <returns></returns>
         internal Option<T> GetProcessSetting<T>(ProcessId pid, string name, string prop, ProcessFlags flags)
         {
-            var empty = Map<string, ValueToken>();
+            var empty = HashMap<string, ValueToken>();
 
-            var settingsMaps = new[] {
+            var settingsMaps = Seq(
                     processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
                     processSettings.Find(RolePid(pid)).Map(token => token.Settings).IfNone(empty),
                     roleSettings,
-                    Cluster.Map(c => c.Settings).IfNone(empty)
-                };
+                    Cluster.Map(c => c.Settings).IfNone(empty));
 
             return GetSettingGeneral<T>(settingsMaps, ActorInboxCommon.ClusterSettingsKey(pid), name, prop, flags);
         }
@@ -187,10 +185,10 @@ namespace Echo.Config
         /// types, not value types)</param>
         internal T GetRoleSetting<T>(string name, string prop, T defaultValue)
         {
-            var empty = Map<string, ValueToken>();
+            var empty = HashMap<string, ValueToken>();
             var key = $"role-{Role.Current}@settings";
             var flags = ActorContext.System(SystemName).Cluster.Map(_ => ProcessFlags.PersistState).IfNone(ProcessFlags.Default);
-            var settingsMaps = new[] { roleSettings, Cluster.Map(c => c.Settings).IfNone(empty) };
+            var settingsMaps = Seq(roleSettings, Cluster.Map(c => c.Settings).IfNone(empty));
             return GetSettingGeneral(settingsMaps, key, name, prop, defaultValue, flags);
         }
 
@@ -221,12 +219,12 @@ namespace Echo.Config
         internal Option<T> GetClusterSetting<T>(string name, string prop)
         {
             var key = "cluster@settings";
-            var empty = Map<string, ValueToken>();
+            var empty = HashMap<string, ValueToken>();
             var settingsMaps = new[] { Cluster.Map(c => c.Settings).IfNone(empty) };
-            return GetSettingGeneral<T>(settingsMaps, key, name, prop, ProcessFlags.Default);
+            return GetSettingGeneral<T>(settingsMaps.ToSeq(), key, name, prop, ProcessFlags.Default);
         }
 
-        internal T GetSettingGeneral<T>(IEnumerable<Map<string, ValueToken>> settingsMaps, string key, string name, string prop, T defaultValue, ProcessFlags flags)
+        internal T GetSettingGeneral<T>(Seq<HashMap<string, ValueToken>> settingsMaps, string key, string name, string prop, T defaultValue, ProcessFlags flags)
         {
             var res = GetSettingGeneral<T>(settingsMaps, key, name, prop, flags);
 
@@ -240,7 +238,7 @@ namespace Echo.Config
             return res.IfNone(defaultValue);
         }
 
-        internal Option<T> GetSettingGeneral<T>(IEnumerable<Map<string, ValueToken>> settingsMaps, string key, string name, string prop, ProcessFlags flags)
+        internal Option<T> GetSettingGeneral<T>(Seq<HashMap<string, ValueToken>> settingsMaps, string key, string name, string prop, ProcessFlags flags)
         {
             var propKey = $"{name}@{prop}";
 

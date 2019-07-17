@@ -87,7 +87,7 @@ namespace Echo.Session
         /// only stores the data that the particular node is interested in. 
         /// Unit if the node is interested in data but does not have a value yet.
         /// </summary>
-        Map<string, Either<Unit, ValueVector>> data;
+        HashMap<string, Either<Unit, ValueVector>> data;
         DateTime lastAccess;
         DateTime expires;
         object sync = new object();
@@ -109,7 +109,7 @@ namespace Echo.Session
         /// only stores the data that  the particular node is interested in. 
         /// Unit if the node is interested in data but does not have a value yet.        
         /// </summary>
-        public Map<string, Either<Unit, ValueVector>> Data => data;
+        public HashMap<string, Either<Unit, ValueVector>> Data => data;
 
         /// <summary>
         /// UTC date of last access

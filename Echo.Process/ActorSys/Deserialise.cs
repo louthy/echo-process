@@ -15,7 +15,7 @@ namespace Echo
     /// </summary>
     internal static class Deserialise
     {
-        static Map<string, MethodInfo> funcs = Map<string, MethodInfo>();
+        static HashMap<string, MethodInfo> funcs = HashMap<string, MethodInfo>();
 
         static MethodInfo Ignore() =>
             null;

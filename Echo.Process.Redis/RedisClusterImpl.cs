@@ -22,7 +22,7 @@ namespace Echo
         int databaseNumber;
         ConnectionMultiplexer redis;
 
-        Map<string, Subject<RedisValue>> subscriptions = Map<string, Subject<RedisValue>>();
+        HashMap<string, Subject<RedisValue>> subscriptions = HashMap<string, Subject<RedisValue>>();
         object subsync = new object();
 
         /// <summary>
@@ -298,7 +298,7 @@ namespace Echo
             Retry(() =>
                 Db.HashSet(key, field, JsonConvert.SerializeObject(value)));
 
-        public void HashFieldAddOrUpdate<T>(string key, Map<string, T> fields) =>
+        public void HashFieldAddOrUpdate<T>(string key, HashMap<string, T> fields) =>
             Retry(() =>
                 Db.HashSet(
                     key, 
@@ -314,7 +314,7 @@ namespace Echo
                 return trans.Execute();
             });
 
-        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, Map<string, T> fields) =>
+        public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, HashMap<string, T> fields) =>
             Retry(() =>
             {
                 var trans = Db.CreateTransaction();
@@ -335,19 +335,19 @@ namespace Echo
             Retry(() =>
                 (int)Db.HashDelete(key, fields.Map(x => (RedisValue)x).ToArray()));
 
-        public Map<string, object> GetHashFields(string key) =>
+        public HashMap<string, object> GetHashFields(string key) =>
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map<string, object>(),
+                    HashMap<string, object>(),
                     (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value)))
                   .Filter((object v) => notnull(v)));
 
-        public Map<string, T> GetHashFields<T>(string key) =>
+        public HashMap<string, T> GetHashFields<T>(string key) =>
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map<string, T>(),
+                    HashMap<string, T>(),
                     (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
                   .Filter(v => notnull<T>(v)));
 
@@ -376,11 +376,11 @@ namespace Echo
             }
         }
 
-        public Map<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
+        public HashMap<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>
                 Db.HashGetAll(key)
                   .Fold(
-                    Map<K, T>(),
+                    HashMap<K, T>(),
                     (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value)))
                   .Filter(v => notnull<T>(v)));
 
@@ -391,13 +391,13 @@ namespace Echo
             return JsonConvert.DeserializeObject<T>(res);
         }
 
-        public Map<string, T> GetHashFields<T>(string key, IEnumerable<string> fields) =>
+        public HashMap<string, T> GetHashFields<T>(string key, IEnumerable<string> fields) =>
             Retry(() =>
                 Db.HashGet(key, fields.Map(x => (RedisValue)x).ToArray())
                   .Zip(fields)
                   .Filter(x => !x.Item1.IsNullOrEmpty)
                   .Fold(
-                      Map<string, T>(),
+                      HashMap<string, T>(),
                       (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1)))
                   .Filter(v => notnull<T>(v)));
 
@@ -465,8 +465,8 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
-        public Map<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery) =>
-            toMap(
+        public HashMap<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery) =>
+            toHashMap(
                 map(QueryKeys(keyQuery, "", metaDataSuffix).Map(x => (RedisKey)x).ToArray(), keys =>
                     keys.Map(x => (string)x)
                         .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
@@ -477,18 +477,18 @@ namespace Echo
         /// </summary>
         /// <param name="keys"></param>
         /// <returns>map of keys and their key/value map</returns>
-        public async Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
+        public async Task<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
         {
             var batch = Db.CreateBatch();
             var tasks = keys.Map(key => batch.HashGetAllAsync(key)
                                              .Map(h =>
-                                                (Key: key, Value: toMap(h.Map(r =>
+                                                (Key: key, Value: toHashMap(h.Map(r =>
                                                     ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))))
                             .Strict();
 
             batch.Execute();
 
-            return toMap(await Task.WhenAll(tasks));
+            return toHashMap(await Task.WhenAll(tasks));
         }
 
         IDatabase Db => 

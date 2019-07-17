@@ -39,7 +39,7 @@ namespace Echo
         /// <summary>
         /// Child processes
         /// </summary>
-        Map<string, ActorItem> Children { get; }
+        HashMap<string, ActorItem> Children { get; }
 
         /// <summary>
         /// Clears the state (keeps the mailbox items)

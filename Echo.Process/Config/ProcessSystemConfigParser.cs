@@ -469,7 +469,7 @@ namespace Echo.Config
                 FuncSpec.Property("default", () => types.Bool)
                 );
 
-        public Map<SystemName, ProcessSystemConfig> ParseConfigText(string text)
+        public HashMap<SystemName, ProcessSystemConfig> ParseConfigText(string text)
         {
             // Parse the config text
             var res = parse(parser, text);
@@ -497,8 +497,8 @@ namespace Echo.Config
                  let reg = process.RegisteredName
                  let final = process.SetRegisteredName(new ValueToken(types.ProcessName, reg.IfNone(new ProcessName(nv.Name))))
                  select Tuple(pid.IfNone(ProcessId.None), final)).Fold(
-                Map<ProcessId, ProcessToken>(),
-                (s, x) => s.TryAdd(x.Item1, x.Item2, (_, p) => failwith<Map<ProcessId, ProcessToken>>("Process declared twice: " + p.RegisteredName.IfNone("not defined"))));
+                HashMap<ProcessId, ProcessToken>(),
+                (s, x) => s.TryAdd(x.Item1, x.Item2, (_, p) => failwith<HashMap<ProcessId, ProcessToken>>("Process declared twice: " + p.RegisteredName.IfNone("not defined"))));
 
 
             // Extract the cluster settings
@@ -507,8 +507,8 @@ namespace Echo.Config
                  where nv.Value.Type == strategyType
                  let strategy = nv.Value.Cast<State<StrategyContext, Unit>>()
                  select Tuple(nv.Name, strategy)).Fold(
-                    Map<string, State<StrategyContext, Unit>>(),
-                    (s, x) => s.TryAdd(x.Item1, x.Item2, (_, __) => failwith<Map<string, State<StrategyContext, Unit>>>("Strategy declared twice: " + x.Item1)));
+                    HashMap<string, State<StrategyContext, Unit>>(),
+                    (s, x) => s.TryAdd(x.Item1, x.Item2, (_, __) => failwith<HashMap<string, State<StrategyContext, Unit>>>("Strategy declared twice: " + x.Item1)));
 
             // Extract the strategy settings
             var clusterSettings = 
@@ -522,17 +522,17 @@ namespace Echo.Config
                  where clusterNodeName.Map(nn => nn == nodeName).IfNone(false)
                  let final = cluster.SetEnvironment(new ValueToken(types.String, key.IfNone(nv.Name)))
                  select Tuple(final.Env.IfNone(""), final)).Fold(
-                    Map<SystemName, ClusterToken>(),
-                    (s, x) => s.TryAdd(new SystemName(x.Item1), x.Item2, (_, c) => failwith<Map<SystemName, ClusterToken>>("Cluster declared twice: " + c.Env.IfNone(""))));
+                    HashMap<SystemName, ClusterToken>(),
+                    (s, x) => s.TryAdd(new SystemName(x.Item1), x.Item2, (_, c) => failwith<HashMap<SystemName, ClusterToken>>("Cluster declared twice: " + c.Env.IfNone(""))));
 
             var roleSettings = 
                 res.Reply.Result.Fold(
-                    Map<string, ValueToken>(),
+                    HashMap<string, ValueToken>(),
                     (s, x) => s.AddOrUpdate(x.Name, x.Value)
             );
 
             return String.IsNullOrEmpty(nodeName)
-                ? Map((default(SystemName), new ProcessSystemConfig(default(SystemName), "root", roleSettings, processSettings, stratSettings, null, types)))
+                ? HashMap((default(SystemName), new ProcessSystemConfig(default(SystemName), "root", roleSettings, processSettings, stratSettings, null, types)))
                 : clusterSettings.Map(cluster => 
                       new ProcessSystemConfig(
                           cluster.Env.Map(e => new SystemName(e)).IfNone(default(SystemName)),
@@ -606,5 +606,43 @@ namespace Echo.Config
 
             return strategy;
         }
+    }
+
+    internal static class HashMapExt
+    {
+        /// <summary>
+        /// Atomically adds a new item to the map.
+        /// If the key already exists then the Fail handler is called with the unaltered map 
+        /// and the value already set for the key, it expects a new map returned.
+        /// </summary>
+        /// <remarks>Null is not allowed for a Key or a Value</remarks>
+        /// <param name="key">Key</param>
+        /// <param name="value">Value</param>
+        /// <param name="Fail">Delegate to handle failure, you're given the unaltered map 
+        /// and the value already set for the key</param>
+        /// <exception cref="ArgumentNullException">Throws ArgumentNullException the key or value are null</exception>
+        /// <returns>New Map with the item added</returns>
+        public static HashMap<K, V> TryAdd<K, V>(this HashMap<K, V> self, K key, V value, Func<HashMap<K, V>, V, HashMap<K, V>> Fail) =>
+            self.ContainsKey(key)
+                ? Fail(self, value)
+                : self.Add(key, value);
+
+        /// <summary>
+        /// Atomically adds a new item to the map.
+        /// If the key already exists then the Fail handler is called with the unaltered map 
+        /// and the value already set for the key, it expects a new map returned.
+        /// </summary>
+        /// <remarks>Null is not allowed for a Key or a Value</remarks>
+        /// <param name="key">Key</param>
+        /// <param name="value">Value</param>
+        /// <param name="Fail">Delegate to handle failure, you're given the unaltered map 
+        /// and the value already set for the key</param>
+        /// <exception cref="ArgumentNullException">Throws ArgumentNullException the key or value are null</exception>
+        /// <returns>New Map with the item added</returns>
+        public static HashMap<K, V> TryAdd<K, V>(this HashMap<K, V> self, K key, V value, Func<HashMap<K, V>, K, V, HashMap<K, V>> Fail) =>
+            self.ContainsKey(key)
+                ? Fail(self, key, value)
+                : self.Add(key, value);
+
     }
 }

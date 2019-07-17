@@ -149,7 +149,7 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
-        Map<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery);
+        HashMap<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery);
 
         /// <summary>
         /// Finds all session keys
@@ -178,7 +178,7 @@ namespace Echo
         /// <typeparam name="T"></typeparam>
         /// <param name="key"></param>
         /// <param name="fields"></param>
-        void HashFieldAddOrUpdate<T>(string key, Map<string, T> fields);
+        void HashFieldAddOrUpdate<T>(string key, HashMap<string, T> fields);
 
         /// <summary>
         /// adds or update the hashfield to corresponding key. Item is not added if key does not exist.
@@ -197,21 +197,21 @@ namespace Echo
         /// <param name="key"></param>
         /// <param name="fields"></param>
         /// <returns>true if added successfully</returns>
-        bool HashFieldAddOrUpdateIfKeyExists<T>(string key, Map<string, T> fields);
+        bool HashFieldAddOrUpdateIfKeyExists<T>(string key, HashMap<string, T> fields);
 
         bool DeleteHashField(string key, string field);
         int DeleteHashFields(string key, IEnumerable<string> fields);
-        Map<string, object> GetHashFields(string key);
-        Map<string, T> GetHashFields<T>(string key);
+        HashMap<string, object> GetHashFields(string key);
+        HashMap<string, T> GetHashFields<T>(string key);
         Option<T> GetHashFieldDropOnDeserialiseFailed<T>(string key, string field);
-        Map<K, T> GetHashFields<K, T>(string key, Func<string, K> keyBuilder);
+        HashMap<K, T> GetHashFields<K, T>(string key, Func<string, K> keyBuilder);
         Option<T> GetHashField<T>(string key, string field);
-        Map<string, T> GetHashFields<T>(string key, IEnumerable<string> fields);
+        HashMap<string, T> GetHashFields<T>(string key, IEnumerable<string> fields);
         void SetAddOrUpdate<T>(string key, T value);
         void SetRemove<T>(string key, T value);
         Set<T> GetSet<T>(string key);
         bool SetContains<T>(string key, T value);
         bool SetExpire(string key, TimeSpan time);
-        Task<Map<string, Map<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
+        Task<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
     }
 }

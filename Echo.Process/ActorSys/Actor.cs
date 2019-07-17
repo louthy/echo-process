@@ -28,8 +28,8 @@ namespace Echo
         readonly Subject<object> stateSubject = new Subject<object>();
         readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
-        Map<string, IDisposable> subs = Map<string, IDisposable>();
-        Map<string, ActorItem> children = Map<string, ActorItem>();
+        HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
+        HashMap<string, ActorItem> children = HashMap<string, ActorItem>();
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
         EventWaitHandle request;
@@ -180,7 +180,7 @@ namespace Echo
         Unit RemoveAllSubscriptions()
         {
             subs.Iter(x => x.Dispose());
-            subs = Map<string, IDisposable>();
+            subs = HashMap<string, IDisposable>();
             return unit;
         }
 
@@ -343,7 +343,7 @@ namespace Echo
         /// <summary>
         /// Child processes
         /// </summary>
-        public Map<string, ActorItem> Children =>
+        public HashMap<string, ActorItem> Children =>
             children;
 
         public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
@@ -1014,7 +1014,7 @@ namespace Echo
                 {
                     ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
                     Parent.Actor.UnlinkChild(Id);
-                    children = Map<string, ActorItem>();
+                    children = HashMap<string, ActorItem>();
                 });
             }
         }

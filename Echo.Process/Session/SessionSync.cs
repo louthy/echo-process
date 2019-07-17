@@ -21,8 +21,8 @@ namespace Echo.Session
     {
         SystemName system;
         ProcessName nodeName;
-        Map<SessionId, SessionVector> sessions;
-        Map<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
+        HashMap<SessionId, SessionVector> sessions;
+        HashMap<SessionId, Subject<(SessionId, DateTime)>> sessionTouched;
         SupplementarySessions suppSessions = new SupplementarySessions();
         Subject<(SessionId, DateTime)> touched = new Subject<(SessionId, DateTime)>();
 
@@ -233,8 +233,8 @@ namespace Echo.Session
         /// </summary>
         class SupplementarySessions
         {
-            Map<SessionId, SupplementarySessionId> sessionToSupp;
-            Map<SupplementarySessionId, SessionId> suppToSession;
+            HashMap<SessionId, SupplementarySessionId> sessionToSupp;
+            HashMap<SupplementarySessionId, SessionId> suppToSession;
             object sync = new object();
 
             /// <summary>

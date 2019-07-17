@@ -12,7 +12,7 @@ namespace Echo
 
         static readonly object sync = new object();
         static Func<ProcessId, bool> routeValidator = _ => false;
-        static Map<ClientConnectionId, ClientConnection> connections = Map<ClientConnectionId, ClientConnection>();
+        static HashMap<ClientConnectionId, ClientConnection> connections = HashMap<ClientConnectionId, ClientConnection>();
 
         /// <summary>
         /// Ctor
@@ -37,7 +37,7 @@ namespace Echo
         /// <summary>
         /// Active client connections 
         /// </summary>
-        public static Map<ClientConnectionId, ClientConnection> Connections => connections;
+        public static HashMap<ClientConnectionId, ClientConnection> Connections => connections;
 
         /// <summary>
         /// Monitor open connections that should be closed
