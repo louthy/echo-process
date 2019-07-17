@@ -67,4 +67,73 @@ namespace Echo.Tests
             }
         }
     }
+
+    public class Issue69ForKill
+    {
+        [Fact(Timeout = 5000)]
+        public void TryKillChildren()
+        {
+            initialiseFileSystem();
+
+            var parent = spawn<string>("parent", ParentInbox);
+            for (int i = 0; i < 1000; i++)
+            {
+                tell(parent, "tell");
+                tell(parent, "kill");
+            }
+
+            // call ask to prove the system is not in a deadlock
+            var res = ask<int>(parent, "ask");
+
+            Assert.True(res == 1);
+        }
+
+        static void ParentInbox(string cmd) =>
+            ignore(cmd == "tell" ? fwd(SpawnChild())
+                 : cmd == "kill" ? kill(Children["child"])
+                 : cmd == "ask"  ? reply(1)
+                 : unit);
+
+        static ProcessId SpawnChild() =>
+            spawn<int, string>(
+                "child",
+                () => throw new Exception(),
+                (s, _) => s);
+    }
+
+    public class Issue69ForShutdown
+    {
+        [Fact(Timeout = 5000)]
+        public void TryShutdownAll()
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                initialiseFileSystem();
+                var parent = spawn<int>("parent", ParentInbox);
+                for (int j = 0; j < 100; j++)
+                {
+                    tell(parent, j);
+                }
+                shutdownAll();
+            }
+
+            // call ask to prove the system is not in a deadlock
+            initialiseFileSystem();
+            var pid = spawn<int>("parent", ParentInbox);
+            var res = ask<int>(pid, -1);
+
+            Assert.True(res == 1);
+        }
+
+        static void ParentInbox(int id) =>
+            ignore(id >= 0
+                        ? fwd(SpawnChild(id))
+                        : reply(1));
+
+        static ProcessId SpawnChild(int id) =>
+            spawn<IDisposable, string>(
+                $"child-{id}", 
+                () => throw new Exception(), 
+                (s, _) => s);
+    }
 }

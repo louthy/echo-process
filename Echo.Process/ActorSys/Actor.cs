@@ -29,7 +29,7 @@ namespace Echo
         readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
         Map<string, IDisposable> subs = Map<string, IDisposable>();
-        Map<string, ActorItem> children = Map<string, ActorItem>();
+        Atom<Map<string, ActorItem>> children = Atom(Map<string, ActorItem>());
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
         EventWaitHandle request;
@@ -372,10 +372,7 @@ namespace Echo
         /// </summary>
         public Unit UnlinkChild(ProcessId pid)
         {
-            lock(sync)
-            {
-                children = children.Remove(pid.Name.Value);
-            }
+            children.Swap(c => c.Remove(pid.Name.Value));
             return unit;
         }
 
@@ -384,10 +381,7 @@ namespace Echo
         /// </summary>
         public Unit LinkChild(ActorItem item)
         {
-            lock (sync)
-            {
-                children = children.AddOrUpdate(item.Actor.Id.Name.Value, item);
-            }
+            children.Swap(c => c.AddOrUpdate(item.Actor.Id.Name.Value, item));
             return unit;
         }
 
@@ -1014,7 +1008,7 @@ namespace Echo
                 {
                     ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
                     Parent.Actor.UnlinkChild(Id);
-                    children = Map<string, ActorItem>();
+                    children.Swap(_ => Map<string, ActorItem>());
                 });
             }
         }
