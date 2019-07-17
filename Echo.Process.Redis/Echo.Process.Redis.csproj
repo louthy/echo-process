@@ -31,8 +31,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.1.24" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.1.24" />
+    <PackageReference Include="LanguageExt.Core" Version="3.3.0" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.3.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.0.601" />
   </ItemGroup>
   <ItemGroup>
