@@ -44,10 +44,10 @@ namespace Echo
         public Unit DispatchWatch(ProcessId pid) =>
             IterRoleMembers(d => d.DispatchWatch(pid));
 
-        public Map<string, ProcessId> GetChildren() =>
+        public HashMap<string, ProcessId> GetChildren() =>
             List.fold(
                 MapRoleMembers(disp => disp.GetChildren()),
-                Map.empty<string, ProcessId>(), 
+                HashMap.empty<string, ProcessId>(), 
                 (s, x) => s + x
                 );
 

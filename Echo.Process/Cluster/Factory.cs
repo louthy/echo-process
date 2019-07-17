@@ -7,7 +7,7 @@ namespace Echo
     public static class ClusterFactory
     {
         static object sync = new object();
-        static Map<string, Func<ClusterConfig, ICluster>> providers = Map<string, Func<ClusterConfig, ICluster>>();
+        static HashMap<string, Func<ClusterConfig, ICluster>> providers = HashMap<string, Func<ClusterConfig, ICluster>>();
 
         /// <summary>
         /// Provider registration

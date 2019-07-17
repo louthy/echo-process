@@ -28,10 +28,10 @@ namespace Echo
         ActorRequestContext userContext;
         ClusterMonitor.State clusterState;
         IDisposable startupSubscription;
-        Map<ProcessId, Set<ProcessId>> watchers;
-        Map<ProcessId, Set<ProcessId>> watchings;
-        Map<ProcessName, Set<ProcessId>> registeredProcessNames = Map<ProcessName, Set<ProcessId>>();
-        Map<ProcessId, Set<ProcessName>> registeredProcessIds = Map<ProcessId, Set<ProcessName>>();
+        HashMap<ProcessId, Set<ProcessId>> watchers;
+        HashMap<ProcessId, Set<ProcessId>> watchings;
+        HashMap<ProcessName, Set<ProcessId>> registeredProcessNames = HashMap<ProcessName, Set<ProcessId>>();
+        HashMap<ProcessId, Set<ProcessName>> registeredProcessIds = HashMap<ProcessId, Set<ProcessName>>();
         ProcessSystemConfig settings;
         public AppProfile appProfile;
         ActorItem rootItem;
@@ -62,8 +62,8 @@ namespace Echo
             Ping = new Ping(this);
             startupTimestamp = DateTime.UtcNow.Ticks;
             sessionManager = new SessionManager(cluster, SystemName, appProfile.NodeName, VectorConflictStrategy.Branch);
-            watchers = Map<ProcessId, Set<ProcessId>>();
-            watchings = Map<ProcessId, Set<ProcessId>>();
+            watchers = HashMap<ProcessId, Set<ProcessId>>();
+            watchings = HashMap<ProcessId, Set<ProcessId>>();
 
             startupSubscription = NotifyCluster(cluster, startupTimestamp);
 
@@ -551,7 +551,7 @@ namespace Echo
 
         public Option<ActorItem> GetJsItem()
         {
-            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            var children = rootItem?.Actor?.Children ?? HashMap<string, ActorItem>();
             if (notnull(children) && children.ContainsKey("js"))
             {
                 return Some(children["js"]);
@@ -564,7 +564,7 @@ namespace Echo
 
         public Option<ActorItem> GetAskItem()
         {
-            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            var children = rootItem?.Actor?.Children ?? HashMap<string, ActorItem>();
             if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
                 var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
@@ -586,7 +586,7 @@ namespace Echo
 
         public Option<ActorItem> GetInboxShutdownItem()
         {
-            var children = rootItem?.Actor?.Children ?? Map<string, ActorItem>();
+            var children = rootItem?.Actor?.Children ?? HashMap<string, ActorItem>();
             if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
             {
                 var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
@@ -882,7 +882,7 @@ by name then use Process.deregisterByName(name).");
         public Unit TellSystem(ProcessId pid, SystemMessage message) =>
             GetDispatcher(pid).TellSystem(message, Self);
 
-        public Map<string, ProcessId> GetChildren(ProcessId pid) =>
+        public HashMap<string, ProcessId> GetChildren(ProcessId pid) =>
             GetDispatcher(pid).GetChildren();
 
         public Unit Kill(ProcessId pid, bool maintainState) =>

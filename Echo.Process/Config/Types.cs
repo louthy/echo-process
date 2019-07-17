@@ -32,19 +32,19 @@ namespace Echo.Config
 
         public readonly TypeDef Object;
 
-        public Map<string, TypeDef> TypeMap
+        public HashMap<string, TypeDef> TypeMap
         {
             get;
             private set;
         }
 
-        public Map<string, TypeDef> All
+        public HashMap<string, TypeDef> All
         {
             get;
             private set;
         }
 
-        public Lst<TypeDef> AllInOrder
+        public Seq<TypeDef> AllInOrder
         {
             get;
             private set;
@@ -58,7 +58,7 @@ namespace Echo.Config
                 typeof(int),
                 p => from x in p.integer
                      select (object)x,
-                Map(
+                HashMap(
                     OpT("+", () => Int, (lhs, rhs) => (int)lhs + (int)rhs),
                     OpT("-", () => Int, (lhs, rhs) => (int)lhs - (int)rhs),
                     OpT("*", () => Int, (lhs, rhs) => (int)lhs * (int)rhs),
@@ -73,14 +73,13 @@ namespace Echo.Config
                     OpT("^", () => Int, (lhs, rhs) => Math.Pow((int)lhs, (int)rhs)),
                     OpT("&", () => String, (lhs, rhs) => ((int)lhs & (int)rhs)),
                     OpT("|", () => String, (lhs, rhs) => ((int)lhs | (int)rhs))
-
                 ),
-                Map(
+                HashMap(
                     OpT("+", () => Int, rhs => +(int)rhs),
                     OpT("-", () => Int, rhs => -(int)rhs)
                 ),
                 null,
-                Map(
+                HashMap(
                     Conv("float", obj => (int)((double)obj)),
                     Conv("process-flags", obj => (int)((ProcessFlags)obj))
                 ),
@@ -94,7 +93,7 @@ namespace Echo.Config
                 typeof(double),
                 p => from x in p.floating
                      select (object)x,
-                Map(
+                HashMap(
                     OpT("+", () => Int, (lhs, rhs) => (double)lhs + (double)rhs),
                     OpT("-", () => Int, (lhs, rhs) => (double)lhs - (double)rhs),
                     OpT("*", () => Int, (lhs, rhs) => (double)lhs * (double)rhs),
@@ -107,12 +106,12 @@ namespace Echo.Config
                     Op(">=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (double)lhs.Value >= (double)rhs.Value)),
                     OpT("^", () => Int, (lhs, rhs) => Math.Pow((double)lhs, (double)rhs))
                 ),
-                Map(
+                HashMap(
                     OpT("+", () => Int, rhs => +(double)rhs),
                     OpT("-", () => Int, rhs => -(double)rhs)
                 ),
                 null,
-                Map(
+                HashMap(
                     Conv("int", obj => (double)((int)obj))
                 ),
                 null,
@@ -130,13 +129,13 @@ namespace Echo.Config
                         p.reserved("no")
                         )
                      select (object)(v == "true" || v == "yes"),
-                Map(
+                HashMap(
                     OpT("!=", () => Bool, (lhs, rhs) => (bool)lhs != (bool)rhs),
                     OpT("==", () => Bool, (lhs, rhs) => (bool)lhs == (bool)rhs),
                     OpT("&&", () => Bool, (lhs, rhs) => (bool)lhs && (bool)rhs),
                     OpT("||", () => Bool, (lhs, rhs) => (bool)lhs || (bool)rhs)
                 ),
-                Map(
+                HashMap(
                     OpT("!", () => Int, rhs => !(bool)rhs)
                 ),
                 null,
@@ -152,7 +151,7 @@ namespace Echo.Config
                 p => from _ in unitp
                      from v in p.stringLiteral
                      select (object)v,
-                Map(
+                HashMap(
                     OpT("+", () => String, (lhs, rhs) => (string)lhs + (string)rhs),
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (string)lhs.Value == (string)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (string)lhs.Value != (string)rhs.Value)),
@@ -161,11 +160,11 @@ namespace Echo.Config
                     Op(">", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((string)lhs.Value).CompareTo((string)rhs.Value) > 0)),
                     Op("<", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((string)lhs.Value).CompareTo((string)rhs.Value) < 0))
                 ),
-                Map(
+                HashMap(
                     OpT("!", () => Int, rhs => !(bool)rhs)
                 ),
                 null,
-                Map(
+                HashMap(
                     Conv("int", obj => obj.ToString()),
                     Conv("float", obj => obj.ToString()),
                     Conv("bool", obj => obj.ToString()),
@@ -187,7 +186,7 @@ namespace Echo.Config
                 typeof(ProcessId),
                 p => from v in p.processId
                      select (object)v,
-                Map(
+                HashMap(
                     OpT("+", () => String, (lhs, rhs) => ((ProcessId)lhs).Append((ProcessId)rhs)),
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessId)lhs.Value == (ProcessId)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessId)lhs.Value != (ProcessId)rhs.Value)),
@@ -198,7 +197,7 @@ namespace Echo.Config
                 ),
                 null,
                 null,
-                Map(
+                HashMap(
                     Conv("process-name", obj => new ProcessId("/"+((ProcessName)obj).Value)),
                     Conv("string", obj => new ProcessId((string)obj))
                 ),
@@ -213,7 +212,7 @@ namespace Echo.Config
                 p => from _ in unitp
                      from v in p.processName
                      select (object)v,
-                Map(
+                HashMap(
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessName)lhs.Value == (ProcessName)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessName)lhs.Value != (ProcessName)rhs.Value)),
                     Op(">=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((ProcessName)lhs.Value).CompareTo((ProcessName)rhs.Value) >= 0)),
@@ -223,7 +222,7 @@ namespace Echo.Config
                 ),
                 null,
                 null,
-                Map(
+                HashMap(
                     Conv("string", obj => new ProcessName((string)obj))
                 ),
                 null,
@@ -258,7 +257,7 @@ namespace Echo.Config
                 typeof(ProcessFlags),
                 p => from v in flagsValue(p)
                      select (object)v,
-                Map(
+                HashMap(
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessFlags)lhs.Value == (ProcessFlags)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (ProcessFlags)lhs.Value != (ProcessFlags)rhs.Value)),
                     Op(">=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((ProcessFlags)lhs.Value).CompareTo((ProcessFlags)rhs.Value) >= 0)),
@@ -268,11 +267,11 @@ namespace Echo.Config
                     OpT("&", () => String, (lhs, rhs) => ((ProcessFlags)lhs & (ProcessFlags)rhs)),
                     OpT("|", () => String, (lhs, rhs) => ((ProcessFlags)lhs | (ProcessFlags)rhs))
                 ),
-                Map(
+                HashMap(
                     OpT("~", () => String, rhs => ~(ProcessFlags)rhs)
                 ),
                 null,
-                Map(
+                HashMap(
                     Conv("int", obj => (ProcessFlags)((int)obj))
                 ),
                 null,
@@ -314,7 +313,7 @@ namespace Echo.Config
                 typeof(Time),
                 p => from v in p.token(timeValue(p))
                      select (object)v,
-                Map(
+                HashMap(
                     OpT("+", () => String, (lhs, rhs) => ((Time)lhs + (Time)rhs)),
                     OpT("-", () => String, (lhs, rhs) => ((Time)lhs - (Time)rhs)),
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (Time)lhs.Value == (Time)rhs.Value)),
@@ -324,7 +323,7 @@ namespace Echo.Config
                     Op(">", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((Time)lhs.Value).CompareTo((Time)rhs.Value) > 0)),
                     Op("<", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, ((Time)lhs.Value).CompareTo((Time)rhs.Value) < 0))
                 ),
-                Map(
+                HashMap(
                     OpT("+", () => Int, rhs => 0.Seconds() + (Time)rhs),
                     OpT("-", () => Int, rhs => 0.Seconds() - (Time)rhs)
                 ),
@@ -375,7 +374,7 @@ namespace Echo.Config
                 typeof(MessageDirective),
                 p => from v in p.token(msgDirective(p))
                      select (object)v,
-                Map(
+                HashMap(
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (MessageDirective)lhs.Value == (MessageDirective)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (MessageDirective)lhs.Value != (MessageDirective)rhs.Value))
                 ),
@@ -400,7 +399,7 @@ namespace Echo.Config
                 typeof(Directive),
                 p => from v in p.token(directive(p))
                      select (object)v,
-                Map(
+                HashMap(
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (Directive)lhs.Value == (Directive)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (Directive)lhs.Value != (Directive)rhs.Value))
                 ),
@@ -431,7 +430,7 @@ namespace Echo.Config
                 typeof(string),
                 p => from v in p.token(dispType(p))
                      select (object)v,
-                Map(
+                HashMap(
                     Op("==", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (string)lhs.Value == (string)rhs.Value)),
                     Op("!=", (ValueToken lhs, ValueToken rhs) => new ValueToken(Bool, (string)lhs.Value != (string)rhs.Value))
                 ),
@@ -442,7 +441,7 @@ namespace Echo.Config
                 10
             );
 
-            TypeMap = Map(
+            TypeMap = HashMap(
                 (typeof(bool).FullName, Bool),
                 (typeof(int).FullName, Int),
                 (typeof(double).FullName, Double),
@@ -454,7 +453,7 @@ namespace Echo.Config
                 (typeof(Directive).FullName, Directive)
             );
 
-            All = Map(
+            All = HashMap(
                 (Bool.Name, Bool),
                 (Int.Name, Int),
                 (Double.Name, Double),
@@ -469,7 +468,8 @@ namespace Echo.Config
             AllInOrder = (from x in All.Values
                           orderby x.Order descending
                           select x)
-                         .Freeze();
+                         .ToSeq()
+                         .Strict();
         }
 
         public bool Exists(Type type) =>
@@ -487,7 +487,8 @@ namespace Echo.Config
             AllInOrder = (from x in All.Values
                           orderby x.Order descending
                           select x)
-                         .Freeze();
+                         .ToSeq()
+                         .Strict();
             return type;
         }
 

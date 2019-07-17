@@ -25,10 +25,10 @@ namespace Echo.Config
         public readonly TypeDef GenericType;
         public readonly Func<Option<string>, object, object> Ctor;
         public readonly Func<ProcessSystemConfigParser, Parser<object>> ValueParser;
-        public readonly Map<string, Func<ValueToken, ValueToken, ValueToken>> BinaryOperators;
-        public readonly Map<string, Func<ValueToken, ValueToken>> PrefixOperators;
-        public readonly Map<string, Func<ValueToken, ValueToken>> PostfixOperators;
-        public readonly Map<string, Func<object,object>> ConversionOperators;
+        public readonly HashMap<string, Func<ValueToken, ValueToken, ValueToken>> BinaryOperators;
+        public readonly HashMap<string, Func<ValueToken, ValueToken>> PrefixOperators;
+        public readonly HashMap<string, Func<ValueToken, ValueToken>> PostfixOperators;
+        public readonly HashMap<string, Func<object,object>> ConversionOperators;
         public readonly string NodeName;
         public readonly int Order;
 
@@ -56,10 +56,10 @@ namespace Echo.Config
             Ctor = ctor ?? ((_,x) => x);
             MapsTo = type;
             Name = name ?? MakeName(info.Name);
-            BinaryOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
-            PrefixOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            PostfixOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            ConversionOperators = LanguageExt.Map.empty<string, Func<object, object>>();
+            BinaryOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
+            PrefixOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            PostfixOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            ConversionOperators = LanguageExt.HashMap.empty<string, Func<object, object>>();
             GenericType = null;
             NodeName = nodeName;
 
@@ -116,10 +116,10 @@ namespace Echo.Config
             Name = name;
             Order = order;
             Ctor = ctor ?? ((_,x) => x);
-            BinaryOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
-            PrefixOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            PostfixOperators = LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            ConversionOperators = LanguageExt.Map.empty<string, Func<object, object>>();
+            BinaryOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
+            PrefixOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            PostfixOperators = LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            ConversionOperators = LanguageExt.HashMap.empty<string, Func<object, object>>();
             GenericType = null;
             FuncSpecs = funcSpecs;
             NodeName = nodeName;
@@ -145,10 +145,10 @@ namespace Echo.Config
             Func<Option<string>, object, object> ctor,
             Type mapsTo,
             Func<ProcessSystemConfigParser, Parser<object>> valueParser,
-            Map<string, Func<ValueToken, ValueToken, ValueToken>>? binaryOperators,
-            Map<string, Func<ValueToken, ValueToken>>? prefixOperators,
-            Map<string, Func<ValueToken, ValueToken>>? postfixOperators,
-            Map<string, Func<object, object>>? conversionOperators,
+            HashMap<string, Func<ValueToken, ValueToken, ValueToken>>? binaryOperators,
+            HashMap<string, Func<ValueToken, ValueToken>>? prefixOperators,
+            HashMap<string, Func<ValueToken, ValueToken>>? postfixOperators,
+            HashMap<string, Func<object, object>>? conversionOperators,
             TypeDef genericType,
             int order
             )
@@ -159,10 +159,10 @@ namespace Echo.Config
             Name = name;
             Ctor = ctor ?? ((_,x) => x);
             ValueParser = valueParser.Memo();
-            BinaryOperators = binaryOperators ?? LanguageExt.Map.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
-            PrefixOperators = prefixOperators ?? LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            PostfixOperators = postfixOperators ?? LanguageExt.Map.empty<string, Func<ValueToken, ValueToken>>();
-            ConversionOperators = conversionOperators ?? LanguageExt.Map.empty<string, Func<object, object>>();
+            BinaryOperators = binaryOperators ?? LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken, ValueToken>>();
+            PrefixOperators = prefixOperators ?? LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            PostfixOperators = postfixOperators ?? LanguageExt.HashMap.empty<string, Func<ValueToken, ValueToken>>();
+            ConversionOperators = conversionOperators ?? LanguageExt.HashMap.empty<string, Func<object, object>>();
             GenericType = genericType;
         }
 
@@ -177,7 +177,7 @@ namespace Echo.Config
 
                                     // Known function and property definitions
                                     choice(
-                                        funcSpecs.Fold(LanguageExt.Map.empty<string, Lst<FuncSpec>>(), (s, x) => s.AddOrUpdate(x.Name, Some: exists => exists.Add(x), None: () => List(x)))
+                                        funcSpecs.Fold(LanguageExt.HashMap.empty<string, Lst<FuncSpec>>(), (s, x) => s.AddOrUpdate(x.Name, Some: exists => exists.Add(x), None: () => List(x)))
                                         .Map((func, variants) =>
 
                                               // Hard-coded (for now) strategy match grammar
@@ -195,7 +195,7 @@ namespace Echo.Config
                                                 from tok in choice(Seq(variants.Map(variant =>
                                                     attempt(
                                                         from vals in p.arguments(nam, variant.Args)
-                                                        let valmap = LanguageExt.Map.createRange(vals.Map(x => Tuple(x.Name, x)))
+                                                        let valmap = LanguageExt.HashMap.createRange(vals.Map(x => Tuple(x.Name, x)))
                                                         select new NamedValueToken(nam, new ValueToken(variant.Type(), variant.Body(valmap)), None)))))
                                                 select tok)).Values.ToArray()),
 
@@ -307,7 +307,7 @@ namespace Echo.Config
             var def = new TypeDef(
                 "map",
                 (_,xs) => xs,
-                typeof(Map<string,object>),
+                typeof(HashMap<string,object>),
                 (ProcessSystemConfigParser p) =>
                     p.brackets(
                         from xs in p.commaSep(
@@ -315,11 +315,11 @@ namespace Echo.Config
                             from _ in p.symbol(":")
                             from v in p.expr(None,t())
                             select Tuple(x, v.Value))
-                        select MakeTypedMap(LanguageExt.Map.createRange(xs), t().MapsTo))
+                        select MakeTypedMap(LanguageExt.HashMap.createRange(xs), t().MapsTo))
                     .label("map"),
-                    LanguageExt.Map.create(
-                        Types.OpT("+", () => maps[t()], (lhs, rhs) => (Map<string, object>)lhs + (Map<string, object>)lhs),
-                        Types.OpT("-", () => maps[t()], (lhs, rhs) => (Map<string, object>)lhs - (Map<string, object>)lhs)
+                    LanguageExt.HashMap.create(
+                        Types.OpT("+", () => maps[t()], (lhs, rhs) => (HashMap<string, object>)lhs + (HashMap<string, object>)lhs),
+                        Types.OpT("-", () => maps[t()], (lhs, rhs) => (HashMap<string, object>)lhs - (HashMap<string, object>)lhs)
                     ), 
                 null, 
                 null, 
@@ -353,7 +353,7 @@ namespace Echo.Config
             return result;
         }
 
-        static object MakeTypedMap(Map<string, object> input, Type type)
+        static object MakeTypedMap(HashMap<string, object> input, Type type)
         {
             var tup = typeof(Tuple<,>).MakeGenericType(typeof(string),type);
             var tupCreate = typeof(TypeDef).GetRuntimeMethods()
@@ -387,7 +387,7 @@ namespace Echo.Config
                         from xs in p.commaSep(p.expr(None, t()))
                         select MakeTypedLst(xs.Map(x => x.Value).Freeze(), t().MapsTo))
                     .label("array"),
-                    LanguageExt.Map.create(
+                    LanguageExt.HashMap.create(
                         Types.OpT("+", () => maps[t()], (lhs, rhs) => (Lst<object>)lhs + (Lst<object>)lhs),
                         Types.OpT("-", () => maps[t()], (lhs, rhs) => (Lst<object>)lhs - (Lst<object>)lhs)
                     ),

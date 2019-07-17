@@ -6,12 +6,12 @@ namespace Echo.Config
 {
     public class ParserState
     {
-        public readonly Map<string, ClusterToken> Clusters;
-        public readonly Map<string, ValueToken> Locals;
+        public readonly HashMap<string, ClusterToken> Clusters;
+        public readonly HashMap<string, ValueToken> Locals;
 
         public ParserState(
-            Map<string, ClusterToken> clusters,
-            Map<string, ValueToken> locals
+            HashMap<string, ClusterToken> clusters,
+            HashMap<string, ValueToken> locals
             )
         {
             Clusters = clusters;
@@ -21,7 +21,7 @@ namespace Echo.Config
         public ParserState AddCluster(string alias, ClusterToken cluster) =>
             new ParserState(Clusters.AddOrUpdate(alias, cluster), Locals);
 
-        public ParserState SetClusters(Map<string, ClusterToken> clusters) =>
+        public ParserState SetClusters(HashMap<string, ClusterToken> clusters) =>
             new ParserState(clusters, Locals);
 
         public bool LocalExists(string name) =>
@@ -33,6 +33,6 @@ namespace Echo.Config
         public Option<ValueToken> Local(string name) =>
             Locals.Find(name);
 
-        public static readonly ParserState Empty = new ParserState(Map<string,ClusterToken>(), Map<string, ValueToken>());
+        public static readonly ParserState Empty = new ParserState(HashMap<string,ClusterToken>(), HashMap<string, ValueToken>());
     }
 }

@@ -42,9 +42,9 @@ namespace Echo
     {
         public readonly ProcessId ProcessId;
         public readonly Que<ProcessOp> Ops;
-        public readonly Option<Map<string, object>> Settings;
+        public readonly Option<HashMap<string, object>> Settings;
 
-        public ProcessOpTransaction(ProcessId pid, Que<ProcessOp> ops, Option<Map<string, object>> settings)
+        public ProcessOpTransaction(ProcessId pid, Que<ProcessOp> ops, Option<HashMap<string, object>> settings)
         {
             ProcessId = pid;
             Ops = ops;
@@ -54,21 +54,21 @@ namespace Echo
         public ProcessOpTransaction Write(object value, string name, string prop, ProcessFlags flags)
         {
             var op = new WriteConfigOp(value, name, prop, flags);
-            var settings = Settings.IfNone(Map<string, object>()).AddOrUpdate($"{name}@{prop}", value);
+            var settings = Settings.IfNone(HashMap<string, object>()).AddOrUpdate($"{name}@{prop}", value);
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
         public ProcessOpTransaction Clear(string name, string prop, ProcessFlags flags)
         {
             var op = new ClearConfigOp(name, prop, flags);
-            var settings = Settings.IfNone(Map<string, object>()).Remove($"{name}@{prop}");
+            var settings = Settings.IfNone(HashMap<string, object>()).Remove($"{name}@{prop}");
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
         public ProcessOpTransaction ClearAll(ProcessFlags flags)
         {
             var op = new ClearAllOp(flags);
-            var settings = Settings.IfNone(Map<string, object>()).Clear();
+            var settings = Settings.IfNone(HashMap<string, object>()).Clear();
             return new ProcessOpTransaction(ProcessId, Ops.Enqueue(op), settings);
         }
 
@@ -80,7 +80,7 @@ namespace Echo
 
         public T Read<T>(string name, string prop, ProcessFlags flags, T defaultValue)
         {
-            var val = Settings.IfNone(Map<string, object>()).Find($"{name}@{prop}");
+            var val = Settings.IfNone(HashMap<string, object>()).Find($"{name}@{prop}");
             if (val.IsSome) return val.Map(x => (T)x).IfNone(defaultValue);
             return ActorContext.System(ProcessId).Settings.GetProcessSetting<T>(ProcessId, name, prop, flags).IfNone(defaultValue);
         }

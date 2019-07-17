@@ -14,15 +14,15 @@ namespace Echo
         public readonly Time BackoffAmount;
         public readonly int Failures;
         public readonly DateTime LastFailure;
-        public readonly Map<string, object> Metadata;
+        public readonly HashMap<string, object> Metadata;
 
-        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, Map<string, object>());
+        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, HashMap<string, object>());
 
         public StrategyState(
             Time backoffAmount,
             int failures,
             DateTime lastFailure,
-            Map<string, object> metadata
+            HashMap<string, object> metadata
             )
         {
             BackoffAmount = backoffAmount;
@@ -70,7 +70,7 @@ namespace Echo
             Time? BackoffAmount = null,
             int? Failures = null,
             DateTime? LastFailure = null,
-            Map<string, object>? Metadata = null
+            HashMap<string, object>? Metadata = null
             ) =>
             new StrategyState(
                 BackoffAmount ?? this.BackoffAmount,

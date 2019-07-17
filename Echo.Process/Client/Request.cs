@@ -26,7 +26,7 @@ namespace Echo.Client
         /// 
         /// </param>
         /// <returns></returns>
-        public static Either<string, Req> Parse(string msg, string remoteIp, Map<ClientConnectionId, ClientConnection> activeConnections)
+        public static Either<string, Req> Parse(string msg, string remoteIp, HashMap<ClientConnectionId, ClientConnection> activeConnections)
         {
             try
             {
@@ -93,7 +93,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, Map<ClientConnectionId, ClientConnection> clientConnections) =>
+        public static Either<string, Req> Create(ClientConnectionId id, HashMap<ClientConnectionId, ClientConnection> clientConnections) =>
             clientConnections.Find(id).Map(x => new DisconnectReq(id, x) as Req)
                              .ToEither("Invalid connection-id");
     }
@@ -109,7 +109,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, Map<ClientConnectionId, ClientConnection> clientConnections) =>
+        public static Either<string, Req> Create(ClientConnectionId id, HashMap<ClientConnectionId, ClientConnection> clientConnections) =>
             clientConnections.Find(id).Map(x => new PingReq(id, x) as Req)
                              .ToEither("Invalid connection-id");
     }
@@ -133,7 +133,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, ClientMessageId msgId, ProcessId to, ProcessId sender, string msg, Map<ClientConnectionId, ClientConnection> clientConnections)
+        public static Either<string, Req> Create(ClientConnectionId id, ClientMessageId msgId, ProcessId to, ProcessId sender, string msg, HashMap<ClientConnectionId, ClientConnection> clientConnections)
         {
             if (!to.IsValid) return "Invalid process-id (To)"; 
             var conn = clientConnections.Find(id);
@@ -172,7 +172,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, ClientMessageId msgId, ProcessId to, ProcessId sender, string msg, Map<ClientConnectionId, ClientConnection> clientConnections)
+        public static Either<string, Req> Create(ClientConnectionId id, ClientMessageId msgId, ProcessId to, ProcessId sender, string msg, HashMap<ClientConnectionId, ClientConnection> clientConnections)
         {
             if (!to.IsValid) return "Invalid process-id (To)";
             var conn = clientConnections.Find(id);
@@ -205,7 +205,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, ProcessId publisher, ProcessId subscriber, Map<ClientConnectionId, ClientConnection> clientConnections)
+        public static Either<string, Req> Create(ClientConnectionId id, ProcessId publisher, ProcessId subscriber, HashMap<ClientConnectionId, ClientConnection> clientConnections)
         {
             if (!publisher.IsValid) return "Invalid publisher-id";
             if (!subscriber.IsValid) return "Invalid subscriber-id";
@@ -230,7 +230,7 @@ namespace Echo.Client
             Connection = connection;
         }
 
-        public static Either<string, Req> Create(ClientConnectionId id, ProcessId publisher, ProcessId subscriber, Map<ClientConnectionId, ClientConnection> clientConnections)
+        public static Either<string, Req> Create(ClientConnectionId id, ProcessId publisher, ProcessId subscriber, HashMap<ClientConnectionId, ClientConnection> clientConnections)
         {
             if (!publisher.IsValid) return "Invalid publisher-id";
             if (!subscriber.IsValid) return "Invalid subscriber-id";

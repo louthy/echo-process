@@ -35,12 +35,12 @@ namespace Echo
 
         public class State
         {
-            public readonly Map<ProcessName, ClusterNode> Members;
+            public readonly HashMap<ProcessName, ClusterNode> Members;
             public readonly IActorSystem System;
 
-            public static State Empty(IActorSystem system) => new State(Map<ProcessName, ClusterNode>(), system);
+            public static State Empty(IActorSystem system) => new State(HashMap<ProcessName, ClusterNode>(), system);
 
-            public State(Map<ProcessName, ClusterNode> members, IActorSystem system)
+            public State(HashMap<ProcessName, ClusterNode> members, IActorSystem system)
             {
                 Members = members.Filter(node => node != null);
                 System = system;

@@ -47,12 +47,12 @@ namespace Echo.Config
         public Lst<T> ToList<T>() =>
             ToList().Map(nv => (T)nv.Value.Value);
 
-        Map<string, ValueToken>? mapCache = null;
-        public Map<string, ValueToken> ToMap()
+        HashMap<string, ValueToken>? mapCache = null;
+        public HashMap<string, ValueToken> ToMap()
         {
             if (mapCache == null)
             {
-                mapCache = LanguageExt.Map.createRange(
+                mapCache = LanguageExt.HashMap.createRange(
                     ToList().Map(nv => Tuple(nv.Name, nv.Value))
                 );
             }
@@ -89,7 +89,7 @@ namespace Echo.Config
         public readonly Option<ProcessFlags> Flags;
         public readonly Option<int> MailboxSize;
         public readonly Option<State<StrategyContext, Unit>> Strategy;
-        public readonly Map<string, ValueToken> Settings;
+        public readonly HashMap<string, ValueToken> Settings;
         public readonly Option<ProcessName> RegisteredName;
         public readonly Option<string> Dispatch;
         public readonly Option<string> Route;
@@ -99,7 +99,7 @@ namespace Echo.Config
 
         public ProcessToken(Lst<NamedValueToken> values)
         {
-            Settings        = toMap(values.Map(x => Tuple(x.Name, x.Value)));
+            Settings        = toHashMap(values.Map(x => Tuple(x.Name, x.Value)));
             ProcessId       = GetValue<ProcessId>("pid");
             Flags           = GetValue<ProcessFlags>("flags");
             MailboxSize     = GetValue<int>("mailbox-size");
@@ -117,7 +117,7 @@ namespace Echo.Config
             Option<ProcessFlags> flags,
             Option<int> mailboxSize,
             Option<State<StrategyContext, Unit>> strategy,
-            Map<string, ValueToken> settings,
+            HashMap<string, ValueToken> settings,
             Option<ProcessName> registeredName,
             Option<string> dispatch,
             Option<string> route,
@@ -160,7 +160,7 @@ namespace Echo.Config
 
     public class ClusterToken
     {
-        public readonly Map<string, ValueToken> Settings;
+        public readonly HashMap<string, ValueToken> Settings;
         public readonly Option<string> Alias;
         public readonly Option<string> NodeName;
         public readonly Option<string> Role;
@@ -173,7 +173,7 @@ namespace Echo.Config
         public ClusterToken(Option<string> alias, Lst<NamedValueToken> values)
         {
             Alias = alias;
-            Settings = toMap(values.Map(x => (x.Name, x.Value)));
+            Settings = toHashMap(values.Map(x => (x.Name, x.Value)));
             NodeName = GetValue<string>("node-name");
             Role = GetValue<string>("role");
             Connection = GetValue<string>("connection");
@@ -189,7 +189,7 @@ namespace Echo.Config
         }
 
         ClusterToken(
-            Map<string, ValueToken> settings,
+            HashMap<string, ValueToken> settings,
             Option<string> nodeName,
             Option<string> role,
             Option<string> connection,
@@ -222,6 +222,6 @@ namespace Echo.Config
            Settings.Find(name).Map(tok => tok.Cast<T>());
 
         public readonly static ClusterToken Empty =
-            new ClusterToken(Map<string, ValueToken>(), None, None, None, None, None, None);
+            new ClusterToken(HashMap<string, ValueToken>(), None, None, None, None, None, None);
     }
 }
