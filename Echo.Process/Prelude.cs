@@ -454,5 +454,25 @@ namespace Echo
         /// <returns>List of types</returns>
         public static IEnumerable<Type> validMessageTypes(ProcessId pid) =>
             ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes();
+
+        /// <summary>
+        /// Re-schedule an already scheduled message
+        /// </summary>
+        public static Unit reschedule(ProcessId pid, string key, DateTime when)
+        {
+            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
+            LocalScheduler.Reschedule(pid, key, when);
+            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.Reschedule(inboxKey, key, when));
+        }
+
+        /// <summary>
+        /// Cancel an already scheduled message
+        /// </summary>
+        public static Unit cancelScheduled(ProcessId pid, string key)
+        {
+            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
+            LocalScheduler.RemoveExistingScheduledMessage(pid, key);
+            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.RemoveFromSchedule(inboxKey, key));
+        }
     }
 }
