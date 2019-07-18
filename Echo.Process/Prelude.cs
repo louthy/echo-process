@@ -466,6 +466,12 @@ namespace Echo
         }
 
         /// <summary>
+        /// Re-schedule an already scheduled message
+        /// </summary>
+        public static Unit reschedule(ProcessId pid, string key, TimeSpan when) =>
+            reschedule(pid, key, DateTime.Now.Add(when));
+
+        /// <summary>
         /// Cancel an already scheduled message
         /// </summary>
         public static Unit cancelScheduled(ProcessId pid, string key)
