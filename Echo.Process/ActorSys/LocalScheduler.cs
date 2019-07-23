@@ -12,7 +12,8 @@ namespace Echo
     internal static class LocalScheduler
     {
         static object sync = new object();
-        static HashMap<long, Seq<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
+        // using Map for 'actions' as we rely on order
+        static Map<long, Seq<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
         static HashMap<string, long> keys;
         static Que<(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> inbound;
 
