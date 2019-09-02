@@ -51,7 +51,7 @@ namespace Echo
             With(Metadata: Metadata.TryAdd(key, value));
 
         /// <summary>
-        /// Attempts to set a meta-data item.  If it is already set, nothing 
+        /// Attempts to remove a meta-data item.  If it is not set, nothing 
         /// happens.
         /// 
         /// This is for extending the default strategies behaviours and 
