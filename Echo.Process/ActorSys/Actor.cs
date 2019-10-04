@@ -627,6 +627,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                     );
@@ -706,6 +707,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                         );
@@ -822,6 +824,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                         );
