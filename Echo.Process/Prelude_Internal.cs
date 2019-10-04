@@ -55,6 +55,7 @@ namespace Echo
         {
             var savedContext = ActorContext.Request;
             var savedSession = ActorContext.SessionId;
+            var stackTrace   = new System.Diagnostics.StackTrace(true);
 
             return Observable.Timer(delayFor).Do(_ =>
             {
@@ -64,7 +65,18 @@ namespace Echo
                 }
                 else
                 {
-                    ActorContext.System(savedContext.Self.Actor.Id).WithContext(
+                    ActorSystem system;
+                    try
+                    {
+
+                        system = ActorContext.System(savedContext.Self.Actor.Id);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new ProcessSystemException(e, stackTrace);
+                    }
+
+                    system.WithContext(
                                   savedContext.Self,
                                   savedContext.Parent,
                                   savedContext.Sender,

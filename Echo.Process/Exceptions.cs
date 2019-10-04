@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -351,4 +352,18 @@ namespace Echo
         }
     }
     
+    public class ProcessSystemException : Exception
+    {
+        public override string StackTrace { get; }
+
+        internal ProcessSystemException(Exception ex, StackTrace stackTrace) : base(ex.Message, ex)
+        {
+            StackTrace = stackTrace.ToString();
+        }
+
+        public override string Message => $"{InnerException?.GetType().Name} {InnerException?.Message}";
+
+        public override string ToString() =>
+            $"{nameof(ProcessSystemException)}: {Message}{Environment.NewLine} ---> {InnerException}{Environment.NewLine}   --- End of inner exception ---{Environment.NewLine}{StackTrace}";
+    }
 }
