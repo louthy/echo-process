@@ -11,12 +11,14 @@ namespace Echo
         public readonly ProcessName NodeName;
         public readonly DateTime LastHeartbeat;
         public readonly ProcessName Role;
+        public readonly Version EchoVersion;
 
-        public ClusterNode(ProcessName nodeName, DateTime lastHeartbeat, ProcessName role)
+        public ClusterNode(ProcessName nodeName, DateTime lastHeartbeat, ProcessName role, Version echoVersion)
         {
             NodeName = nodeName;
             LastHeartbeat = lastHeartbeat;
             Role = role;
+            EchoVersion = echoVersion;
         }
     }
 }

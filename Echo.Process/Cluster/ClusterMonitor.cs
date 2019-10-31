@@ -16,6 +16,7 @@ namespace Echo
         public const string MembersKey = "sys-cluster-members";
         static readonly Time HeartbeatFreq = 1*seconds;
         static readonly Time OfflineCutoff = 3*seconds;
+        static readonly Version EchoVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
 
         public enum MsgTag
         {
@@ -103,7 +104,7 @@ namespace Echo
                     {
                         var cutOff = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff);
 
-                        c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role));
+                        c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role, EchoVersion));
                         var newState = new State(c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s))
                                                   .Where(m => m.LastHeartbeat > cutOff), state.System);
                         var diffs = DiffState(state, newState);
@@ -129,7 +130,7 @@ namespace Echo
         }
 
         static State HeartbeatLocal(State state) =>
-            state.SetMember("root", new ClusterNode("root", DateTime.UtcNow, "local"));
+            state.SetMember("root", new ClusterNode("root", DateTime.UtcNow, "local", EchoVersion));
 
         static string GetNodeName(Option<ICluster> cluster) =>
             cluster.Map(c => c.NodeName.Value).IfNone("root");
