@@ -3,6 +3,7 @@ using LanguageExt.UnitsOfMeasure;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -151,16 +152,31 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static Map<string, ProcessId> Children =>
+        public static HashMap<string, ProcessId> Children =>
             InMessageLoop
                 ? ActorContext.Request.Children
-                : raiseUseInMsgLoopOnlyException<Map<string,ProcessId>>(nameof(Children));
+                : raiseUseInMsgLoopOnlyException<HashMap<string,ProcessId>>(nameof(Children));
+
+        /// <summary>
+        /// Get the child processes of the running process
+        /// </summary>
+        /// <remarks>
+        /// This should be used from within a process message loop only
+        /// </remarks>
+        public static Map<string, ProcessId> ChildrenInOrder =>
+            toMap(Children);
 
         /// <summary>
         /// Get the child processes of the process ID provided
         /// </summary>
-        public static Map<string, ProcessId> children(ProcessId pid) =>
+        public static HashMap<string, ProcessId> children(ProcessId pid) =>
             ActorContext.System(pid).GetChildren(pid);
+
+        /// <summary>
+        /// Get the child processes of the process ID provided
+        /// </summary>
+        public static Map<string, ProcessId> childrenInOrder(ProcessId pid) =>
+            toMap(children(pid));
 
         /// <summary>
         /// Get the child processes by name
@@ -185,8 +201,8 @@ namespace Echo
                     ? raise<ProcessId>(new NoChildProcessesException())
                     : ActorContext.Request
                                   .Children
+                                  .Values
                                   .Skip(index % ActorContext.Request.Children.Count)
-                                  .Map( kv => kv.Value )
                                   .Head()
                 : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
 
@@ -399,8 +415,8 @@ namespace Echo
         /// <summary>
         /// Get a list of cluster nodes that are online
         /// </summary>
-        public static Map<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).ClusterState?.Members ?? Map<ProcessName, ClusterNode>();
+        public static HashMap<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
+            ActorContext.System(system).ClusterState?.Members ?? HashMap<ProcessName, ClusterNode>();
 
         /// <summary>
         /// List of system names running on this node
@@ -438,5 +454,31 @@ namespace Echo
         /// <returns>List of types</returns>
         public static IEnumerable<Type> validMessageTypes(ProcessId pid) =>
             ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes();
+
+        /// <summary>
+        /// Re-schedule an already scheduled message
+        /// </summary>
+        public static Unit reschedule(ProcessId pid, string key, DateTime when)
+        {
+            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
+            LocalScheduler.Reschedule(pid, key, when);
+            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.Reschedule(inboxKey, key, when));
+        }
+
+        /// <summary>
+        /// Re-schedule an already scheduled message
+        /// </summary>
+        public static Unit reschedule(ProcessId pid, string key, TimeSpan when) =>
+            reschedule(pid, key, DateTime.Now.Add(when));
+
+        /// <summary>
+        /// Cancel an already scheduled message
+        /// </summary>
+        public static Unit cancelScheduled(ProcessId pid, string key)
+        {
+            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
+            LocalScheduler.RemoveExistingScheduledMessage(pid, key);
+            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.RemoveFromSchedule(inboxKey, key));
+        }
     }
 }

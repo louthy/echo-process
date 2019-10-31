@@ -21,10 +21,10 @@ namespace Echo.Config
     {
         public readonly string Name;
         public readonly Func<TypeDef> Type;
-        public readonly Func<Map<string, NamedValueToken>, object> Body;
+        public readonly Func<HashMap<string, NamedValueToken>, object> Body;
         public readonly FieldSpec[] Args;
 
-        FuncSpec(string name, Func<TypeDef> type, Func<Map<string, NamedValueToken>, object> body, params FieldSpec[] args)
+        FuncSpec(string name, Func<TypeDef> type, Func<HashMap<string, NamedValueToken>, object> body, params FieldSpec[] args)
         {
             Name = name;
             Args = args;
@@ -48,7 +48,7 @@ namespace Echo.Config
                 new FieldSpec("value", propertyType)
             );
 
-        public static FuncSpec Attrs(string name, Func<TypeDef> type, Func<Map<string, object>, object> body, params FieldSpec[] args) =>
+        public static FuncSpec Attrs(string name, Func<TypeDef> type, Func<HashMap<string, object>, object> body, params FieldSpec[] args) =>
             new FuncSpec(
                 name,
                 type,

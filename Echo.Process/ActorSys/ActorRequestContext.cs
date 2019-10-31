@@ -103,7 +103,7 @@ namespace Echo
             return unit;
         }
 
-        public Map<string, ProcessId> Children =>
+        public HashMap<string, ProcessId> Children =>
             Self.Actor.Children.Map(c => c.Actor.Id);
     }
 }

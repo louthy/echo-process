@@ -26,6 +26,8 @@ namespace Echo
                     {
                         case Msg.CheckMsg m: return Check(s, cluster);
                         case Msg.AddToScheduleMsg m: return AddToSchedule(s, m, cluster);
+                        case Msg.RescheduleMsg m: return Reschedule(s, m, cluster);
+                        case Msg.RemoveFromScheduleMsg m: return RemoveFromSchedule(s, m, cluster);
                         default: return s;
                     }
                 });
@@ -46,11 +48,26 @@ namespace Echo
             return state;
         }
 
+        static State RemoveFromSchedule(State state, Msg.RemoveFromScheduleMsg msg, ICluster cluster)
+        {
+            cluster.DeleteHashField(msg.InboxKey, msg.Id);
+            return state.Delete(msg.InboxKey, msg.Id);
+        }
+
         static State AddToSchedule(State state, Msg.AddToScheduleMsg msg, ICluster cluster)
         {
             cluster.HashFieldAddOrUpdate(msg.InboxKey, msg.Id, msg.Message);
             return state.Add(msg.InboxKey, msg.Id, msg.Message);
         }
+
+        static State Reschedule(State state, Msg.RescheduleMsg msg, ICluster cluster) =>
+            cluster.GetHashField<RemoteMessageDTO>(msg.InboxKey, msg.Id).Map(dto =>
+            {
+                dto.Due = msg.When.Ticks;
+                cluster.HashFieldAddOrUpdate(msg.InboxKey, msg.Id, dto);
+                return state.Delete(msg.InboxKey, msg.Id).Add(msg.InboxKey, msg.Id, dto);
+            })
+            .IfNone(state);
 
         static State Check(State state, ICluster cluster)
         {
@@ -79,10 +96,10 @@ namespace Echo
             return state;
         }
 
-        static Map<string, Map<string, RemoteMessageDTO>> GetScheduled(ICluster cluster) =>
+        static HashMap<string, HashMap<string, RemoteMessageDTO>> GetScheduled(ICluster cluster) =>
             cluster.QueryScheduleKeys(cluster.NodeName.Value)
                    .ToList()
-                   .Fold(Map<string, Map<string, RemoteMessageDTO>>(), 
+                   .Fold(HashMap<string, HashMap<string, RemoteMessageDTO>>(), 
                     (s, key) =>
                         s.AddOrUpdate(key, cluster.GetHashFields<RemoteMessageDTO>(key)));
 
@@ -90,6 +107,12 @@ namespace Echo
         {
             public static Msg AddToSchedule(string inboxKey, string id, RemoteMessageDTO message) =>
                 new AddToScheduleMsg(inboxKey, id, message);
+
+            public static Msg Reschedule(string inboxKey, string id, DateTime when) =>
+                new RescheduleMsg(inboxKey, id, when);
+
+            public static Msg RemoveFromSchedule(string inboxKey, string id) =>
+                new RemoveFromScheduleMsg(inboxKey, id);
 
             public static readonly Msg Check = 
                 new CheckMsg();
@@ -107,6 +130,30 @@ namespace Echo
                 }
             }
 
+            public class RemoveFromScheduleMsg : Msg
+            {
+                public readonly string InboxKey;
+                public readonly string Id;
+                public RemoveFromScheduleMsg(string inboxKey, string id)
+                {
+                    InboxKey = inboxKey;
+                    Id = id;
+                }
+            }
+
+            public class RescheduleMsg : Msg
+            {
+                public readonly string InboxKey;
+                public readonly string Id;
+                public readonly DateTime When;
+                public RescheduleMsg(string inboxKey, string id, DateTime when)
+                {
+                    InboxKey = inboxKey;
+                    Id = id;
+                    When = when;
+                }
+            }
+
             public class CheckMsg : Msg
             {
             }
@@ -116,8 +163,8 @@ namespace Echo
         {
             public static readonly State Empty = new State(None);
 
-            public readonly Option<Map<string, Map<string, RemoteMessageDTO>>> Scheduled;
-            public State(Option<Map<string, Map<string, RemoteMessageDTO>>> scheduled)
+            public readonly Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> Scheduled;
+            public State(Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> scheduled)
             {
                 Scheduled = scheduled;
             }

@@ -27,8 +27,8 @@ namespace Echo
             this.transactionalIO = transactionalIO;
         }
 
-        public Map<string, ProcessId> GetChildren() =>
-            ask<Map<string, ProcessId>>(ProcessId, UserControlMessage.GetChildren);
+        public HashMap<string, ProcessId> GetChildren() =>
+            ask<HashMap<string, ProcessId>>(ProcessId, UserControlMessage.GetChildren);
 
         public IObservable<T> Observe<T>() =>
             Cluster.SubscribeToChannel<T>(ActorInboxCommon.ClusterPubSubKey(ProcessId));

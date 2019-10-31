@@ -87,7 +87,7 @@ namespace Echo
                 try
                 {
                     return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
-                                           .IfSome(msg => userInbox.Post(msg));
+                                           .IfSome(msg => userInbox?.Post(msg));
                 }
                 catch (QueueFullException)
                 {
@@ -105,7 +105,7 @@ namespace Echo
                 try
                 {
                     return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
-                                           .IfSome(msg => userInbox.Post(msg));
+                                           .IfSome(msg => userInbox?.Post(msg));
                 }
                 catch(QueueFullException)
                 {
@@ -123,7 +123,7 @@ namespace Echo
                 try
                 {
                     message.SessionId = message.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
-                    userInbox.Post(message);
+                    userInbox?.Post(message);
                 }
                 catch (QueueFullException)
                 {
@@ -140,7 +140,7 @@ namespace Echo
             {
                 try
                 {
-                    sysInbox.Post(message);
+                    sysInbox?.Post(message);
                 }
                 catch (QueueFullException)
                 {
@@ -159,17 +159,17 @@ namespace Echo
         {
             get
             {
-                return userInbox.IsPaused;
+                return userInbox?.IsPaused ?? false;
             }
             private set
             {
                 if (value)
                 {
-                    userInbox.Pause();
+                    userInbox?.Pause();
                 }
                 else
                 {
-                    userInbox.UnPause();
+                    userInbox?.UnPause();
                 }
             }
         }

@@ -34,6 +34,9 @@ namespace Echo
             Zero = zero;
         }
 
+        public Schedule SetDue(DateTime due) =>
+            new Schedule(due, Type, Key, Fold, Zero);
+
         public Schedule SetKey(string key) =>
             new Schedule(Due, Type, key, Fold, Zero);
 

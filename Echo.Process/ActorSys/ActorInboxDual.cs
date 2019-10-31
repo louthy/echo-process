@@ -161,7 +161,7 @@ namespace Echo
                                     {
                                         try
                                         {
-                                            userInbox.Post(msg);
+                                            userInbox?.Post(msg);
                                         }
                                         catch (QueueFullException)
                                         {
@@ -189,7 +189,7 @@ namespace Echo
                                     {
                                         try
                                         {
-                                            userInbox.Post(msg);
+                                            userInbox?.Post(msg);
                                         }
                                         catch (QueueFullException)
                                         {
@@ -208,7 +208,7 @@ namespace Echo
             {
                 try
                 {
-                    sysInbox.Post(message);
+                    sysInbox?.Post(message);
                 }
                 catch (QueueFullException)
                 {
@@ -242,7 +242,7 @@ namespace Echo
                 {
                     try
                     {
-                        userInbox.Post(msg);
+                        userInbox?.Post(msg);
                     }
                     catch(QueueFullException)
                     {

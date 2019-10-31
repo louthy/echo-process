@@ -210,8 +210,8 @@ namespace Echo
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
         public static IEnumerable<ProcessId> spawnMany<S, T>(
-            ProcessName Name, 
-            Map<int, Func<S>> Spec, 
+            ProcessName Name,
+            HashMap<int, Func<S>> Spec, 
             Func<S, T, S> Inbox, 
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,

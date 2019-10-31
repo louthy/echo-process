@@ -11,7 +11,7 @@ namespace Echo.Session
 {
     static class SessionDataTypeResolve
     {
-        static Map<string, Option<Type>> sessionDataTypeValid = Map<string, Option<Type>>();
+        static HashMap<string, Option<Type>> sessionDataTypeValid = HashMap<string, Option<Type>>();
         static Set<string> sessionDataTypeValidityLogged = Set<string>();
         static object sync = new object();
 

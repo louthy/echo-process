@@ -34,9 +34,9 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
-        public static Map<ProcessId, ProcessMetaData> queryProcessMetaData(string keyQuery, SystemName system = default(SystemName)) =>
+        public static HashMap<ProcessId, ProcessMetaData> queryProcessMetaData(string keyQuery, SystemName system = default(SystemName)) =>
             ActorContext.System(system).Cluster
                         .Map(c => c.QueryProcessMetaData(keyQuery))
-                        .IfNone(Map.empty<ProcessId,ProcessMetaData>());
+                        .IfNone(HashMap.empty<ProcessId,ProcessMetaData>());
     }
 }

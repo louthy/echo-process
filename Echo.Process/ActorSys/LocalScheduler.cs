@@ -12,8 +12,9 @@ namespace Echo
     internal static class LocalScheduler
     {
         static object sync = new object();
+        // using Map for 'actions' as we rely on order
         static Map<long, Seq<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
-        static Map<string, long> keys;
+        static HashMap<string, long> keys;
         static Que<(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> inbound;
 
         public static Unit Push(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message)
@@ -58,6 +59,25 @@ namespace Echo
             }
         }
 
+        internal static Unit Reschedule(ProcessId pid, string key, DateTime when)
+        {
+            lock(sync)
+            {
+                var ckey = pid.Path + "|" + key;
+                return FindExistingScheduledMessage(key).Iter(existing =>
+                {
+                    RemoveExistingScheduledMessage(key);
+
+                    actions = actions.AddOrUpdate(
+                        when.Ticks,
+                        Some: seq => (key, existing.action, existing.message, existing.context, existing.sessionId).Cons(seq),
+                        None: () => Seq1((key, existing.action, existing.message, existing.context, existing.sessionId)));
+
+                    keys = keys.AddOrUpdate(key, when.Ticks);
+                });
+            }
+        }
+
         public static IDisposable Run() =>
             new CompositeDisposable(Disposable.Create(Clear), Observable.Interval(TimeSpan.FromMilliseconds(10)).Subscribe(Process));
 
@@ -68,7 +88,7 @@ namespace Echo
                 ProcessInboundQueue();
                 ProcessActions();
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logErr(e);
             }
@@ -90,7 +110,7 @@ namespace Echo
 
                 actions = actions.AddOrUpdate(
                     schedule.Due.Ticks,
-                    Some: seq => (key, action, message, context, sessionId).Cons(seq), 
+                    Some: seq => (key, action, message, context, sessionId).Cons(seq),
                     None: () => Seq1((key, action, message, context, sessionId)));
 
 
@@ -103,7 +123,21 @@ namespace Echo
             }
         }
 
-        private static void RemoveExistingScheduledMessage(string key)
+        internal static void RemoveExistingScheduledMessage(ProcessId pid, string key)
+        {
+            lock (sync)
+            {
+                var ckey = pid.Path + "|" + key;
+                keys.Find(ckey).Match(
+                    Some: ticks =>
+                    {
+                        actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != ckey));
+                    },
+                    None: () => { });
+            }
+        }
+
+        internal static void RemoveExistingScheduledMessage(string key)
         {
             keys.Find(key).Match(
                 Some: ticks =>

@@ -28,8 +28,8 @@ namespace Echo
         readonly Subject<object> stateSubject = new Subject<object>();
         readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
-        Map<string, IDisposable> subs = Map<string, IDisposable>();
-        Map<string, ActorItem> children = Map<string, ActorItem>();
+        HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
+        Atom<HashMap<string, ActorItem>> children = Atom(HashMap<string, ActorItem>());
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
         EventWaitHandle request;
@@ -180,7 +180,7 @@ namespace Echo
         Unit RemoveAllSubscriptions()
         {
             subs.Iter(x => x.Dispose());
-            subs = Map<string, IDisposable>();
+            subs = HashMap<string, IDisposable>();
             return unit;
         }
 
@@ -343,7 +343,7 @@ namespace Echo
         /// <summary>
         /// Child processes
         /// </summary>
-        public Map<string, ActorItem> Children =>
+        public HashMap<string, ActorItem> Children =>
             children;
 
         public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
@@ -372,10 +372,7 @@ namespace Echo
         /// </summary>
         public Unit UnlinkChild(ProcessId pid)
         {
-            lock(sync)
-            {
-                children = children.Remove(pid.Name.Value);
-            }
+            children.Swap(c => c.Remove(pid.Name.Value));
             return unit;
         }
 
@@ -384,10 +381,7 @@ namespace Echo
         /// </summary>
         public Unit LinkChild(ActorItem item)
         {
-            lock (sync)
-            {
-                children = children.AddOrUpdate(item.Actor.Id.Name.Value, item);
-            }
+            children.Swap(c => c.AddOrUpdate(item.Actor.Id.Name.Value, item));
             return unit;
         }
 
@@ -1014,7 +1008,7 @@ namespace Echo
                 {
                     ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
                     Parent.Actor.UnlinkChild(Id);
-                    children = Map<string, ActorItem>();
+                    children.Swap(_ => HashMap<string, ActorItem>());
                 });
             }
         }

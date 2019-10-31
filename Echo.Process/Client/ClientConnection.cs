@@ -46,13 +46,13 @@ namespace Echo.Client
         public readonly ClientConnectionId Id;
         public readonly Action<ClientMessageDTO> Tell;
         object sync = new object();
-        Map<ProcessId, Lst<Subscriber>> subscriptions;
+        HashMap<ProcessId, Lst<Subscriber>> subscriptions;
         DateTime lastAccess;
 
         public static ClientConnection New(ClientConnectionId id, Action<ClientMessageDTO> tell) =>
-            new ClientConnection(id, Map<ProcessId, Lst<Subscriber>>(), DateTime.UtcNow, tell);
+            new ClientConnection(id, HashMap<ProcessId, Lst<Subscriber>>(), DateTime.UtcNow, tell);
 
-        ClientConnection(ClientConnectionId id, Map<ProcessId, Lst<Subscriber>> subscriptions, DateTime lastAccess, Action<ClientMessageDTO> tell)
+        ClientConnection(ClientConnectionId id, HashMap<ProcessId, Lst<Subscriber>> subscriptions, DateTime lastAccess, Action<ClientMessageDTO> tell)
         {
             Id = id;
             this.subscriptions = subscriptions;
