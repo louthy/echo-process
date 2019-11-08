@@ -40,7 +40,7 @@ namespace Echo
             sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
 
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
-            userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
+            userInbox.ReceiveAsync(obj, (state, msg) => process.CancellationTokenSource.IsCancellationRequested ? InboxDirective.Shutdown : ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
             sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
 
             return unit;

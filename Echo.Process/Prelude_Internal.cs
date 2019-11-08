@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
 using LanguageExt;
@@ -54,40 +55,44 @@ namespace Echo
         {
             var savedContext = ActorContext.Request;
             var savedSession = ActorContext.SessionId;
+            var stackTrace   = new System.Diagnostics.StackTrace(true);
 
-            return (IDisposable)Task.Delay(delayFor).ContinueWith(_ =>
-              {
-                  try
-                  {
-                      if (savedContext == null)
-                      {
-                          f();
-                      }
-                      else
-                      {
-                          ActorContext.System(savedContext.Self.Actor.Id).WithContext(
-                                       savedContext.Self,
-                                       savedContext.Parent,
-                                       savedContext.Sender,
-                                       savedContext.CurrentRequest,
-                                       savedContext.CurrentMsg,
-                                       savedSession,
-                                       () =>
-                                       {
-                                           f();
+            return Observable.Timer(delayFor).Do(_ =>
+            {
+                if (savedContext == null)
+                {
+                    f();
+                }
+                else
+                {
+                    ActorSystem system;
+                    try
+                    {
 
-                                           // Run the operations that affect the settings and sending of tells
-                                           // in the order which they occured in the actor
-                                           ActorContext.Request?.Ops?.Run();
-                                       });
-                      }
+                        system = ActorContext.System(savedContext.Self.Actor.Id);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new ProcessSystemException(e, stackTrace);
+                    }
 
-                  }
-                  catch (Exception e)
-                  {
-                      logErr(e);
-                  }
-              });
+                    system.WithContext(
+                                  savedContext.Self,
+                                  savedContext.Parent,
+                                  savedContext.Sender,
+                                  savedContext.CurrentRequest,
+                                  savedContext.CurrentMsg,
+                                  savedSession,
+                                  () =>
+                                  {
+                                      f();
+
+                                      // Run the operations that affect the settings and sending of tells
+                                      // in the order which they occured in the actor
+                                      ActorContext.Request?.Ops?.Run();
+                                  });
+                }
+            }).Subscribe(onNext: _ => { }, onCompleted: () => { }, onError: logErr);
         }
 
         internal static IDisposable safedelay(Action f, DateTime delayUntil) =>

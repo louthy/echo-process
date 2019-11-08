@@ -27,6 +27,34 @@ namespace Echo.Tests
             public void Dispose() => shutdownAll();
         }
 
+        public class StrategyStateProperties : IClassFixture<ProcessFixture>
+        {
+            [Fact]
+            public void FirstFailureTime()
+            {
+                string err = "";
+                var start = DateTimeOffset.Now;
+                State<StrategyContext, Unit> MyStrategy() =>
+                    from context in Context
+                    let _1 = err += $"{context.Global.Failures}:f={(context.Global.FirstFailure < DateTime.MaxValue ? Math.Round((context.Global.FirstFailure - start).TotalSeconds) : -1)},"
+                    let _2 = err += $"l={(context.Global.FirstFailure < DateTime.MaxValue ? Math.Round((context.Global.LastFailure - start).TotalSeconds) : -1)}|"
+                    from x in Compose(SetBackOffAmount(1000 * milliseconds), SetDirective(Directive.Resume), Redirect(MessageDirective.StayInQueue))
+                    select x;
+
+                var actor = spawn<Unit, string>(nameof(FirstFailureTime), () => ignore(spawn("sub", (string msg) =>
+                {
+
+                    throw new Exception();
+                    err += $"{DateTimeOffset.Now}: {msg}\n";
+                })), (dummyUnit, _) => tellChild("sub", _), Strategy: MyStrategy());
+
+                tell(actor, "test");
+                Task.Delay(2500).Wait();
+                kill(actor);
+
+                Assert.Equal("1:f=-1,l=-1|2:f=0,l=0|3:f=0,l=1|", err);
+            }
+        }
 
         public class StrategyRestartDelayIssue : IClassFixture<ProcessFixture>
         {

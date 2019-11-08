@@ -13,20 +13,23 @@ namespace Echo
     {
         public readonly Time BackoffAmount;
         public readonly int Failures;
+        public readonly DateTime FirstFailure;
         public readonly DateTime LastFailure;
         public readonly HashMap<string, object> Metadata;
 
-        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, HashMap<string, object>());
+        public static readonly StrategyState Empty = new StrategyState(0 * seconds, 0, DateTime.MaxValue, DateTime.MaxValue, HashMap<string, object>());
 
         public StrategyState(
             Time backoffAmount,
             int failures,
+            DateTime firstFailure,
             DateTime lastFailure,
             HashMap<string, object> metadata
             )
         {
             BackoffAmount = backoffAmount;
             Failures = failures;
+            FirstFailure = firstFailure;
             LastFailure = lastFailure;
             Metadata = metadata;
         }
@@ -51,7 +54,7 @@ namespace Echo
             With(Metadata: Metadata.TryAdd(key, value));
 
         /// <summary>
-        /// Attempts to set a meta-data item.  If it is already set, nothing 
+        /// Attempts to remove a meta-data item.  If it is not set, nothing 
         /// happens.
         /// 
         /// This is for extending the default strategies behaviours and 
@@ -69,12 +72,14 @@ namespace Echo
         public StrategyState With(
             Time? BackoffAmount = null,
             int? Failures = null,
+            DateTime? FirstFailure = null,
             DateTime? LastFailure = null,
             HashMap<string, object>? Metadata = null
             ) =>
             new StrategyState(
                 BackoffAmount ?? this.BackoffAmount,
                 Failures ?? this.Failures,
+                FirstFailure ?? this.FirstFailure,
                 LastFailure ?? this.LastFailure,
                 Metadata ?? this.Metadata
             );
