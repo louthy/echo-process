@@ -195,7 +195,8 @@ namespace Echo.Config
             Option<string> connection,
             Option<string> database,
             Option<string> env,
-            Option<string> userEnv
+            Option<string> userEnv,
+            bool _default
             )
         {
             Settings = settings;
@@ -205,6 +206,7 @@ namespace Echo.Config
             Database = database;
             Env = env;
             UserEnv = userEnv;
+            Default = _default;
         }
 
         public ClusterToken SetEnvironment(ValueToken env) =>
@@ -215,13 +217,14 @@ namespace Echo.Config
                 Connection,
                 Database,
                 (string)env.Value,
-                UserEnv
+                UserEnv,
+                Default
             );
 
         Option<T> GetValue<T>(string name) =>
            Settings.Find(name).Map(tok => tok.Cast<T>());
 
         public readonly static ClusterToken Empty =
-            new ClusterToken(HashMap<string, ValueToken>(), None, None, None, None, None, None);
+            new ClusterToken(HashMap<string, ValueToken>(), None, None, None, None, None, None, false);
     }
 }
