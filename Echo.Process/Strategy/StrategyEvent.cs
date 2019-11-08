@@ -52,7 +52,7 @@ namespace Echo
                         state.Pause
                     );
 
-                    return (decision, state.Global.With(LastFailure: now));
+                    return (decision, state.Global.With(FirstFailure: stateInst.FirstFailure == DateTime.MaxValue ? DateTime.UtcNow : stateInst.FirstFailure, LastFailure: now));
                 });
     }
 }
