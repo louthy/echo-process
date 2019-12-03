@@ -627,6 +627,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                     );
@@ -706,6 +707,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                         );
@@ -822,6 +824,7 @@ namespace Echo
 
                     strategyState = strategyState.With(
                         Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
                         LastFailure: DateTime.MaxValue,
                         BackoffAmount: 0 * seconds
                         );
@@ -876,10 +879,13 @@ namespace Echo
                         if (decision.ProcessDirective.Type != DirectiveType.Stop && decision.Pause > 0 * seconds)
                         {
                             decision.Affects.Iter(p => pause(p));
-                            safedelay(
+
+                            var safeDelayDisposable = safedelay(
                                 () => RunProcessDirective(pid, sender, ex, message, decision, true),
                                 decision.Pause
                             );
+                            cancellationTokenSource.Token.Register(() => safeDelayDisposable.Dispose());
+
                             return InboxDirective.Pause | RunMessageDirective(pid, sender, decision, ex, message);
                         }
                         else

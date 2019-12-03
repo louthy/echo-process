@@ -77,6 +77,16 @@ namespace Echo
             select y;
 
         /// <summary>
+        /// Sets the first-failure state.  
+        /// </summary>
+        /// <param name="when">Time to set</param>
+        /// <returns>Strategy computation as a State monad</returns>
+        public static State<StrategyContext, Unit> SetFirstFailure(DateTime when) =>
+            from x in Context
+            from y in put(x.With(Global: x.Global.With(FirstFailure: when)))
+            select y;
+
+        /// <summary>
         /// Sets the last-failure state.  
         /// </summary>
         /// <param name="when">Time to set</param>
@@ -227,16 +237,16 @@ namespace Echo
             MapGlobal(g => g.With(Failures: g.Failures + 1));
 
         /// <summary>
-        /// Reset the failure count state to zero and set LastFailure to max-value
+        /// Reset the failure count state to zero and set FirstFailure and LastFailure to max-value
         /// </summary>
         public static readonly State<StrategyContext, Unit> ResetFailureCount =
-            MapGlobal(g => g.With(Failures: 0, LastFailure: DateTime.MaxValue));
+            MapGlobal(g => g.With(Failures: 0, FirstFailure: DateTime.MaxValue, LastFailure: DateTime.MaxValue));
 
         /// <summary>
-        /// Set the failure count to 1 and set LastFailure to UtcNow
+        /// Set the failure count to 1 and set FirstFailure and LastFailure to UtcNow
         /// </summary>
         public static readonly State<StrategyContext, Unit> FailedOnce =
-            MapGlobal(g => g.With(Failures: 1, LastFailure: DateTime.UtcNow));
+            MapGlobal(g => g.With(Failures: 1, FirstFailure: DateTime.UtcNow, LastFailure: DateTime.UtcNow));
 
         /// <summary>
         /// Always return this Directive in the final StrategyDecision

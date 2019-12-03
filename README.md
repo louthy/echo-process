@@ -1,3 +1,5 @@
+![banner](https://github.com/louthy/echo-process/raw/master/Images/echo%20banner.png)
+
 # echo
 Actor system that works alongside the functional framework [Language-Ext](https://github.com/louthy/language-ext)
 
