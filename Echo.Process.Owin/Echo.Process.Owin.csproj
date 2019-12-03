@@ -12,7 +12,7 @@
     <Copyright>Copyright (c) Paul Louth. All rights reserved.</Copyright>
     <Description>WebSocket client support (via Owin) for the Echo.Process system.</Description>
     <PackageTags>Echo, Process, C#, Functional, Language Extension, Monad, Option, Either, Reader, Writer, State, List, Set, Map, Queue, Memo, Memoization, Immutable, Lambda, Pattern Matching, Tuple, Actor, Process, Akka, Redis</PackageTags>
-      <PackageIcon>https://camo.githubusercontent.com/08525ae465a9061150679d871731e77b399c2a94/687474703a2f2f7777772e34666f75722e6f72672f696d616765732f6c616e672d6578742d6c6f676f2e706e67</PackageIcon>
+      <PackageIcon>../Images/echo icon small.png</PackageIcon>
     <PackageProjectUrl>https://github.com/louthy/echo-process</PackageProjectUrl>
       <License>https://github.com/louthy/echo-process/blob/master/LICENSE.md</License>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
