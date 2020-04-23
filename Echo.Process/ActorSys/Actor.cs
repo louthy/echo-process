@@ -155,7 +155,8 @@ namespace Echo
         {
             get
             {
-                return strategy ?? sys.Settings.GetProcessStrategy(Id);
+                return strategy ?? sys.Settings.GetProcessStrategy(Id)
+                                      .IfNone(() => Parent.Actor.Strategy); // recursion will stop because root and root/user have non-null strategy and -- even if this would change because parent of root is NullProcess which does not have this recursion
             }
             private set
             {

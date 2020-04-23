@@ -367,9 +367,8 @@ namespace Echo.Config
         /// Get the strategy for a Process.  Returns Process.DefaultStrategy if one
         /// hasn't been set in the config.
         /// </summary>
-        internal State<StrategyContext, Unit> GetProcessStrategy(ProcessId pid) =>
-            GetProcessSetting<State<StrategyContext, Unit>>(pid, "strategy", "value", ProcessFlags.Default)
-           .IfNone(Process.DefaultStrategy);
+        internal Option<State<StrategyContext, Unit>> GetProcessStrategy(ProcessId pid) =>
+            GetProcessSetting<State<StrategyContext, Unit>>(pid, "strategy", "value", ProcessFlags.Default);
 
         /// <summary>
         /// Get the role wide timeout setting.  This specifies how long the timeout
