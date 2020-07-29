@@ -473,11 +473,35 @@ namespace Echo
                         .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
 
         /// <summary>
+        /// Finds all the processes based on the search pattern provided and then returns the
+        /// meta-data associated with them.
+        /// </summary>
+        /// <param name="keyQuery">Key query.  * is a wildcard</param>
+        /// <returns>Map of ProcessId to ProcessMetaData</returns>
+        public ValueTask<HashMap<ProcessId, ProcessMetaData>> QueryProcessMetaDataAsync(string keyQuery)
+        {
+            var keys = QueryKeys(keyQuery, "", metaDataSuffix)
+                            .Map(x => (RedisKey) x)
+                            .ToArray();
+
+            var res = keys.Map(x => (string) x)
+                .Map(x => (ProcessId) x.Substring(0, x.Length - metaDataSuffix.Length))
+                .Zip(RetryAsync(async () => await Db.StringGetAsync(keys))
+                        .Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)));
+            
+            // return toHashMap(
+            //     map(QueryKeys(keyQuery, "", metaDataSuffix).Map(x => (RedisKey)x).ToArray(), keys =>
+            //         keys.Map(x => (string)x)
+            //             .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
+            //             .Zip(RetryAsync(async () => await Db.StringGetAsync(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
+        }
+
+        /// <summary>
         /// retrieves all hash values for a list of keys
         /// </summary>
         /// <param name="keys"></param>
         /// <returns>map of keys and their key/value map</returns>
-        public async Task<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
+        public async ValueTask<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys)
         {
             var batch = Db.CreateBatch();
             var tasks = keys.Map(key => batch.HashGetAllAsync(key)
@@ -506,6 +530,84 @@ namespace Echo
         public static object Deserialise(string value, Type type) =>
             DeserialiseFunc(type).Invoke(null, new[] { value });
 
+        static async ValueTask<A> RetryAsync<A>(Func<ValueTask<A>> f)
+        {
+            try
+            {
+                return await f();
+            }
+            catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
+            {
+                return await retry(f);
+            }
+
+            async ValueTask<A> retry(Func<ValueTask<A>> fn)
+            {
+                for (int i = 0; ; i++)
+                {
+                    try
+                    {
+                        return await fn();
+                    }
+                    catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
+                    {
+                        if (i == TimeoutRetries)
+                        {
+                            throw;
+                        }
+
+                        // Backing off wait time
+                        // 0 - immediately
+                        // 1 - 100 ms
+                        // 2 - 400 ms
+                        // 3 - 900 ms
+                        // 4 - 1600 ms
+                        // Maximum wait == 3000ms
+                        await Task.Delay(i * i * 100);
+                    }
+                }
+            }
+        }
+  
+        static async ValueTask RetryAsync(Func<ValueTask> f)
+        {
+            try
+            {
+                await f();
+            }
+            catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
+            {
+                await retry(f);
+            }
+
+            async ValueTask retry(Func<ValueTask> fn)
+            {
+                for (int i = 0; ; i++)
+                {
+                    try
+                    {
+                        await fn();
+                    }
+                    catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
+                    {
+                        if (i == TimeoutRetries)
+                        {
+                            throw;
+                        }
+
+                        // Backing off wait time
+                        // 0 - immediately
+                        // 1 - 100 ms
+                        // 2 - 400 ms
+                        // 3 - 900 ms
+                        // 4 - 1600 ms
+                        // Maximum wait == 3000ms
+                        await Task.Delay(i * i * 100);
+                    }
+                }
+            }
+        }
+        
         static T Retry<T>(Func<T> f)
         {
             T retry()

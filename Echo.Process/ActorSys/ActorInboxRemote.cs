@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using static Echo.Process;
 using static LanguageExt.Prelude;
-//using Microsoft.FSharp.Control;
 using Echo.ActorSys;
 using LanguageExt;
 
@@ -31,9 +31,11 @@ namespace Echo
 
             this.parent = parent;
 
-            userNotify = new PausableBlockingQueue<string>(this.maxMailboxSize);
-
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
+            userNotify = new PausableChannel<string>(this.maxMailboxSize, async msg => { 
+                await CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); 
+                return InboxDirective.Default; });
+
             userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); return InboxDirective.Default; });
 
             SubscribeToSysInboxChannel();
@@ -166,7 +168,7 @@ namespace Echo
             }
         }
 
-        void CheckRemoteInbox(string key, bool pausable)
+        async ValueTask CheckRemoteInbox(string key, bool pausable)
         {
             var inbox = this;
             var count = cluster?.QueueLength(key) ?? 0;
@@ -182,8 +184,8 @@ namespace Echo
                         {
                             switch (msg.MessageType)
                             {
-                                case Message.Type.User:        directive = ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
-                                case Message.Type.UserControl: directive = ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
+                                case Message.Type.User:        directive = await ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
+                                case Message.Type.UserControl: directive = await ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
                             }
                         }
                         catch (Exception e)

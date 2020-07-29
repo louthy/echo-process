@@ -15,8 +15,8 @@ namespace Echo
 {
     class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
     {
-        PausableBlockingQueue<UserControlMessage> userInbox;
-        PausableBlockingQueue<SystemMessage> sysInbox;
+        PausableChannel<UserControlMessage> userInbox;
+        PausableChannel<SystemMessage> sysInbox;
 
         Actor<S, T> actor;
         ActorItem parent;
@@ -27,7 +27,7 @@ namespace Echo
         {
             if (Active)
             {
-                Shutdown();
+                Shutdown();process.CancellationTokenSource.IsCancellationRequested ? InboxDirective.Shutdown : 
             }
             this.cluster = cluster;
             this.parent = parent;
@@ -36,12 +36,12 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
                 : maxMailboxSize;
 
-            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
-
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
-            userInbox.ReceiveAsync(obj, (state, msg) => process.CancellationTokenSource.IsCancellationRequested ? InboxDirective.Shutdown : ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
-            sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
+            userInbox = new PausableChannel<UserControlMessage>(this.maxMailboxSize, async msg => 
+                process.CancellationTokenSource.IsCancellationRequested 
+                    ? InboxDirective.Shutdown 
+                    : await ActorInboxCommon.UserMessageInbox(obj.Actor, obj.Inbox, msg, obj.Parent));
+            sysInbox = new PausableChannel<SystemMessage>(this.maxMailboxSize, msg => ActorInboxCommon.SystemMessageInbox(obj.Actor, obj.Inbox, msg, obj.Parent));
 
             return unit;
         }

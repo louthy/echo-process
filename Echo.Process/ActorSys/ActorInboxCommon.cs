@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
@@ -7,7 +8,7 @@ namespace Echo
 {
     static class ActorInboxCommon
     {
-        public static InboxDirective SystemMessageInbox<S,T>(Actor<S,T> actor, IActorInbox inbox, SystemMessage msg, ActorItem parent)
+        public static ValueTask<InboxDirective> SystemMessageInbox<S,T>(Actor<S,T> actor, IActorInbox inbox, SystemMessage msg, ActorItem parent)
         {
             var session = msg.SessionId == null
                 ? None
@@ -81,7 +82,7 @@ namespace Echo
             });
         }
 
-        public static InboxDirective UserMessageInbox<S, T>(Actor<S, T> actor, IActorInbox inbox, UserControlMessage msg, ActorItem parent)
+        public static ValueTask<InboxDirective> UserMessageInbox<S, T>(Actor<S, T> actor, IActorInbox inbox, UserControlMessage msg, ActorItem parent)
         {
             var session = msg.SessionId == null 
                 ? None 

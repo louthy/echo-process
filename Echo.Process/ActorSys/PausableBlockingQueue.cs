@@ -2,13 +2,123 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using LanguageExt;
 using static LanguageExt.Prelude;
 
 namespace Echo.ActorSys
 {
-    public class PausableBlockingQueue<A> : IDisposable
+    public class PausableChannel<A> : IDisposable
+    {
+        readonly Channel<A> channel;
+        readonly Func<A, ValueTask<InboxDirective>> consumer;
+        CancellationTokenSource tokenSource;
+        CancellationToken token;
+        IDisposable task;
+        volatile bool paused;
+
+        public PausableChannel(int boundedCapacity, Func<A, ValueTask<InboxDirective>> consumer)
+        {
+            boundedCapacity = boundedCapacity < 1 ? 100000 : boundedCapacity;
+            var opts = new BoundedChannelOptions(boundedCapacity)
+            {
+                FullMode = BoundedChannelFullMode.DropWrite,
+                SingleWriter = false,
+                SingleReader = true
+            };
+
+            tokenSource = new CancellationTokenSource();
+            token = tokenSource.Token;
+            channel = Channel.CreateBounded<A>(opts);
+            task = Task.Factory.StartNew(Receive, token);
+        }
+
+        async Task Receive() 
+        {
+            while (!token.IsCancellationRequested && await channel.Reader.WaitToReadAsync(token))
+            {
+                var item = await channel.Reader.ReadAsync(token);
+
+                bool addToFrontOfQueue = false;
+                var directive = default(InboxDirective);
+
+                do
+                {
+                    try
+                    {
+                        directive = await consumer(item);
+                    }
+                    catch (Exception e)
+                    {
+                        Process.logErr(e);
+                    }
+
+                    if (directive.HasFlag(InboxDirective.Shutdown))
+                    {
+                        addToFrontOfQueue = false;
+                        Cancel();
+                    }
+                    else
+                    {
+                        addToFrontOfQueue = directive.HasFlag(InboxDirective.PushToFrontOfQueue);
+
+                        if (directive.HasFlag(InboxDirective.Pause))
+                        {
+                            Pause();
+                        }
+                    }
+                } while (addToFrontOfQueue && !paused);
+            }
+        }
+    
+        public void Pause()
+        {
+            // Pause
+            paused = true;
+ 
+            // Cancel the task
+            tokenSource?.Cancel();
+
+            // Dispose the task
+            var ltask = task;
+            task = null;
+            ltask?.Dispose();
+        }
+
+        public void UnPause()
+        {
+            // Unpause
+            paused = false;
+            
+            // Restart the task
+            tokenSource = new CancellationTokenSource();
+            token = tokenSource.Token;
+            task = Task.Factory.StartNew(Receive, token);
+        }        
+        
+        public void Cancel()
+        {
+            // Cancel the task
+            tokenSource?.Cancel();
+ 
+            // Unpause
+            paused = false;
+
+            // Dispose the task
+            var ltask = task;
+            task = null;
+            ltask?.Dispose();
+        }
+        
+        public void Dispose()
+        {
+            Cancel();
+        }
+    }
+    
+    
+    internal class PausableBlockingQueue_OLD<A> : IDisposable
     {
         readonly EventWaitHandle pauseWait = new AutoResetEvent(false);
         readonly BlockingCollection<A> items;
@@ -19,7 +129,7 @@ namespace Echo.ActorSys
         public bool IsPaused => paused;
         public bool IsCancelled => token.IsCancellationRequested;
 
-        public PausableBlockingQueue(int boundedCapacity)
+        public PausableBlockingQueue_OLD(int boundedCapacity)
         {
             boundedCapacity = boundedCapacity < 1 ? 100000 : boundedCapacity;
             tokenSource = new CancellationTokenSource();

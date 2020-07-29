@@ -149,8 +149,17 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
+        [Obsolete]
         HashMap<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery);
-
+        
+        /// <summary>
+        /// Finds all the processes based on the search pattern provided and then returns the
+        /// meta-data associated with them.
+        /// </summary>
+        /// <param name="keyQuery">Key query.  * is a wildcard</param>
+        /// <returns>Map of ProcessId to ProcessMetaData</returns>
+        ValueTask<HashMap<ProcessId, ProcessMetaData>> QueryProcessMetaDataAsync(string keyQuery) =>
+        
         /// <summary>
         /// Finds all session keys
         /// </summary>
@@ -212,6 +221,7 @@ namespace Echo
         Set<T> GetSet<T>(string key);
         bool SetContains<T>(string key, T value);
         bool SetExpire(string key, TimeSpan time);
-        Task<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
+        
+        ValueTask<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
     }
 }

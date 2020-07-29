@@ -7,10 +7,10 @@ using System.Reflection;
 //using Microsoft.FSharp.Control;
 using System.Reactive.Linq;
 using System.Reactive.Concurrency;
+using Echo.ActorSys;
 using static Echo.Process;
 using static LanguageExt.Prelude;
 using Newtonsoft.Json;
-using Echo.ActorSys;
 using LanguageExt;
 
 namespace Echo
@@ -23,8 +23,8 @@ namespace Echo
     /// </summary>
     class ActorInboxDual<S, T> : IActorInbox, ILocalActorInbox
     {
-        PausableBlockingQueue<UserControlMessage> userInbox;
-        PausableBlockingQueue<SystemMessage> sysInbox;
+        PausableChannel<UserControlMessage> userInbox;
+        PausableChannel<SystemMessage> sysInbox;
 
         ICluster cluster;
         Actor<S, T> actor;
@@ -43,12 +43,9 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id) 
                 : maxMailboxSize;
 
-            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
-
             var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
-            userInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
-            sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
+            userInbox = new PausableChannel<UserControlMessage>(this.maxMailboxSize, msg => ActorInboxCommon.UserMessageInbox(obj.Actor, obj.Inbox, msg, obj.Parent));
+            sysInbox = new PausableChannel<SystemMessage>(this.maxMailboxSize, msg => ActorInboxCommon.SystemMessageInbox(obj.Actor, obj.Inbox, msg, obj.Parent));
 
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
