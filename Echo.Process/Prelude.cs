@@ -84,7 +84,7 @@ namespace Echo
             shutdownSubj;
 
         /// <summary>
-        /// Log of everything that's going on in the Languge Ext process system
+        /// Log of everything that's going on in the Language Ext process system
         /// </summary>
         public static IObservable<ProcessLogItem> ProcessSystemLog => 
             log.ObserveOn(TaskPoolScheduler.Default);
@@ -95,8 +95,10 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static ProcessId Self =>
-            ActorContext.Self;
+        public static Eff<RT, ProcessId> Self<RT>() where RT : struct, HasEcho<RT> =>
+            ActorContextAff.self<RT>();
+        // public static ProcessId Self =>
+        //     ActorContext.Self;
 
         /// <summary>
         /// Parent process ID
@@ -104,10 +106,12 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static ProcessId Parent =>
-            InMessageLoop
-                ? ActorContext.Request.Parent.Actor.Id
-                : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(Parent));
+        public static Eff<RT, ProcessId> Parent<RT>() where RT : struct, HasEcho<RT> =>
+            ActorContextAff.parent<RT>();
+        // public static ProcessId Parent =>
+        //     InMessageLoop
+        //         ? ActorContext.Request.Parent.Actor.Id
+        //         : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(Parent));
 
         /// <summary>
         /// Root process ID

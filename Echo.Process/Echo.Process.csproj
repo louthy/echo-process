@@ -24,7 +24,7 @@
       <License>https://github.com/louthy/echo-process/blob/master/LICENSE.md</License>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
-    <LangVersion>7.3</LangVersion>
+    <LangVersion>8.0</LangVersion>
   
 </PropertyGroup>
   <ItemGroup>
@@ -52,11 +52,17 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="[3.5.1-beta,)" />
-    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.1-beta,)" />
+    <PackageReference Include="LanguageExt.Core" Version="[3.5.10-beta,)" />
+    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.10-beta,)" />
     <PackageReference Include="Newtonsoft.Json" Version="[10.0.2,)" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
     <PackageReference Include="System.Threading.Channels" Version="4.5.0" />
+
+    <PackageReference Include="LanguageExt.CodeGen" Version="[3.5.10-beta,)" PrivateAssets="all" />
+
+    <PackageReference Include="CodeGeneration.Roslyn.BuildTime" Version="0.6.1" PrivateAssets="all" />
+
+    <DotNetCliToolReference Include="dotnet-codegen" Version="0.6.1" />    
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
       <Reference Include="System.Web" />

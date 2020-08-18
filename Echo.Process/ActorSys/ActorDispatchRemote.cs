@@ -18,7 +18,7 @@ namespace Echo
         public readonly Ping Pinger;
         readonly bool transactionalIO;
 
-        public ActorDispatchRemote(Ping ping, ProcessId pid, ICluster cluster, Option<SessionId> sessionId, bool transactionalIO)
+        public ActorDispatchRemote(Ping ping, ProcessId pid, Option<SessionId> sessionId, bool transactionalIO)
         {
             Pinger = ping;
             ProcessId = pid;

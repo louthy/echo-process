@@ -27,7 +27,7 @@ namespace Echo
         {
             if (Active)
             {
-                Shutdown();process.CancellationTokenSource.IsCancellationRequested ? InboxDirective.Shutdown : 
+                Shutdown(); 
             }
             this.cluster = cluster;
             this.parent = parent;

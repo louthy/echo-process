@@ -4,6 +4,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
 using LanguageExt;
+using LanguageExt.Interfaces;
 
 namespace Echo
 {
@@ -36,20 +37,22 @@ namespace Echo
         static Subject<SystemName> shutdownSubj = new Subject<SystemName>();
         static Subject<ShutdownCancellationToken> preShutdownSubj = new Subject<ShutdownCancellationToken>();
 
-        internal static void OnShutdown(SystemName system)
-        {
-            shutdownSubj.OnNext(system);
-            shutdownSubj.OnCompleted();
-        }
+        internal static EffPure<Unit> onShutdown(SystemName system) =>
+            Eff(() => {
+                shutdownSubj.OnNext(system);
+                shutdownSubj.OnCompleted();
+                return unit;
+            });
 
-        internal static void OnPreShutdown(ShutdownCancellationToken cancel)
-        {
-            preShutdownSubj.OnNext(cancel);
-            if (!cancel.Cancelled)
-            {
-                preShutdownSubj.OnCompleted();
-            }
-        }
+        internal static EffPure<Unit> onPreShutdown(ShutdownCancellationToken token) =>
+            Eff(() => {
+                preShutdownSubj.OnNext(token);
+                if (!token.Cancelled)
+                {
+                    preShutdownSubj.OnCompleted();
+                }
+                return unit;
+            });
 
         internal static IDisposable safedelay(Action f, TimeSpan delayFor)
         {

@@ -1,4 +1,5 @@
-﻿using LanguageExt;
+﻿/*
+using LanguageExt;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -151,14 +152,14 @@ namespace Echo
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
         [Obsolete]
         HashMap<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery);
-        
+
         /// <summary>
         /// Finds all the processes based on the search pattern provided and then returns the
         /// meta-data associated with them.
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
-        ValueTask<HashMap<ProcessId, ProcessMetaData>> QueryProcessMetaDataAsync(string keyQuery) =>
+        ValueTask<HashMap<ProcessId, ProcessMetaData>> QueryProcessMetaDataAsync(string keyQuery);
         
         /// <summary>
         /// Finds all session keys
@@ -225,3 +226,4 @@ namespace Echo
         ValueTask<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
     }
 }
+*/

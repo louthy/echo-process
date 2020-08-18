@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using Newtonsoft.Json;
 using System.Text;
@@ -384,6 +385,12 @@ namespace Echo
         public bool IsValid => 
             value != null;
 
+        [Pure]
+        public EffPure<Unit> AssertValid() =>
+            IsValid
+                ? unitEff
+                : FailEff<Unit>(new InvalidProcessIdException());
+        
         /// <summary>
         /// Get the name of the process
         /// </summary>

@@ -10,14 +10,13 @@ using static LanguageExt.Prelude;
 
 namespace Echo
 {
-    class ActorRequestContext
+    internal class ActorRequestContext
     {
         public readonly ActorItem Self;
         public readonly ProcessId Sender;
         public readonly ActorItem Parent;
         public readonly ActorSystem System;
 
-        public ProcessOpTransaction Ops;
         public object CurrentMsg;
         public ActorRequest CurrentRequest;
         public ProcessFlags ProcessFlags;
@@ -29,18 +28,16 @@ namespace Echo
             ActorItem parent,
             object currentMsg,
             ActorRequest currentRequest,
-            ProcessFlags processFlags,
-            ProcessOpTransaction ops
+            ProcessFlags processFlags
             )
         {
+            System = system;
             Self = self;
             Sender = sender;
             Parent = parent;
             CurrentMsg = currentMsg;
             CurrentRequest = currentRequest;
             ProcessFlags = processFlags;
-            Ops = ops;
-            System = system;
         }
 
         public ActorRequestContext SetProcessFlags(ProcessFlags flags) =>
@@ -51,8 +48,7 @@ namespace Echo
                 Parent,
                 CurrentMsg,
                 CurrentRequest,
-                flags,
-                Ops
+                flags
             );
 
         public ActorRequestContext SetCurrentRequest(ActorRequest currentRequest) =>
@@ -63,8 +59,7 @@ namespace Echo
                 Parent,
                 CurrentMsg,
                 currentRequest,
-                ProcessFlags,
-                Ops
+                ProcessFlags
             );
 
         public ActorRequestContext SetCurrentMessage(object currentMsg) =>
@@ -75,33 +70,8 @@ namespace Echo
                 Parent,
                 currentMsg,
                 CurrentRequest,
-                ProcessFlags,
-                Ops
+                ProcessFlags
             );
-
-        public void SetOps(ProcessOpTransaction ops)
-        {
-            Ops = ops;
-        }
-
-
-        /// <summary>
-        /// Run the operations that affect the settings and sending of tells
-        /// in the order which they occured in the actor
-        /// </summary>
-        public Unit RunOps()
-        {
-            if (Ops != null)
-            {
-                while (Ops.Ops.Count > 0)
-                {
-                    var ops = Ops;
-                    Ops = ProcessOpTransaction.Start(Ops.ProcessId);
-                    ops.Run();
-                }
-            }
-            return unit;
-        }
 
         public HashMap<string, ProcessId> Children =>
             Self.Actor.Children.Map(c => c.Actor.Id);

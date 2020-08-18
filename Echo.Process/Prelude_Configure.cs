@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection.Emit;
+using System.Windows.Forms;
 using Echo.Config;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
+using LanguageExt.Common;
+using LanguageExt.UnsafeValueAccess;
 #if !NETSTANDARD
 using System.Web;
 #endif
@@ -13,22 +17,23 @@ namespace Echo
 {
     public static class ProcessConfig
     {
-        static object sync = new object();
         static IDisposable localScheduler;
 
-        static void InitLocalScheduler()
+        static Unit InitLocalScheduler()
         {
             if(localScheduler != null)
             {
                 localScheduler.Dispose();
             }
             localScheduler = LocalScheduler.Run();
+            return default;
         }
 
-        internal static void ShutdownLocalScheduler()
+        internal static Unit ShutdownLocalScheduler()
         {
             localScheduler.Dispose();
             localScheduler = null;
+            return default;
         }
 
 #if !NETSTANDARD
@@ -41,8 +46,8 @@ namespace Echo
         /// ProcessConfig.initialiseWeb(...)
         /// </summary>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(IEnumerable<FuncSpec> strategyFuncs = null) =>
-            initialiseWeb(() => { }, strategyFuncs);
+        public static Aff<RT, Unit> initialiseWeb<RT>(IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            initialiseWeb<RT>(() => { }, strategyFuncs);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -58,13 +63,10 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Aff<RT, Unit> initialiseWeb<RT>(Action setup, IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT>
         {
-            lock (sync)
-            {
-                if (HttpContext.Current == null) throw new NotSupportedException("There must be a valid HttpContext.Current to call ProcessConfig.initialiseWeb()");
-                return initialiseFileSystem(hostName(HttpContext.Current), setup, strategyFuncs, AppDomain.CurrentDomain.BaseDirectory);
-            }
+            if (HttpContext.Current == null) throw new NotSupportedException("There must be a valid HttpContext.Current to call ProcessConfig.initialiseWeb()");
+            return initialiseFileSystem<RT>(hostName(HttpContext.Current), setup, strategyFuncs, AppDomain.CurrentDomain.BaseDirectory);
         }
 #endif
 
@@ -107,8 +109,8 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) =>
-            initialiseWeb(nodeName, () => { }, strategyFuncs);
+        public static Aff<RT, Unit> initialiseWeb<RT>(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            initialiseWeb<RT>(nodeName, () => { }, strategyFuncs);
 
         /// <param name="nodeName">
         /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
@@ -167,13 +169,8 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
-        {
-            lock (sync)
-            {
-                return initialiseFileSystem(nodeName, setup, strategyFuncs, appPath);
-            }
-        }
+        public static Aff<RT, Unit> initialiseWeb<RT>(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null) where RT : struct, HasEcho<RT> =>
+            initialiseFileSystem<RT>(nodeName, setup, strategyFuncs, appPath);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -188,13 +185,8 @@ namespace Echo
         /// those settings will be used to connect to the cluster.  This allows for different staging environments to be 
         /// setup.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null)
-        {
-            lock (sync)
-            {
-                return initialiseFileSystem(nodeName, () => { }, strategyFuncs);
-            }
-        }
+        public static Aff<RT, Unit> initialiseFileSystem<RT>(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            initialiseFileSystem<RT>(nodeName, () => { }, strategyFuncs);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -205,13 +197,8 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
-        {
-            lock (sync)
-            {
-                return initialiseFileSystem(null, setup, strategyFuncs);
-            }
-        }
+        public static Aff<RT, Unit> initialiseFileSystem<RT>(Action setup, IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            initialiseFileSystem<RT>(null, setup, strategyFuncs);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -220,13 +207,8 @@ namespace Echo
         /// by ProcessConfig.initialiseFileSystem(...), so it's safe to not surround it with ifs.
         /// </summary>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(IEnumerable<FuncSpec> strategyFuncs = null)
-        {
-            lock (sync)
-            {
-                return initialiseFileSystem(null, () => { }, strategyFuncs);
-            }
-        }
+        public static Aff<RT, Unit> initialiseFileSystem<RT>(IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            initialiseFileSystem<RT>(null, () => { }, strategyFuncs);
 
         /// <summary>
         /// Process system configuration initialisation
@@ -243,37 +225,26 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
-        {
-            lock (sync)
-            {
-#if !NETSTANDARD
-                appPath = appPath ?? AppDomain.CurrentDomain.BaseDirectory;
+        public static Aff<RT, Unit> initialiseFileSystem<RT>(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string applicationPath = null)
+            where RT : struct, HasEcho<RT> =>
+#if NETSTANDARD
+            from appPath in SuccessEff<string>(applicationPath ?? "")
+#else
+            from appPath in SuccessEff<string>(applicationPath ?? AppDomain.CurrentDomain.BaseDirectory ?? "")
 #endif
-
-                appPath = appPath ?? "";
-                var clusterPath = Path.Combine(appPath, "cluster.conf");
-                var processPath = Path.Combine(appPath, "process.conf");
-
-                var clusterText =
-                    File.Exists(clusterPath)
-                        ? File.ReadAllText(clusterPath)
-                        : "";
-
-                var processText = File.Exists(processPath)
-                    ? File.ReadAllText(processPath)
-                    : "";
-
-                return initialise(clusterText + processText, nodeName, setup, strategyFuncs);
-            }
-        }
+            from clusterPath in SuccessEff(Path.Combine(appPath, "cluster.conf"))
+            from processPath in SuccessEff(Path.Combine(appPath, "process.conf"))
+            from clusterText in IO.File.readAllText<RT>(clusterPath)
+            from processText in IO.File.readAllText<RT>(processPath)
+            from result in initialise<RT>(clusterText + processText, nodeName, setup, strategyFuncs)
+            select result;
 
         /// <summary>
         /// Process system initialisation
         /// Initialises am in-memory only Process system
         /// </summary>
-        public static Unit initialise() =>
-            initialise("", None, () => { });
+        public static Aff<RT, Unit> initialise<RT>() where RT : struct, HasEcho<RT> =>
+            initialise<RT>("", None, () => { });
 
         /// <summary>
         /// Initialise without a config file or text
@@ -285,20 +256,16 @@ namespace Echo
         /// <param name="connectionString"></param>
         /// <param name="catalogueName"></param>
         /// <returns></returns>
-        public static Unit initialise(
+        public static Aff<RT, Unit> initialise<RT>(
             SystemName systemName,
             ProcessName roleName,
             ProcessName nodeName,
             string connectionString,
             string catalogueName,
-            string providerName = "redis"
-            )
-        {
-            lock (sync)
-            {
-                var types = new Types();
-
-                StartFromConfig(new ProcessSystemConfig(
+            string providerName = "redis") 
+            where RT : struct, HasEcho<RT> =>
+                from types in SuccessEff(new Types())
+                from resul in startFromConfig<RT>(ProcessSystemConfig.New(
                     systemName,
                     nodeName.Value,
                     HashMap<string, ValueToken>(),
@@ -313,11 +280,8 @@ namespace Echo
                             new NamedValueToken("connection", new ValueToken(types.String, connectionString), None),
                             new NamedValueToken("database", new ValueToken(types.String, catalogueName), None),
                             new NamedValueToken("provider", new ValueToken(types.String, providerName), None))),
-                    types
-                ));
-            }
-            return unit;
-        }
+                    types))
+                select resul;
 
         /// <summary>
         /// Process system configuration initialisation
@@ -328,112 +292,119 @@ namespace Echo
         /// NOTE: If a cluster is specified in config text and its 'node-name' matches nodeName, then those settings 
         /// will be used to connect to the cluster.  This allows for different staging environments to be setup.
         /// </summary>
+        /// <param name="configText">Config source text</param>
         /// <param name="nodeName">If a cluster is specified in the cluster.conf and its 'node-name' matches nodeName, then 
         /// those settings will be used to connect to the cluster.  This allows for different staging environments to be 
         /// setup.</param>
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        public static Unit initialise(string configText, Option<string> nodeName, Action setup = null, IEnumerable<FuncSpec> strategyFuncs = null)
+        public static Aff<RT, Unit> initialise<RT>(string configText, Option<string> nodeName, Action setup = null, IEnumerable<FuncSpec> strategyFuncs = null) where RT : struct, HasEcho<RT> =>
+            from parser   in SuccessEff(new ProcessSystemConfigParser(nodeName.IfNone(""), new Types(), strategyFuncs))
+            from configs  in SuccessEff(String.IsNullOrWhiteSpace(configText)
+                                           ? HashMap(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
+                                           : parser.ParseConfigText(configText))
+            from startups in SuccessEff(nodeName.Map(_ => configs.Filter(c => c.NodeName == nodeName).Map(startFromConfig<RT>))
+                                                .IfNone(() => configs.Filter(c => c.NodeName == "root").Map(startFromConfig<RT>)))
+            from r        in startups.Values.SequenceParallel()
+            from _        in setup == null
+                                ? SuccessEff(unit)
+                                : SuccessEff(fun(setup)())
+            select unit;
+
+        static Aff<RT, Unit> startFromConfig<RT>(ProcessSystemConfig config) where RT : struct, HasEcho<RT> =>
+            from _ in Eff(InitLocalScheduler)
+            from r in config.Cluster.Match(
+                Some: t  => startClusterFromConfig<RT>(config),
+                None: () => startNonClusterFromConfig<RT>(config))
+            select r;
+
+        static EffPure<A> clusterSetting<A>(ProcessSystemConfig config, string name, EffPure<A> defaultValue)
         {
-            lock (sync)
+            foreach (var settings in config.ClusterSettingsMaps)
             {
-                var parser = new ProcessSystemConfigParser(nodeName.IfNone(""), new Types(), strategyFuncs);
-                var configs = String.IsNullOrWhiteSpace(configText)
-                    ? HashMap(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
-                    : parser.ParseConfigText(configText);
-
-                nodeName.Map(_ => configs.Filter(c => c.NodeName == nodeName).Iter(StartFromConfig))
-                        .IfNone(() => configs.Filter(c => c.NodeName == "root").Iter(StartFromConfig));
-
-                setup?.Invoke();
-                return unit;
+                var v = settings.Find(name)
+                                .Bind(t => ProcessSystemConfig.mapTokenType<A>(t, config))
+                                .Map(v => (A)v.Value);
+                
+                if (v.IsSome) return SuccessEff(v.ValueUnsafe());
             }
+            return defaultValue;
         }
 
-        private static void StartFromConfig(ProcessSystemConfig config)
-        {
-            lock (sync)
-            {
-                InitLocalScheduler();
+        static Aff<RT, Unit> startClusterFromConfig<RT>(ProcessSystemConfig config) 
+            where RT : struct, HasEcho<RT> =>
+            
+            // TODO: Build a temporary EchoEnv with a System and Config so the next few lines work
+            
+            // Extract cluster settings and update
+            from provider        in clusterSetting(config, "provider",   SuccessEff("redis"))
+            from role            in clusterSetting(config, "role",       FailEff<string>(Error.New("Cluster 'role' setting missing")))
+            from clusterConn     in clusterSetting(config, "connection", SuccessEff("localhost"))
+            from clusterDb       in clusterSetting(config, "database",   SuccessEff("0"))
+            from userEnv         in clusterSetting(config, "user-env",   SuccessEff("value"))
+            
+            // Extract the values from the settings / value pairs
+            from env             in SuccessEff(config.SystemName)
+            
+            // Build an appProfile
+            from appProfile      in SuccessEff(new AppProfile(config.NodeName, role, clusterConn, clusterDb, env, userEnv))
+        
+            // Look for an existing actor-system with the same system name
+            from current         in ActorContext.findSystem(env).Match(Some, _ => None)
+            
+            // Work out if something significant has changed that will cause us to restart
+            from restart         in SuccessEff(current.Map(c => c.AppProfile.Value.NodeName != appProfile.NodeName ||
+                                                                c.AppProfile.Value.Role != appProfile.Role ||
+                                                                c.AppProfile.Value.ClusterConn != appProfile.ClusterConn ||
+                                                                c.AppProfile.Value.ClusterDb != appProfile.ClusterDb))
+                
+            // Restart, update, or start-new
+            from result          in restart.Match(
+                                       Some: r => r
+                                           ? restartClusterFromConfig<RT>(config, env)
+                                           : updateSettings<RT>(config, appProfile, env),
+                                       None: () => startClusterFromConfig<RT>(provider, clusterConn, clusterDb, role, appProfile, config, env))
+            
+            select result;
 
-                config.Cluster.Match(
-                    Some: _ =>
-                    {
-                        // Extract cluster settings
-                        var provider = config.GetClusterSetting("provider", "value", "redis");
-                        var role = config.GetClusterSetting("role", "value", name => clusterSettingMissing<string>(name));
-                        var clusterConn = config.GetClusterSetting("connection", "value", "localhost");
-                        var clusterDb = config.GetClusterSetting("database", "value", "0");
-                        var env = config.SystemName;
-                        var userEnv = config.GetClusterSetting<string>("user-env", "value");
+        static Aff<RT, Unit> startClusterFromConfig<RT>(
+            string provider, 
+            string clusterConn, 
+            string clusterDb, 
+            string role, 
+            AppProfile appProfile,
+            ProcessSystemConfig config, 
+            SystemName env) 
+                where RT : struct, HasEcho<RT> =>
+                    from _1 in Cluster.addSystem<RT>(env, new ClusterConfig(config.NodeName, clusterConn, clusterDb, role))
+                    from _2 in Cluster.connect<RT>()
+                    from _3 in ActorContextAff<RT>.startSystem(env, true, appProfile, config)
+                    from _4 in ProcessSystemConfigAff<RT>.postConnect
+                    from _5 in updateSettings<RT>(sgs, appProfile, env)
+                    select unit;
+        
+        /// <summary>
+        /// Stop a system and restart it with the new config
+        /// </summary>
+        static Aff<RT, Unit> restartClusterFromConfig<RT>(ProcessSystemConfig config, SystemName env)
+            where RT : struct, HasEcho<RT> =>
+                from a in ActorContextAff<RT>.stopSystem(env)
+                from b in startFromConfig<RT>(config)
+                select b;
 
-                        var appProfile = new AppProfile(
-                            config.NodeName,
-                            role,
-                            clusterConn,
-                            clusterDb,
-                            env,
-                            userEnv
-                            );
+        /// <summary>
+        /// Update the settings of an existing running system
+        /// </summary>
+        static Aff<RT, Unit> updateSettings<RT>(ProcessSystemConfig config, AppProfile appProfile, SystemName env)
+            where RT : struct, HasEcho<RT> =>
+                from sys in ActorContext.findSystem(env)
+                from res in ActorContextAff<RT>.localSystem(sys, ActorSystemAff<RT>.updateSettings(config, appProfile))
+                select res;
 
-                        // Look for an existing actor-system with the same system name
-                        var current = ActorContext.Systems.Filter(c => c.Value == env).HeadOrNone();
-
-                        // Work out if something significant has changed that will cause us to restart
-                        var restart = current.Map(ActorContext.System)
-                                                 .Map(c => c.AppProfile.NodeName != appProfile.NodeName ||
-                                                           c.AppProfile.Role != appProfile.Role ||
-                                                           c.AppProfile.ClusterConn != appProfile.ClusterConn ||
-                                                           c.AppProfile.ClusterDb != appProfile.ClusterDb);
-
-                        // Either restart / update settings / or start new
-                        restart.Match(
-                            Some: r =>
-                            {
-                                if (r)
-                                {
-                                    // Restart
-                                    try
-                                    {
-                                        ActorContext.StopSystem(env);
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        logErr(e);
-                                    }
-                                    StartFromConfig(config);
-                                }
-                                else
-                                {
-                                    // Update settings
-                                    ActorContext.System(env).UpdateSettings(config, appProfile);
-                                        var cluster = from systm in current.Map(ActorContext.System)
-                                                        from clstr in systm.Cluster
-                                                        select clstr;
-                                }
-                            },
-                            None: () =>
-                            {
-                                // Start new
-                                ICluster cluster = Cluster.connect(
-                                        provider,
-                                        config.NodeName,
-                                        clusterConn,
-                                        clusterDb,
-                                        role
-                                        );
-
-                                ActorContext.StartSystem(env, Optional(cluster), appProfile, config);
-                                config.PostConnect();
-                            });
-                    },
-                    None: () =>
-                    {
-                        ActorContext.StartSystem(new SystemName(""), None, AppProfile.NonClustered, config);
-                    });
-            }
-        }
+        static Aff<RT, Unit> startNonClusterFromConfig<RT>(ProcessSystemConfig config) 
+            where RT : struct, HasEcho<RT> =>
+            ActorContext.StartSystem<RT>(new SystemName(""), false, AppProfile.NonClustered, config);
 
         /// <summary>
         /// Access a setting 
@@ -561,9 +532,6 @@ namespace Echo
                 return ActorContext.System(system).Settings.ClearSettingsOverride($"role-{Role.Current.Value}@settings", ProcessFlags.PersistState);
             }
         }
-
-        static T clusterSettingMissing<T>(string name) =>
-            failwith<T>("Cluster setting missing: " + name);
 
 #if !NETSTANDARD
         static string hostName(HttpContext context) =>

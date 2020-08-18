@@ -2,87 +2,256 @@
 using System.Threading;
 using System.Reflection;
 using static LanguageExt.Prelude;
-using static Echo.Process;
+using static Echo.ProcessAff;
 using System.Reactive.Subjects;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.Reactive.Linq;
 using Echo.Config;
 using LanguageExt.ClassInstances;
 using LanguageExt;
 
 namespace Echo
 {
+    class ActorState<S>
+    {
+        public static readonly ActorState<S> Default = new ActorState<S>(default, default, default, Echo.StrategyState.Empty, default);  
+        
+        public ActorState(HashMap<string, IDisposable> subs, HashMap<string, ActorItem> children, Option<S> state, StrategyState strategyState, Seq<IDisposable> remoteSubs)
+        {
+            Subs = subs;
+            Children = children;
+            State = state;
+            StrategyState = strategyState;
+            RemoteSubs = remoteSubs;
+        }
+
+        public readonly HashMap<string, IDisposable> Subs;
+        public readonly HashMap<string, ActorItem> Children;
+        public readonly Option<S> State;
+        public readonly StrategyState StrategyState;
+        public readonly Seq<IDisposable> RemoteSubs;
+
+        public ActorState<S> With(
+            HashMap<string, IDisposable>? Subs = null, 
+            HashMap<string, ActorItem>? Children = null, 
+            Option<S>? State = null, 
+            StrategyState StrategyState = null, 
+            Seq<IDisposable>? RemoteSubs = null) =>
+            new ActorState<S>(
+                Subs ?? this.Subs, 
+                Children ?? this.Children, 
+                State ?? this.State, 
+                StrategyState ?? this.StrategyState, 
+                RemoteSubs ?? this.RemoteSubs);
+    }
+
     /// <summary>
     /// Internal class that represents the state of a single process.
     /// </summary>
     /// <typeparam name="S">State</typeparam>
     /// <typeparam name="T">Message type</typeparam>
-    class Actor<S, T> : IActor
+    class Actor<RT, S, T> : IActor 
+        where RT : struct, HasEcho<RT>
     {
-        readonly Func<S, T, S> actorFn;
-        readonly Func<S, ProcessId, S> termFn;
-        readonly Func<IActor, S> setupFn;
-        readonly Func<S, Unit> shutdownFn;
-        readonly ProcessFlags flags;
-        readonly Subject<object> publishSubject = new Subject<object>();
-        readonly Subject<object> stateSubject = new Subject<object>();
-        readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-        readonly Option<ICluster> cluster;
-        HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
-        Atom<HashMap<string, ActorItem>> children = Atom(HashMap<string, ActorItem>());
-        Option<S> state;
-        StrategyState strategyState = StrategyState.Empty;
-        EventWaitHandle request;
-        volatile ActorResponse response;
-        object sync = new object();
-        bool remoteSubsAcquired;
-        IActorSystem sys;
+        public readonly ProcessId Id;
+        public readonly ProcessName Name;
+        public readonly ActorItem Parent;
+        public readonly Func<S, T, Aff<RT, S>> ActorFn;
+        public readonly Func<S, ProcessId, Aff<RT, S>> TermFn;
+        public readonly Func<IActor, Aff<RT, S>> SetupFn;
+        public readonly Func<S, Aff<RT, Unit>> ShutdownFn;
+        public readonly ProcessFlags Flags;
+        public readonly State<StrategyContext, Unit> Strategy;
+        public readonly Subject<object> PublishSubject;
+        public readonly Subject<S> StateSubject;
+        public readonly Atom<ActorState<S>> State;
 
-        internal Actor(
-            Option<ICluster> cluster,
-            ActorItem parent,
+        public Actor(
+            ProcessId id,
             ProcessName name,
-            Func<S, T, S> actor,
-            Func<IActor, S> setup,
-            Func<S, Unit> shutdown,
-            Func<S, ProcessId, S> term,
+            ActorItem parent,
+            Func<S, T, Aff<RT, S>> actorFn, 
+            Func<S, ProcessId, Aff<RT, S>> termFn, 
+            Func<IActor, Aff<RT, S>> setupFn, 
+            Func<S, Aff<RT, Unit>> shutdownFn, 
+            ProcessFlags flags, 
             State<StrategyContext, Unit> strategy,
-            ProcessFlags flags,
-            ProcessSystemConfig settings,
-            IActorSystem sys
-            )
+            Subject<object> publishSubject, 
+            Subject<S> stateSubject,
+            Atom<ActorState<S>> state)
         {
-            setupFn = setup ?? throw new ArgumentNullException(nameof(setup));
-            actorFn = actor ?? throw new ArgumentNullException(nameof(actor));
-            shutdownFn = shutdown ?? throw new ArgumentNullException(nameof(shutdown));
-            shutdownFn = fun((S s) =>
-            {
-                try
-                {
-                    shutdown(s);
-                }
-                catch (Exception e)
-                {
-                    logErr(e);
-                }
-                return unit;
-            });
-
-            this.sys = sys;
-            Id = parent.Actor.Id[name];
-            this.cluster = cluster;
-            this.flags = flags == ProcessFlags.Default
-                ? settings.GetProcessFlags(Id)
-                : flags;
-            
-            termFn = term;
-            
-            Parent = parent;
+            Id = id;
             Name = name;
+            Parent = parent;
+            ActorFn = actorFn;
+            TermFn = termFn;
+            SetupFn = setupFn;
+            ShutdownFn = shutdownFn;
+            Flags = flags;
             Strategy = strategy;
-            SetupRemoteSubscriptions(cluster, flags);
+            PublishSubject = publishSubject;
+            StateSubject = stateSubject;
+            State = state;
+        }
+        
+        public Aff<RT, Unit> InitState() =>
+            State.SwapAff(state =>
+                        from nwState1 in SuccessEff(disposeRemoteSubs(state))
+                        from nwState2 in (Flags & ProcessFlags.PersistState) == ProcessFlags.PersistState
+                                             ? from exists in Cluster.exists<RT>(stateKey(Id))
+                                               from result in exists
+                                                   ? Cluster.getValue<RT, S>(stateKey(Id))
+                                                   : SetupFn(this)
+                                               select result
+                                             : SetupFn(this)
+                        from remSubs  in setupRemoteSubs(Id, Flags, StateSubject)
+                        select nwState1.With(State: nwState2, RemoteSubs: remSubs))
+                 .Map(_ => unit);
+
+        static ActorState<S> disposeRemoteSubs(ActorState<S> state)
+        {
+            state.RemoteSubs.Iter(s => s.Dispose());
+            return state.With(RemoteSubs: Empty);
         }
 
+        internal static string stateKey(ProcessId id) => 
+            id.Path + "@state";
+        
+        internal static Aff<RT, Seq<IDisposable>> setupRemoteSubs(ProcessId id, ProcessFlags flags, Subject<S> stateSubject) =>
+
+            // Watches for local state-changes and persists them
+            from spers in (flags & ProcessFlags.PersistState) == ProcessFlags.PersistState
+                ? logErr(
+                    Eff<RT, IDisposable>(e => 
+                        stateSubject.SelectMany(async state => await Cluster.setValue<RT, S>(stateKey(id), state).RunIO(e))
+                            .Subscribe(state => { })))
+                : SuccessEff<IDisposable>(null)
+            
+            // Watches for local state-changes and publishes them remotely
+            from sdisp in (flags & ProcessFlags.RemoteStatePublish) == ProcessFlags.RemoteStatePublish
+                ? logErr(
+                    Eff<RT, IDisposable>(e => 
+                        stateSubject.SelectMany(async state => await Cluster.publishToChannel<RT, S>(ActorInboxCommon.ClusterStatePubSubKey(id), state).RunIO(e))
+                            .Subscribe(state => { })))
+                : SuccessEff<IDisposable>(null)
+                
+            // Watches for publish events and remotely publishes them
+            from pubd  in (flags & ProcessFlags.RemotePublish) == ProcessFlags.RemotePublish
+                ? logErr(
+                    Eff<RT, IDisposable>(e => 
+                        stateSubject.SelectMany(async state => await Cluster.publishToChannel<RT, S>(ActorInboxCommon.ClusterPubSubKey(id), state).RunIO(e))
+                            .Subscribe(state => { })))
+                : SuccessEff<IDisposable>(null)
+            
+            select new [] {spers, sdisp, pubd}.Filter(notnull).ToSeq();        
+        //     
+        //     
+        // {
+        //     S state;
+        //
+        //     try
+        //     {
+        //         SetupRemoteSubscriptions(cluster, flags);
+        //
+        //         if (cluster.IsSome && ((flags & ProcessFlags.PersistState) == ProcessFlags.PersistState))
+        //         {
+        //             try
+        //             {
+        //                 logInfo($"Restoring state: {StateKey}");
+        //
+        //                 state = cluster.IfNoneUnsafe(() => null).Exists(StateKey)
+        //                     ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
+        //                     : setupFn(this);
+        //
+        //             }
+        //             catch (Exception e)
+        //             {
+        //                 logSysErr(e);
+        //                 state = setupFn(this);
+        //             }
+        //         }
+        //         else
+        //         {
+        //             state = setupFn(this);
+        //         }
+        //
+        //         ActorContext.Request.RunOps();
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         throw new ProcessSetupException(Id.Path, e);
+        //     }
+        //
+        //     try
+        //     {
+        //         stateSubject.OnNext(state);
+        //     }
+        //     catch (Exception ue)
+        //     {
+        //         // Not our errors, so just log and move on
+        //         logErr(ue);
+        //     }
+        //     return state;
+        // }          
+    }
+
+    static class ActorAff<RT, S, A> where RT : struct, HasEcho<RT>
+    {
+        public static Aff<RT, IActor> create(
+            bool cluster,
+            ActorItem parent,
+            ProcessName name,
+            Func<S, A, Aff<RT, S>> actor,
+            Func<IActor, Aff<RT, S>> setup,
+            Func<S, Aff<RT, Unit>> shutdown,
+            Func<S, ProcessId, Aff<RT, S>> term,
+            State<StrategyContext, Unit> strategy,
+            ProcessFlags flags) =>
+                from setupFn    in SuccessEff(setup ?? throw new ArgumentNullException(nameof(setup)))
+                from actorFn    in SuccessEff(actor ?? throw new ArgumentNullException(nameof(actor)))
+                from shutdownFn in SuccessEff(shutdown ?? throw new ArgumentNullException(nameof(shutdown))).Map(loggingShutdown)
+                from sys        in ActorContextAff<RT>.LocalSystem
+                from settings   in ActorContextAff<RT>.LocalSettings
+                from id         in SuccessEff(parent.Actor.Id[name])
+                from pflags     in flags == ProcessFlags.Default
+                                       ? ProcessSystemConfigAff<RT>.getProcessFlags(id)
+                                       : SuccessEff(flags)
+                from stateSubj  in SuccessEff(new Subject<S>())
+                from pubSubj    in SuccessEff(new Subject<object>())
+                from remoteSubs in cluster
+                                      ? Actor<RT, S, A>.setupRemoteSubs(id, flags, stateSubj)
+                                      : SuccessEff(Seq<IDisposable>())
+                from state      in SuccessEff(Atom(ActorState<S>.Default))
+                select new Actor<RT, S, A>(id, name, parent, actorFn, term, setupFn, shutdownFn, flags, strategy, pubSubj, stateSubj, state) as IActor;
+        
+        
+        static Func<S, Aff<RT, Unit>> loggingShutdown(Func<S, Aff<RT, Unit>> shutdown) =>
+            state =>
+                ProcessAff.logErr<RT, Unit>(shutdown(state));
+
+ 
+
+        // static Aff<RT, S> getState =>
+        //     from ctx in ActorContextAff<RT>.Request
+        //     from res in ctx.Self.Actor.GetState<RT
+        // {
+        //     lock (sync)
+        //     {
+        //         var res = state.IfNoneUnsafe(InitState);
+        //         state = res;
+        //         return res;
+        //     }
+        // }
+
+      
+        
+        /// <summary>
+        /// Start up
+        /// </summary>
+        public static Aff<RT, InboxDirective> startup =>
+            from dir in                             
+        
         /// <summary>
         /// Start up - placeholder
         /// </summary>
@@ -187,116 +356,6 @@ namespace Echo
         public ProcessFlags Flags => 
             flags;
 
-        string StateKey => 
-            Id.Path + "@state";
-
-        void SetupRemoteSubscriptions(Option<ICluster> cluster, ProcessFlags flags)
-        {
-            if (remoteSubsAcquired) return;
-
-            cluster.IfSome(c =>
-            {
-                // Watches for local state-changes and persists them
-                if ((flags & ProcessFlags.PersistState) == ProcessFlags.PersistState)
-                {
-                    try
-                    {
-                        stateSubject.Subscribe(state => c.SetValue(StateKey, state));
-                    }
-                    catch (Exception e)
-                    {
-                        logSysErr(e);
-                    }
-                }
-
-                // Watches for local state-changes and publishes them remotely
-                if ((flags & ProcessFlags.RemoteStatePublish) == ProcessFlags.RemoteStatePublish)
-                {
-                    try
-                    {
-                        stateSubject.Subscribe(state => c.PublishToChannel(ActorInboxCommon.ClusterStatePubSubKey(Id), state));
-                    }
-                    catch (Exception e)
-                    {
-                        logSysErr(e);
-                    }
-                }
-
-                // Watches for publish events and remotely publishes them
-                if ((flags & ProcessFlags.RemotePublish) == ProcessFlags.RemotePublish)
-                {
-                    try
-                    {
-                        publishSubject.Subscribe(msg => c.PublishToChannel(ActorInboxCommon.ClusterPubSubKey(Id), msg));
-                    }
-                    catch (Exception e)
-                    {
-                        logSysErr(e);
-                    }
-                }
-            });
-
-            remoteSubsAcquired = true;
-        }
-
-        S GetState()
-        {
-            lock (sync)
-            {
-                var res = state.IfNoneUnsafe(InitState);
-                state = res;
-                return res;
-            }
-        }
-
-        S InitState()
-        {
-            S state;
-
-            try
-            {
-                SetupRemoteSubscriptions(cluster, flags);
-
-                if (cluster.IsSome && ((flags & ProcessFlags.PersistState) == ProcessFlags.PersistState))
-                {
-                    try
-                    {
-                        logInfo($"Restoring state: {StateKey}");
-
-                        state = cluster.IfNoneUnsafe(() => null).Exists(StateKey)
-                            ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
-                            : setupFn(this);
-
-                    }
-                    catch (Exception e)
-                    {
-                        logSysErr(e);
-                        state = setupFn(this);
-                    }
-                }
-                else
-                {
-                    state = setupFn(this);
-                }
-
-                ActorContext.Request.RunOps();
-            }
-            catch (Exception e)
-            {
-                throw new ProcessSetupException(Id.Path, e);
-            }
-
-            try
-            {
-                stateSubject.OnNext(state);
-            }
-            catch (Exception ue)
-            {
-                // Not our errors, so just log and move on
-                logErr(ue);
-            }
-            return state;
-        }
 
         /// <summary>
         /// Publish observable stream

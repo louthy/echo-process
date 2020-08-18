@@ -102,12 +102,14 @@ namespace Echo
     /// </summary>
     public class InvalidProcessIdException : Exception
     {
+        public const string Error = "Invalid process ID";
+        
         /// <summary>
         /// Ctor
         /// </summary>
         public InvalidProcessIdException()
             :
-            base("Invalid process ID")
+            base(Error)
         {
         }
 

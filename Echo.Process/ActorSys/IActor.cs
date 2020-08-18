@@ -45,72 +45,70 @@ namespace Echo
         /// Clears the state (keeps the mailbox items)
         /// </summary>
         /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
-        Unit Restart(bool unpauseAfterRestart);
+        Aff<RT, Unit> Restart<RT>(bool unpauseAfterRestart) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Startup
         /// </summary>
         /// <returns>returns InboxDirective.Pause if Startup will unpause inbox (via some strategy error handling). Otherwise InboxDirective.Default</returns>
-        InboxDirective Startup();
+        Aff<RT, InboxDirective> Startup<RT>() where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Shutdown
         /// </summary>
-        Unit Shutdown(bool maintainState);
+        Aff<RT, Unit> Shutdown<RT>(bool maintainState) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Link child
         /// </summary>
         /// <param name="pid">Child to link</param>
-        Unit LinkChild(ActorItem pid);
+        Aff<RT, Unit> LinkChild<RT>(ActorItem pid) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Unlink child
         /// </summary>
         /// <param name="pid">Child to unlink</param>
-        Unit UnlinkChild(ProcessId pid);
+        Aff<RT, Unit> UnlinkChild<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Add a watcher of this Process
         /// </summary>
         /// <param name="pid">Id of the Process that will watch this Process</param>
-        Unit AddWatcher(ProcessId pid);
+        Aff<RT, Unit> AddWatcher<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Remove a watcher of this Process
         /// </summary>
         /// <param name="pid">Id of the Process that will stop watching this Process</param>
-        Unit RemoveWatcher(ProcessId pid);
+        Aff<RT, Unit> RemoveWatcher<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Publish to the PublishStream
         /// </summary>
-        Unit Publish(object message);
+        Aff<RT, Unit> Publish<RT>(object message) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Publish stream - for calls to Process.pub
         /// </summary>
-        IObservable<object> PublishStream { get; }
+        Eff<RT, IObservable<object>> PublishStream<RT>() where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// State stream - sent after each message loop
         /// </summary>
-        IObservable<object> StateStream { get; }
+        Eff<RT, IObservable<object>> StateStream<RT>() where RT : struct, HasEcho<RT>;
 
-        CancellationTokenSource CancellationTokenSource { get; }
+        Aff<RT, InboxDirective> ProcessMessage<RT>(object message) where RT : struct, HasEcho<RT>;
+        Aff<RT, InboxDirective> ProcessAsk<RT>(ActorRequest request) where RT : struct, HasEcho<RT>;
+        Aff<RT, InboxDirective> ProcessTerminated<RT>(ProcessId id) where RT : struct, HasEcho<RT>;
 
-        InboxDirective ProcessMessage(object message);
-        InboxDirective ProcessAsk(ActorRequest request);
-        InboxDirective ProcessTerminated(ProcessId id);
+        Aff<RT, R> ProcessRequest<RT, R>(ProcessId pid, object message) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> ProcessResponse<RT>(ActorResponse response) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> ShutdownProcess<RT>(bool maintainState) where RT : struct, HasEcho<RT>;
 
-        R ProcessRequest<R>(ProcessId pid, object message);
-        Unit ProcessResponse(ActorResponse response);
-        Unit ShutdownProcess(bool maintainState);
+        Aff<RT, Unit> AddSubscription<RT>(ProcessId pid, IDisposable sub) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> RemoveSubscription<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
 
-        Unit AddSubscription(ProcessId pid, IDisposable sub);
-        Unit RemoveSubscription(ProcessId pid);
-
-        Unit DispatchWatch(ProcessId pid);
-        Unit DispatchUnWatch(ProcessId pid);
+        Aff<RT, Unit> DispatchWatch<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> DispatchUnWatch<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
     }
 }

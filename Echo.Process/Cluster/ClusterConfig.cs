@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using LanguageExt;
+using static LanguageExt.Prelude;
 
 namespace Echo
 {
@@ -12,6 +10,8 @@ namespace Echo
         public readonly string ConnectionString;
         public readonly string CatalogueName;
         public readonly ProcessName Role;
+        
+        public readonly Atom<Option<IDisposable>> Connection = Atom<Option<IDisposable>>(None);
 
         public ClusterConfig(
             ProcessName nodeName,

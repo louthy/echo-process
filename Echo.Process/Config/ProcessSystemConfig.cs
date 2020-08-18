@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Xml.Schema;
 using LanguageExt;
+using LanguageExt.Common;
 using LanguageExt.Parsec;
 using static LanguageExt.Prelude;
 using static LanguageExt.Parsec.Prim;
@@ -24,19 +27,19 @@ namespace Echo.Config
     {
         public readonly SystemName SystemName;
         public readonly Option<ClusterToken> Cluster;
-        public readonly string NodeName = "";
-        readonly HashMap<string, ValueToken> roleSettings;
-        readonly HashMap<ProcessId, ProcessToken> processSettings;
-        readonly HashMap<string, State<StrategyContext, Unit>> stratSettings;
-        readonly object sync = new object();
-        readonly Types types;
+        public readonly string NodeName;
+        public readonly int MaxMailboxSize;
 
-        HashMap<string, HashMap<string, object>> settingOverrides;
-        Time timeout = 30 * seconds;
-        Time sessionTimeoutCheck = 60 * seconds;
-        int maxMailboxSize = 100000;
-        bool transactionalIO = false;
-
+        internal readonly Time Timeout;
+        internal readonly bool TransactionalIO = false;
+        internal readonly SettingOverrides SettingOverrides;
+        internal readonly Types Types;
+        
+        readonly HashMap<string, ValueToken> RoleSettings;
+        readonly HashMap<ProcessId, ProcessToken> ProcessSettings;
+        readonly HashMap<string, State<StrategyContext, Unit>> StratSettings;
+        readonly Time SessionTimeoutCheck;
+ 
         public readonly static ProcessSystemConfig Empty =
             new ProcessSystemConfig(
                 default(SystemName),
@@ -45,356 +48,337 @@ namespace Echo.Config
                 HashMap<ProcessId, ProcessToken>(),
                 HashMap<string, State<StrategyContext, Unit>>(),
                 null,
-                new Types()
+                new Types(),
+                default,
+                30*seconds,     
+                60*seconds,
+                100000,
+                false
             );
 
-        public ProcessSystemConfig(
+        ProcessSystemConfig(
             SystemName systemName,
             string nodeName,
             HashMap<string, ValueToken> roleSettings,
             HashMap<ProcessId, ProcessToken> processSettings,
             HashMap<string, State<StrategyContext, Unit>> stratSettings,
-            ClusterToken cluster,
-            Types types
+            Option<ClusterToken> cluster,
+            Types types,
+            SettingOverrides settingOverrides,
+            Time timeout,
+            Time sessionTimeoutCheck,
+            int maxMailboxSize,
+            bool transactionalIO
             )
         {
             SystemName = systemName;
             NodeName = nodeName;
-            this.settingOverrides = HashMap<string, HashMap<string, object>>();
-            this.roleSettings = roleSettings;
-            this.processSettings = processSettings;
-            this.stratSettings = stratSettings;
-            this.Cluster = cluster;
-            this.types = types;
+            SettingOverrides = default;
+            RoleSettings = roleSettings;
+            ProcessSettings = processSettings;
+            StratSettings = stratSettings;
+            Cluster = cluster;
+            Types = types;
+            SettingOverrides = settingOverrides;
+            Timeout = timeout;
+            SessionTimeoutCheck = sessionTimeoutCheck;
+            MaxMailboxSize = maxMailboxSize;
+            TransactionalIO = transactionalIO;
+            RoleSettingsKey = $"role-{Role.Current}@settings";
+            RoleSettingsMaps = Seq(RoleSettings, Cluster.Map(c => c.Settings).IfNone(HashMap<string, ValueToken>()));
+            StatePersistsFlag = cluster.IsSome ? ProcessFlags.PersistState : ProcessFlags.Default;
+            ClusterSettingsMaps = Seq1(Cluster.Map(c => c.Settings).IfNone(HashMap<string, ValueToken>()));
         }
+        
+        /// <summary>
+        /// Ctor function
+        /// </summary>
+        [Pure]
+        public static ProcessSystemConfig New(SystemName systemName,
+            string nodeName,
+            HashMap<string, ValueToken> roleSettings,
+            HashMap<ProcessId, ProcessToken> processSettings,
+            HashMap<string, State<StrategyContext, Unit>> stratSettings,
+            Option<ClusterToken> cluster,
+            Types types) =>
+            new ProcessSystemConfig(
+                systemName, 
+                nodeName, 
+                roleSettings, 
+                processSettings, 
+                stratSettings, 
+                cluster, 
+                types,
+                default,
+                30*seconds,
+                60*seconds,
+                100000,
+                false);
 
+        /// <summary>
+        /// Configuration transformation
+        /// </summary>
+        [Pure]
+        internal ProcessSystemConfig With(
+            SystemName? SystemName = null,
+            string NodeName = null,
+            HashMap<string, ValueToken>? RoleSettings = null,
+            HashMap<ProcessId, ProcessToken>? ProcessSettings = null,
+            HashMap<string, State<StrategyContext, Unit>>? StratSettings = null,
+            Option<ClusterToken>? Cluster = null,
+            Types Types = null,
+            SettingOverrides? SettingOverrides = null,
+            Time? Timeout = null,
+            Time? SessionTimeoutCheck = null,
+            int? MaxMailboxSize = null,
+            bool? TransactionalIO = null) =>            
+            new ProcessSystemConfig(
+                SystemName ?? this.SystemName, 
+                NodeName ?? this.NodeName, 
+                RoleSettings ?? this.RoleSettings, 
+                ProcessSettings ?? this.ProcessSettings, 
+                StratSettings ?? this.StratSettings, 
+                Cluster ?? this.Cluster, 
+                Types ?? this.Types,
+                SettingOverrides ?? this.SettingOverrides,
+                Timeout ?? this.Timeout,
+                SessionTimeoutCheck ?? this.SessionTimeoutCheck,
+                MaxMailboxSize ?? this.MaxMailboxSize,
+                TransactionalIO ?? this.TransactionalIO);
+        
+        /// <summary>
+        /// Get the roles settings key
+        /// </summary>
+        public string RoleSettingsKey { get; }
+
+        /// <summary>
+        /// All the settings for a role, in scope order (role -> cluster)
+        /// </summary>
+        public Seq<HashMap<string, ValueToken>> RoleSettingsMaps { get; }
+
+        /// <summary>
+        /// If we have a cluster then this returns ProcessFlags.PersistState else ProcessFlags.Default
+        /// </summary>
+        public ProcessFlags StatePersistsFlag { get; }
+
+        /// <summary>
+        /// All the settings for a cluster
+        /// </summary>
+        public Seq<HashMap<string, ValueToken>> ClusterSettingsMaps { get; }
+        
+        [Pure]
+        internal ProcessSystemConfig ApplyUpdates(SettingOverrideUpdates updates) =>
+            With(SettingOverrides: SettingOverrides.ApplyUpdates(updates));
+        
+        [Pure]
+        internal ProcessSystemConfig ApplyUpdates(params SettingOverrideUpdates[] updates) =>
+            With(SettingOverrides: SettingOverrides.ApplyUpdates(SettingOverrideUpdates.Concat(updates)));
+ 
         /// <summary>
         /// Returns a named strategy
         /// </summary>
+        [Pure]
         internal Option<State<StrategyContext, Unit>> GetStrategy(string name) =>
-            stratSettings.Find(name);
+            StratSettings.Find(name);
 
-        internal Option<HashMap<string, object>> GetProcessSettingsOverrides(ProcessId pid) =>
-            settingOverrides.Find(pid.Path);
+        [Pure]
+        internal Option<HashMap<string, (object Value, long Timestamp)>> GetProcessSettingsOverrides(ProcessId pid) =>
+            SettingOverrides.Find(pid.Path);
 
         /// <summary>
         /// Make a process ID into a /role/... ID
         /// </summary>
+        [Pure]
         static ProcessId RolePid(ProcessId pid) =>
             ProcessId.Top["role"].Append(pid.Skip(1));
 
         /// <summary>
-        /// Write a single override setting
+        /// All the settings for a process, in scope order (local -> local-role -> role -> cluster)
         /// </summary>
-        internal Unit WriteSettingOverride(string key, object value, string name, string prop, ProcessFlags flags)
-        {
-            if (value == null) failwith<Unit>("Settings can't be null");
+        [Pure]
+        internal Seq<HashMap<string, ValueToken>> SettingsMaps(ProcessId pid) =>
+            Seq(
+                ProcessSettings.Find(pid).Map(token => token.Settings).IfNone(HashMap<string, ValueToken>()),
+                ProcessSettings.Find(RolePid(pid)).Map(token => token.Settings).IfNone(HashMap<string, ValueToken>()),
+                RoleSettings,
+                Cluster.Map(c => c.Settings).IfNone(HashMap<string, ValueToken>()));
 
-            var propKey = $"{name}@{prop}";
-
-            if (flags != ProcessFlags.Default)
-            {
-                ActorContext.System(SystemName).Cluster.Iter(c => c.HashFieldAddOrUpdate(key, propKey, value));
-            }
-            settingOverrides = settingOverrides.AddOrUpdate(key, propKey, value);
-            return unit;
-        }
-
-        /// <summary>
-        /// Clear a single override setting
-        /// </summary>
-        internal Unit ClearSettingOverride(string key, string name, string prop, ProcessFlags flags)
-        {
-            var propKey = $"{name}@{prop}";
-            if (flags != ProcessFlags.Default)
-            {
-                ActorContext.System(SystemName).Cluster.Iter(c => c.DeleteHashField(key, propKey));
-            }
-            settingOverrides = settingOverrides.Remove(key, propKey);
-            return unit;
-        }
-
-        /// <summary>
-        /// Clear all override settings for either the process or role
-        /// </summary>
-        internal Unit ClearSettingsOverride(string key, ProcessFlags flags)
-        {
-            if (flags != ProcessFlags.Default)
-            {
-                ActorContext.System(SystemName).Cluster.Iter(c => c.Delete(key));
-            }
-            return ClearInMemorySettingsOverride(key);
-        }
-
-        /// <summary>
-        /// Clear all override settings for either the process or role
-        /// </summary>
-        internal Unit ClearInMemorySettingsOverride(string key)
-        {
-            settingOverrides = settingOverrides.Remove(key);
-            return unit;
-        }
-
-        /// <summary>
-        /// Get a named process setting
-        /// </summary>
-        /// <param name="pid">Process</param>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        /// <returns></returns>
-        internal T GetProcessSetting<T>(ProcessId pid, string name, string prop, T defaultValue, ProcessFlags flags)
-        {
-            var empty = HashMap<string, ValueToken>();
-
-            var settingsMaps = Seq(
-                    processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
-                    processSettings.Find(RolePid(pid)).Map(token => token.Settings).IfNone(empty),
-                    roleSettings,
-                    Cluster.Map(c => c.Settings).IfNone(empty));
-
-            return GetSettingGeneral(settingsMaps, ActorInboxCommon.ClusterSettingsKey(pid), name, prop, defaultValue, flags);
-        }
-
-        /// <summary>
-        /// Get a named process setting
-        /// </summary>
-        /// <param name="pid">Process</param>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        /// <returns></returns>
-        internal Option<T> GetProcessSetting<T>(ProcessId pid, string name, string prop, ProcessFlags flags)
-        {
-            var empty = HashMap<string, ValueToken>();
-
-            var settingsMaps = Seq(
-                    processSettings.Find(pid).Map(token => token.Settings).IfNone(empty),
-                    processSettings.Find(RolePid(pid)).Map(token => token.Settings).IfNone(empty),
-                    roleSettings,
-                    Cluster.Map(c => c.Settings).IfNone(empty));
-
-            return GetSettingGeneral<T>(settingsMaps, ActorInboxCommon.ClusterSettingsKey(pid), name, prop, flags);
-        }
-
-        /// <summary>
-        /// Get a named role setting
-        /// </summary>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        internal T GetRoleSetting<T>(string name, string prop, T defaultValue)
-        {
-            var empty = HashMap<string, ValueToken>();
-            var key = $"role-{Role.Current}@settings";
-            var flags = ActorContext.System(SystemName).Cluster.Map(_ => ProcessFlags.PersistState).IfNone(ProcessFlags.Default);
-            var settingsMaps = Seq(roleSettings, Cluster.Map(c => c.Settings).IfNone(empty));
-            return GetSettingGeneral(settingsMaps, key, name, prop, defaultValue, flags);
-        }
-
-        /// <summary>
-        /// Get a named cluster setting
-        /// </summary>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        internal T GetClusterSetting<T>(string name, string prop, T defaultValue) =>
-            GetClusterSetting(name, prop, _ => defaultValue);
-
-        /// <summary>
-        /// Get a named cluster setting
-        /// </summary>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        internal T GetClusterSetting<T>(string name, string prop, Func<string, T> defaultValue) =>
-            GetClusterSetting<T>(name, prop).IfNone(() => defaultValue(name));
-
-        /// <summary>
-        /// Get a named cluster setting
-        /// </summary>
-        /// <param name="name">Name of setting</param>
-        /// <param name="prop">Name of property within the setting (for complex 
-        /// types, not value types)</param>
-        internal Option<T> GetClusterSetting<T>(string name, string prop)
-        {
-            var key = "cluster@settings";
-            var empty = HashMap<string, ValueToken>();
-            var settingsMaps = new[] { Cluster.Map(c => c.Settings).IfNone(empty) };
-            return GetSettingGeneral<T>(settingsMaps.ToSeq(), key, name, prop, ProcessFlags.Default);
-        }
-
-        internal T GetSettingGeneral<T>(Seq<HashMap<string, ValueToken>> settingsMaps, string key, string name, string prop, T defaultValue, ProcessFlags flags)
-        {
-            var res = GetSettingGeneral<T>(settingsMaps, key, name, prop, flags);
-
-            if (res.IsNone)
-            {
-                // No config, no override; so cache the default value so we don't
-                // go through all of this again.
-                var propKey = $"{name}@{prop}";
-                AddOrUpdateProcessOverride(key, propKey, Optional(defaultValue));
-            }
-            return res.IfNone(defaultValue);
-        }
-
-        internal Option<T> GetSettingGeneral<T>(Seq<HashMap<string, ValueToken>> settingsMaps, string key, string name, string prop, ProcessFlags flags)
-        {
-            var propKey = $"{name}@{prop}";
-
-            // First see if we have the value cached
-            var over = settingOverrides.Find(key, propKey);
-            if (over.IsSome) return over.Map(x => (T)x);
-
-            // Next check the cluster data store (Redis usually)
-            Option<T> tover = None;
-            if (flags != ProcessFlags.Default && SystemName.IsValid)
-            {
-                tover = from x in ActorContext.System(SystemName).Cluster.Map(c => c.GetHashField<T>(key, propKey))
-                        from y in x
-                        select y;
-
-                if (tover.IsSome)
-                {
-                    // It's in the data-store, so cache it locally and return
-                    AddOrUpdateProcessOverride(key, propKey, tover);
-                    return tover;
-                }
-            }
-
-            foreach (var settings in settingsMaps)
-            {
-                tover = from opt1 in prop == "value"
-                            ? from tok in settings.Find(name)  
-                              from map in MapTokenType<T>(tok).Map(v => (T)v.Value)
-                              select map
-                            : settings.Find(name).Map(v => v.GetItem<T>(prop))
-                        from opt2 in opt1
-                        select opt2;
-
-                if (tover.IsSome)
-                {
-                    // There is a config setting, so cache it and return
-                    AddOrUpdateProcessOverride(key, propKey, tover);
-                    return tover.IfNoneUnsafe(default(T));
-                }
-            }
-            return None;
-        }
-
-        Option<ValueToken> MapTokenType<T>(ValueToken token)
-        {
-            var type = typeof(T);
-            if (type.GetTypeInfo().IsAssignableFrom(token.Value.GetType().GetTypeInfo()))
-            {
-                return new ValueToken(token.Type, Convert.ChangeType(token.Value, type));
-            }
-            return from def in types.TypeMap.Find(type.FullName)
-                   from map in def.Convert(token)
-                   select map;
-        }
-
-        void AddOrUpdateProcessOverride<T>(string key, string propKey, Option<T> tover)
-        {
-            tover.Iter(v =>
-            {
-                lock (sync)
-                {
-                    // Update our cache
-                    settingOverrides = settingOverrides.AddOrUpdate(key, propKey, v);
-                }
-            });
-        }
-
-        /// <summary>
-        /// Get the name to use to register the Process
-        /// </summary>
-        internal Option<ProcessName> GetProcessRegisteredName(ProcessId pid) =>
-            GetProcessSetting<ProcessName>(pid, "register-as", "value", ProcessFlags.Default);
-
-        /// <summary>
-        /// Get the dispatch method
-        /// This is used by the registration system, it registers the Process 
-        /// using a Role[dispatch][...relative path to process...]
-        /// </summary>
-        internal Option<string> GetProcessDispatch(ProcessId pid) =>
-            GetProcessSetting<string>(pid, "dispatch", "value", ProcessFlags.Default);
-
-        /// <summary>
-        /// Get the router dispatch method
-        /// This is used by routers to specify the type of routing
-        /// </summary>
-        internal Option<string> GetRouterDispatch(ProcessId pid) =>
-            GetProcessSetting<string>(pid, "route", "value", ProcessFlags.Default);
-
-        /// <summary>
-        /// Get the router workers list
-        /// </summary>
-        internal Lst<ProcessToken> GetRouterWorkers(ProcessId pid) =>
-            GetProcessSetting<Lst<ProcessToken>>(pid, "workers", "value", ProcessFlags.Default)
-           .IfNone(List<ProcessToken>());
-
-        /// <summary>
-        /// Get the router worker count
-        /// </summary>
-        internal Option<int> GetRouterWorkerCount(ProcessId pid) =>
-            GetProcessSetting<int>(pid, "worker-count", "value", ProcessFlags.Default);
-
-        /// <summary>
-        /// Get the router worker name
-        /// </summary>
-        internal string GetRouterWorkerName(ProcessId pid) =>
-            GetProcessSetting<string>(pid, "worker-name", "value", ProcessFlags.Default)
-           .IfNone("worker");
-
-        /// <summary>
-        /// Get the mailbox size for a Process.  Returns a default size if one
-        /// hasn't been set in the config.
-        /// </summary>
-        internal int GetProcessMailboxSize(ProcessId pid) =>
-            GetProcessSetting<int>(pid, "mailbox-size", "value", ProcessFlags.Default)
-           .IfNone(maxMailboxSize);
-
-        /// <summary>
-        /// Get the flags for a Process.  Returns ProcessFlags.Default if none
-        /// have been set in the config.
-        /// </summary>
-        internal ProcessFlags GetProcessFlags(ProcessId pid) =>
-            GetProcessSetting<ProcessFlags>(pid, "flags", "value", ProcessFlags.Default)
-           .IfNone(ProcessFlags.Default);
-
-        /// <summary>
-        /// Get the strategy for a Process.  Returns Process.DefaultStrategy if one
-        /// hasn't been set in the config.
-        /// </summary>
-        internal State<StrategyContext, Unit> GetProcessStrategy(ProcessId pid) =>
-            GetProcessSetting<State<StrategyContext, Unit>>(pid, "strategy", "value", ProcessFlags.Default)
-           .IfNone(Process.DefaultStrategy);
-
-        /// <summary>
-        /// Get the role wide timeout setting.  This specifies how long the timeout
-        /// is for 'ask' operations.
-        /// </summary>
-        internal Time Timeout =>
-            timeout;
 
         /// <summary>
         /// This is the setting for how often sessions are checked for expiry, *not*
         /// the expiry time itself.  That is set on each sessionStart()
         /// </summary>
+        [Pure]
         internal Time SessionTimeoutCheckFrequency =>
-            sessionTimeoutCheck;
+            SessionTimeoutCheck;
+    
+        [Pure]
+        internal static Option<ValueToken> mapTokenType<A>(ValueToken token, ProcessSystemConfig psc) =>
+            token.Value is A avalue
+                ? new ValueToken(token.Type, avalue)
+                : from def in psc.Types.TypeMap.Find(typeof(A).FullName)
+                  from map in def.Convert(token)
+                  select map;
+    }
 
-        internal bool TransactionalIO =>
-            transactionalIO;
-
-        internal void PostConnect()
+        
+    internal struct SettingOverride
+    {
+        public enum Tag
         {
-            // Cache the frequently accessed
-            maxMailboxSize = GetRoleSetting("mailbox-size", "value", 100000);
-            timeout = GetRoleSetting("timeout", "value", 30 * seconds);
-            sessionTimeoutCheck = GetRoleSetting("session-timeout-check", "value", 60 * seconds);
-            transactionalIO = GetRoleSetting("transactional-io", "value", true);
+            DeleteKey,
+            DeletePropKey,
+            Update
+        }
+
+        public readonly string Key;
+        public readonly string PropKey;
+        public readonly object Value;
+        public readonly Tag Type;
+        public readonly long Timestamp;
+    
+        SettingOverride(string key, string propKey, object value)
+        {
+            Key = key;
+            PropKey = propKey;
+            Value = value;
+            Type = Tag.Update;                   
+            Timestamp = DateTime.UtcNow.Ticks;
+        }
+    
+        SettingOverride(string key, string propKey)
+        {
+            Key = key;
+            PropKey = propKey;
+            Value = default;
+            Type = Tag.DeletePropKey;                   
+            Timestamp = DateTime.UtcNow.Ticks;
+        }
+    
+        SettingOverride(string key)
+        {
+            Key = key;
+            PropKey = default;
+            Value = default;
+            Type = Tag.DeleteKey;                   
+            Timestamp = DateTime.UtcNow.Ticks;
+        }
+
+        [Pure]
+        public static SettingOverride CreateOrUpdate(string key, string propKey, object value) =>
+            new SettingOverride(key, propKey, value);
+
+        [Pure]
+        public static SettingOverride Delete(string key, string propKey) =>
+            new SettingOverride(key, propKey);
+
+        [Pure]
+        public static SettingOverride Delete(string key) =>
+            new SettingOverride(key);
+    }
+
+    internal struct SettingOverrideUpdates
+    {
+        public static SettingOverrideUpdates Empty = default;
+        public readonly Seq<SettingOverride> Updates;
+        
+        public SettingOverrideUpdates(Seq<SettingOverride> updates) =>
+            Updates = updates;
+
+        [Pure]
+        public SettingOverrideUpdates Add(SettingOverride update) =>
+            new SettingOverrideUpdates(Updates.Add(update));
+
+        [Pure]
+        public SettingOverrideUpdates Append(SettingOverrideUpdates updates) =>
+            new SettingOverrideUpdates(Updates + updates.Updates);
+
+        [Pure]
+        public static SettingOverrideUpdates Concat(Seq<SettingOverrideUpdates> xs) =>
+            xs.IsEmpty
+                ? SettingOverrideUpdates.Empty
+                : new SettingOverrideUpdates(xs.Head.Updates + Concat(xs.Tail).Updates);
+
+        [Pure]
+        public static SettingOverrideUpdates Concat(params SettingOverrideUpdates[] xs) =>
+            Concat(Seq(xs));
+    }
+
+    internal struct SettingOverrides
+    {
+        public readonly HashMap<string, HashMap<string, (object Value, long Timestamp)>> Settings;
+
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        SettingOverrides(HashMap<string, HashMap<string, (object Value, long Timestamp)>> settings) =>
+            Settings = settings;
+
+        [Pure]
+        public Option<HashMap<string, (object Value, long Timestamp)>> Find(string key) =>
+            Settings.Find(key);
+
+        [Pure]
+        public Option<(object Value, long Timestamp)> Find(string key, string propKey) =>
+            Settings.Find(key, propKey);
+
+        [Pure]
+        public Option<object> FindValue(string key, string propKey) =>
+            Settings.Find(key, propKey).Map(x => x.Value);
+
+        [Pure]
+        public Option<A> FindValue<A>(string key, string propKey) =>
+            Settings.Find(key, propKey).Map(x => x.Value).Map(x => (A)x);
+        
+        /// <summary>
+        /// Apply the updates
+        /// </summary>
+        [Pure]
+        public SettingOverrides ApplyUpdates(SettingOverrideUpdates updates)
+        {
+            var target = Settings;
+            foreach (var update in updates.Updates.OrderBy(u => u.Timestamp))
+            {
+                target = ApplyUpdate(target, update);
+            }
+            return new SettingOverrides(target);
+        }
+
+        [Pure]
+        public SettingOverrides ApplyUpdates(SettingOverride update) =>
+            new SettingOverrides(ApplyUpdate(Settings, update));
+ 
+        static HashMap<string, HashMap<string, (object Value, long Timestamp)>> ApplyUpdate(
+            HashMap<string, HashMap<string, (object Value, long Timestamp)>> target, 
+            SettingOverride update
+            )
+        {
+            target = update.Type switch
+            {
+                // Update a setting if the new timestamp is greater than the current setting
+                // If there is no current setting, add the new update
+                SettingOverride.Tag.Update =>
+                target.Find(update.Key, update.PropKey)
+                    .Filter(s => s.Timestamp < update.Timestamp)
+                    .Map(s => target.AddOrUpdate(update.Key, update.PropKey, (update.Value, update.Timestamp)))
+                    .IfNone(() => target.AddOrUpdate(update.Key, update.PropKey, (update.Value, update.Timestamp))),
+
+                // Remove a setting if the new timestamp is greater than the current setting
+                SettingOverride.Tag.DeletePropKey =>
+                target.Find(update.Key, update.PropKey)
+                    .Filter(s => s.Timestamp < update.Timestamp)
+                    .Map(s => target.Remove(update.Key, update.PropKey))
+                    .IfNone(target),
+
+                // Remove a whole key
+                SettingOverride.Tag.DeleteKey =>
+                target.Find(update.Key)
+                    .Map(s => target.Remove(update.Key))
+                    .IfNone(target),
+
+                _ => throw new NotSupportedException()
+            };
+            return target;
         }
     }
 }
