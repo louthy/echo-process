@@ -4,16 +4,16 @@ using System.Collections.Generic;
 
 namespace Echo
 {
-    internal interface ILocalActorInbox : IDisposable
+    internal interface ILocalActorInbox : IActorInbox, IDisposable
     {
-        Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId);
-        Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId);
-        Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId);
-        Unit TellSystem(SystemMessage message);
-        object ValidateMessageType(object message, ProcessId sender);
-        Either<string, bool> CanAcceptMessageType<TMsg>();
-        Either<string, bool> HasStateTypeOf<TState>();
-        int Count { get; }
-        IEnumerable<Type> GetValidMessageTypes();
+        Aff<RT, Unit> Ask<RT>(object message, ProcessId sender, Option<SessionId> sessionId) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> Tell<RT>(object message, ProcessId sender, Option<SessionId> sessionId) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> TellUserControl<RT>(UserControlMessage message, Option<SessionId> sessionId) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> TellSystem<RT>(SystemMessage message) where RT : struct, HasEcho<RT>;
+        object ValidateMessageType<RT>(object message, ProcessId sender) where RT : struct, HasEcho<RT>;
+        Aff<RT, Either<string, bool>> CanAcceptMessageType<RT, TMsg>() where RT : struct, HasEcho<RT>;
+        Aff<RT, Either<string, bool>> HasStateTypeOf<RT, TState>() where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> Count<RT>() where RT : struct, HasEcho<RT>;
+        Aff<RT, IEnumerable<Type>> GetValidMessageTypes<RT>() where RT : struct, HasEcho<RT>;
     }
 }

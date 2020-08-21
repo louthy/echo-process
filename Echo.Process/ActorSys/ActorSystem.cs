@@ -368,7 +368,7 @@ namespace Echo
             return unit;
         }
 
-        public Unit AddWatcher(ProcessId watcher, ProcessId watching)
+        public static Eff<RT, Unit> addWatcher(ProcessId watcher, ProcessId watching)
         {
             logInfo(watcher + " is watching " + watching);
 
@@ -387,7 +387,7 @@ namespace Echo
             return unit;
         }
 
-        public Unit RemoveWatcher(ProcessId watcher, ProcessId watching)
+        public static Eff<RT, Unit> removeWatcher(ProcessId watcher, ProcessId watching)
         {
             logInfo(watcher + " stopped watching " + watching);
 
@@ -440,7 +440,7 @@ namespace Echo
             return unit;
         }
 
-        public Unit DispatchTerminate(ProcessId terminating)
+        public static Aff<RT, Unit> dispatchTerminate(ProcessId terminating)
         {
             watchers.Find(terminating).IfSome(ws =>
             {
@@ -754,7 +754,7 @@ namespace Echo
         
         [Pure]
         public static Aff<RT, Unit> deregisterById(ProcessId pid) =>
-            from _ in pid.AssertValid()
+            from ___ in pid.AssertValid()
             from sys in ActorContextAff<RT>.LocalSystem
             from res in pid.Take(2) == sys.Disp["reg"]
                             ? FailEff<Unit>(new InvalidProcessIdException(deregError))
@@ -832,17 +832,17 @@ namespace Echo
                 : ProcessAff<RT>.Self;
 
         [Pure]
-        internal static IActorDispatch getJsDispatcher(ProcessId pid, ProcessSystemConfig settings, Option<SessionId> sid) =>
+        static IActorDispatch getJsDispatcher(ProcessId pid, ProcessSystemConfig settings, Option<SessionId> sid) =>
             new ActorDispatchJS(pid, sid, settings.TransactionalIO);
 
         [Pure]
-        internal static IActorDispatch getLocalDispatcher(ProcessId pid, ActorSystem sys, Option<SessionId> sid) =>
+        static IActorDispatch getLocalDispatcher(ProcessId pid, ActorSystem sys, Option<SessionId> sid) =>
             pid.Take(2) == sys.RootJS
                 ? getJsDispatcher(pid, sys.Settings, sid)
                 : getDispatcher(pid.Tail(), sys.RootItem, pid, sys, sid);
 
         [Pure]
-        internal static IActorDispatch getRemoteDispatcher(ProcessId pid, ActorSystem sys, Option<SessionId> sid) =>
+        static IActorDispatch getRemoteDispatcher(ProcessId pid, ActorSystem sys, Option<SessionId> sid) =>
             sys.Cluster
                 ? new ActorDispatchRemote(sys.Ping, pid, sid, sys.Settings.Value.TransactionalIO) as IActorDispatch
                 : new ActorDispatchNotExist(pid);
@@ -856,38 +856,39 @@ namespace Echo
         }
 
         [Pure]
-        internal static IEnumerable<ProcessId> resolveProcessIdSelection(ProcessId pid) =>
+        public static IEnumerable<ProcessId> resolveProcessIdSelection(ProcessId pid) =>
             getProcessSelector(pid)
                 .Map(selector => selector(pid.Skip(2)))
                 .IfNone(() => new ProcessId[0]);
 
         [Pure]
-        internal static IActorDispatch getPluginDispatcher(ProcessId pid, ProcessSystemConfig settings) =>
+        static IActorDispatch getPluginDispatcher(ProcessId pid, ProcessSystemConfig settings) =>
             getProcessSelector(pid)
                 .Map(selector => new ActorDispatchGroup(selector(pid.Skip(2)), settings.TransactionalIO) as IActorDispatch)
                 .IfNone(() => new ActorDispatchNotExist(pid));
 
         [Pure]
-        internal static bool isLocal(ProcessId pid, ActorSystem sys) =>
+        static bool isLocal(ProcessId pid, ActorSystem sys) =>
             pid.StartsWith(sys.Root);
 
         [Pure]
-        internal static bool isDisp(ProcessId pid) =>
+        static bool isDisp(ProcessId pid) =>
             pid.value.IsDisp;
 
         [Pure]
         public static Eff<RT, IActorDispatch> getDispatcher(ProcessId pid) =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from sid in ActorContextAff<RT>.SessionId.Match(Some, _ => None)
-            select pid.IsValid
-                    ? pid.IsSelection
-                        ? new ActorDispatchGroup(pid.GetSelection(), sys.Settings.Value.TransactionalIO)
-                        : isDisp(pid)
-                            ? getPluginDispatcher(pid, sys.Settings)
-                            : isLocal(pid, sys)
-                                ? getLocalDispatcher(pid, sys, sid)
-                                : getRemoteDispatcher(pid, sys, sid)
-                    : new ActorDispatchNotExist(pid);
+            ActorContextAff<RT>.localSystem(pid,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from sid in ActorContextAff<RT>.SessionId.Match(Some, _ => None)
+                select pid.IsValid
+                        ? pid.IsSelection
+                            ? new ActorDispatchGroup(pid.GetSelection(), sys.Settings.Value.TransactionalIO)
+                            : isDisp(pid)
+                                ? getPluginDispatcher(pid, sys.Settings)
+                                : isLocal(pid, sys)
+                                    ? getLocalDispatcher(pid, sys, sid)
+                                    : getRemoteDispatcher(pid, sys, sid)
+                        : new ActorDispatchNotExist(pid));
 
         [Pure]
         static IActorDispatch getDispatcher(ProcessId pid, ActorItem current, ProcessId orig, ActorSystem sys, Option<SessionId> sessionId)
@@ -929,6 +930,14 @@ namespace Echo
             select r;
 
         [Pure]
+        public static Aff<RT, Unit> tell(Eff<RT, ProcessId> pid, object message, Schedule schedule, ProcessId sender) =>
+            from p in pid
+            from d in getDispatcher(p)
+            from s in senderOrDefault(sender)
+            from r in d.Tell<RT>(message, schedule, s, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User)
+            select r;
+
+        [Pure]
         public static Aff<RT, Unit> tellUserControl(ProcessId pid, UserControlMessage message) =>
             from d in getDispatcher(pid)
             from s in ProcessAff<RT>.Self
@@ -936,8 +945,24 @@ namespace Echo
             select r;
 
         [Pure]
+        public static Aff<RT, Unit> tellUserControl(Eff<RT, ProcessId> pid, UserControlMessage message) =>
+            from p in pid
+            from d in getDispatcher(p)
+            from s in ProcessAff<RT>.Self
+            from r in d.TellUserControl<RT>(message, s)
+            select r;
+
+        [Pure]
         public static Aff<RT, Unit> tellSystem(ProcessId pid, SystemMessage message) =>
             from d in getDispatcher(pid)
+            from s in ProcessAff<RT>.Self
+            from r in d.TellSystem<RT>(message, s)
+            select r;
+
+        [Pure]
+        public static Aff<RT, Unit> tellSystem(Eff<RT, ProcessId> pid, SystemMessage message) =>
+            from p in pid
+            from d in getDispatcher(p)
             from s in ProcessAff<RT>.Self
             from r in d.TellSystem<RT>(message, s)
             select r;

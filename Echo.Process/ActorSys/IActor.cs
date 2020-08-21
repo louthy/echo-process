@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Echo
 {
-    internal interface IActor : IDisposable
+    internal interface IActor
     {
         /// <summary>
         /// Process path
@@ -41,74 +41,109 @@ namespace Echo
         /// </summary>
         HashMap<string, ActorItem> Children { get; }
 
-        /// <summary>
-        /// Clears the state (keeps the mailbox items)
-        /// </summary>
-        /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
-        Aff<RT, Unit> Restart<RT>(bool unpauseAfterRestart) where RT : struct, HasEcho<RT>;
-
-        /// <summary>
-        /// Startup
-        /// </summary>
-        /// <returns>returns InboxDirective.Pause if Startup will unpause inbox (via some strategy error handling). Otherwise InboxDirective.Default</returns>
-        Aff<RT, InboxDirective> Startup<RT>() where RT : struct, HasEcho<RT>;
-
-        /// <summary>
-        /// Shutdown
-        /// </summary>
-        Aff<RT, Unit> Shutdown<RT>(bool maintainState) where RT : struct, HasEcho<RT>;
 
         /// <summary>
         /// Link child
         /// </summary>
         /// <param name="pid">Child to link</param>
-        Aff<RT, Unit> LinkChild<RT>(ActorItem pid) where RT : struct, HasEcho<RT>;
+        EffPure<Unit> LinkChild(ActorItem<RT> pid);
 
         /// <summary>
         /// Unlink child
         /// </summary>
         /// <param name="pid">Child to unlink</param>
-        Aff<RT, Unit> UnlinkChild<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
+        EffPure<Unit> UnlinkChild(ProcessId pid);
 
+        /// <summary>
+        /// Publish to the PublishStream
+        /// </summary>
+        EffPure<Unit> Publish(object message);
+
+        /// <summary>
+        /// Publish stream - for calls to Process.publish
+        /// </summary>
+        IObservable<object> PublishStream { get; }
+
+        /// <summary>
+        /// State stream - sent after each message loop
+        /// </summary>
+        IObservable<object> StateStream { get; }
+
+        /// <summary>
+        /// Add a subscription
+        /// </summary>
+        /// <remarks>If one already exists then it is safely disposed</remarks>
+        EffPure<Unit> AddSubscription(ProcessId pid, IDisposable sub);
+        
+        /// <summary>
+        /// Remove a subscription and safely dispose it 
+        /// </summary>
+        EffPure<Unit> RemoveSubscription(ProcessId pid);
+        
+        /// <summary>
+        /// Safely dispose and remove all subscriptions
+        /// </summary>
+        /// <returns></returns>
+        EffPure<Unit> RemoveAllSubscriptions();
+
+        /// <summary>
+        /// Clear the strategy state, so it has 0 retries, back-off, etc.
+        /// </summary>
+        EffPure<Unit> ResetStrategyState();
+        
+        /// <summary>
+        /// Update the strategy state
+        /// </summary>
+        EffPure<Unit> SetStrategyState(StrategyState state);
+
+        /// <summary>
+        /// Current state for the strategy system
+        /// </summary>
+        StrategyState StrategyState { get; }
+
+        IActor<RT> WithRuntime<RT>() where RT : struct, HasEcho<RT>;
+    }
+
+    internal interface IActor<RT> : IActor
+        where RT : struct, HasEcho<RT>
+    {
+        /// <summary>
+        /// Restarts the process (and shutdowns down all children)
+        /// Clears the state, but keeps the mailbox items
+        /// </summary>
+        /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
+        Aff<RT, Unit> Restart(bool unpauseAfterRestart);
+
+        /// <summary>
+        /// Startup
+        /// </summary>
+        /// <returns>returns InboxDirective.Pause if Startup will unpause inbox (via some strategy error handling). Otherwise InboxDirective.Default</returns>
+        Aff<RT, InboxDirective> Startup { get; }
+
+        /// <summary>
+        /// Shutdown everything from this process and all its child processes
+        /// </summary>
+        Aff<RT, Unit> Shutdown(bool maintainState);
         /// <summary>
         /// Add a watcher of this Process
         /// </summary>
         /// <param name="pid">Id of the Process that will watch this Process</param>
-        Aff<RT, Unit> AddWatcher<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
+        Eff<RT, Unit> AddWatcher(ProcessId pid);
 
         /// <summary>
         /// Remove a watcher of this Process
         /// </summary>
         /// <param name="pid">Id of the Process that will stop watching this Process</param>
-        Aff<RT, Unit> RemoveWatcher<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
+        Eff<RT, Unit> RemoveWatcher(ProcessId pid);
 
-        /// <summary>
-        /// Publish to the PublishStream
-        /// </summary>
-        Aff<RT, Unit> Publish<RT>(object message) where RT : struct, HasEcho<RT>;
+        Aff<RT, InboxDirective> ProcessTell { get; }
+        Aff<RT, InboxDirective> ProcessAsk { get; }
+        Aff<RT, InboxDirective> ProcessTerminated(ProcessId id);
 
-        /// <summary>
-        /// Publish stream - for calls to Process.pub
-        /// </summary>
-        Eff<RT, IObservable<object>> PublishStream<RT>() where RT : struct, HasEcho<RT>;
+        Aff<RT, R> ProcessRequest<R>(ProcessId pid, object message);
+        Aff<RT, Unit> ProcessResponse(ActorResponse response);
 
-        /// <summary>
-        /// State stream - sent after each message loop
-        /// </summary>
-        Eff<RT, IObservable<object>> StateStream<RT>() where RT : struct, HasEcho<RT>;
-
-        Aff<RT, InboxDirective> ProcessMessage<RT>(object message) where RT : struct, HasEcho<RT>;
-        Aff<RT, InboxDirective> ProcessAsk<RT>(ActorRequest request) where RT : struct, HasEcho<RT>;
-        Aff<RT, InboxDirective> ProcessTerminated<RT>(ProcessId id) where RT : struct, HasEcho<RT>;
-
-        Aff<RT, R> ProcessRequest<RT, R>(ProcessId pid, object message) where RT : struct, HasEcho<RT>;
-        Aff<RT, Unit> ProcessResponse<RT>(ActorResponse response) where RT : struct, HasEcho<RT>;
-        Aff<RT, Unit> ShutdownProcess<RT>(bool maintainState) where RT : struct, HasEcho<RT>;
-
-        Aff<RT, Unit> AddSubscription<RT>(ProcessId pid, IDisposable sub) where RT : struct, HasEcho<RT>;
-        Aff<RT, Unit> RemoveSubscription<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
-
-        Aff<RT, Unit> DispatchWatch<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
-        Aff<RT, Unit> DispatchUnWatch<RT>(ProcessId pid) where RT : struct, HasEcho<RT>;
+        Aff<RT, Unit> DispatchWatch(ProcessId pid);
+        Aff<RT, Unit> DispatchUnWatch(ProcessId pid);
     }
 }

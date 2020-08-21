@@ -13,7 +13,7 @@ using LanguageExt;
 
 namespace Echo
 {
-    class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
+    class ActorInboxLocal<S, T> : ILocalActorInbox
     {
         PausableChannel<UserControlMessage> userInbox;
         PausableChannel<SystemMessage> sysInbox;

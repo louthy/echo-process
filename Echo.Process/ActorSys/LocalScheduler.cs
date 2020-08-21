@@ -123,7 +123,7 @@ namespace Echo
             }
         }
 
-        internal static void RemoveExistingScheduledMessage(ProcessId pid, string key)
+        internal static Unit RemoveExistingScheduledMessage(ProcessId pid, string key)
         {
             lock (sync)
             {
@@ -134,6 +134,7 @@ namespace Echo
                         actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != ckey));
                     },
                     None: () => { });
+                return unit;
             }
         }
 

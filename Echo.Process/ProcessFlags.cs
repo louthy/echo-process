@@ -80,4 +80,22 @@ namespace Echo
         /// </summary>
         RemoteStatePublish = 16
     }
+
+    public static class ProcessFlagsExt
+    {
+        public static bool HasPersistence(this ProcessFlags flgs) =>
+            flgs != ProcessFlags.Default;
+
+        public static bool HasPersistentState(this ProcessFlags flgs) =>
+            (flgs & ProcessFlags.PersistState) == ProcessFlags.PersistState;
+
+        public static bool HasPersistentMessages(this ProcessFlags flgs) =>
+            (flgs & (ProcessFlags.PersistInbox | ProcessFlags.ListenRemoteAndLocal)) != 0;
+
+        public static bool HasPublishRemoteState(this ProcessFlags flgs) =>
+            (flgs & ProcessFlags.RemoteStatePublish) == ProcessFlags.RemoteStatePublish;
+
+        public static bool HasPublishRemote(this ProcessFlags flgs) =>
+            (flgs & ProcessFlags.RemotePublish) == ProcessFlags.RemotePublish;
+    }
 }

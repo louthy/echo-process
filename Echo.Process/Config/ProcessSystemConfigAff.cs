@@ -15,43 +15,51 @@ namespace Echo.Config
         /// Write a single override setting
         /// </summary>
         [Pure]
-        public static Aff<RT, SettingOverride> writeSettingOverride(string key, object value, string name, string prop, ProcessFlags flags) =>
+        public static Aff<RT, Unit> writeSettingOverride(string key, object value, string name, string prop, ProcessFlags flags) =>
             from _       in value == null
                                 ? FailEff<Unit>(Error.New("Settings can't be null"))
-                                : SuccessEff(unit)
+                                : unitEff
             from propKey in SuccessEff($"{name}@{prop}")
-            from success in flags == ProcessFlags.Default
-                                ? SuccessEff(unit)
-                                : Echo.Cluster.hashFieldAddOrUpdate<RT, object>(key, propKey, value)
-            select SettingOverride.CreateOrUpdate(key, propKey, value);
-
+            from success in flags.HasPersistence()
+                                ? Echo.Cluster.hashFieldAddOrUpdate<RT, object>(key, propKey, value)
+                                : unitEff
+            from sys     in ActorContextAff<RT>.LocalSystem
+            from __      in sys.ApplyUpdate(SettingOverride.CreateOrUpdate(key, propKey, value))
+            select unit;
+        
         /// <summary>
         /// Clear a single override setting
         /// </summary>
         [Pure]
-        public static Aff<RT, SettingOverride> clearSettingOverride(string key, string name, string prop, ProcessFlags flags) =>
+        public static Aff<RT, Unit> clearSettingOverride(string key, string name, string prop, ProcessFlags flags) =>
             from propKey in SuccessEff($"{name}@{prop}")
-            from success in flags == ProcessFlags.Default
-                ? SuccessEff(true)
-                : Echo.Cluster.deleteHashField<RT>(key, propKey)
-            select SettingOverride.Delete(key, propKey);
+            from success in flags.HasPersistence()
+                                ? Echo.Cluster.deleteHashField<RT>(key, propKey)
+                                : SuccessEff(true)
+            from sys     in ActorContextAff<RT>.LocalSystem
+            from __      in sys.ApplyUpdate(SettingOverride.Delete(key, propKey))
+            select unit;
 
         /// <summary>
         /// Clear all override settings for either the process or role
         /// </summary>
         [Pure]
-        public static Aff<RT, SettingOverride> clearSettingsOverride(string key, ProcessFlags flags) =>
-            from success in flags == ProcessFlags.Default
-                ? SuccessEff(true)
-                : Echo.Cluster.delete<RT>(key)
-            select SettingOverride.Delete(key);
+        public static Aff<RT, Unit> clearSettingsOverride(string key, ProcessFlags flags) =>
+            from success in flags.HasPersistence()
+                                ? Echo.Cluster.delete<RT>(key)
+                                : SuccessEff(true)
+            from sys     in ActorContextAff<RT>.LocalSystem
+            from __      in sys.ApplyUpdate(SettingOverride.Delete(key))
+            select unit;
 
         /// <summary>
         /// Clear all override settings for either the process or role
         /// </summary>
         [Pure]
-        public static SettingOverride clearInMemorySettingsOverride(string key) =>
-            SettingOverride.Delete(key);
+        public static Eff<RT, Unit> clearInMemorySettingsOverride(string key) =>
+            from sys     in ActorContextAff<RT>.LocalSystem
+            from __      in sys.ApplyUpdate(SettingOverride.Delete(key))
+            select unit;
 
         /// <summary>
         /// All the settings for a process, in scope order (local -> local-role -> role -> cluster)
@@ -183,8 +191,15 @@ namespace Echo.Config
         /// have been set in the config.
         /// </summary>
         [Pure]
-        internal static Aff<RT, ProcessFlags> getProcessFlags(ProcessId pid) =>
+        public static Aff<RT, ProcessFlags> getProcessFlags(ProcessId pid) =>
             getProcessSetting<ProcessFlags>(pid, "flags", "value", SuccessEff(ProcessFlags.Default));
+
+        /// <summary>
+        /// Get the strategy for a Process.  Returns Process.DefaultStrategy if one
+        /// hasn't been set in the config.
+        /// </summary>
+        public static Aff<RT, State<StrategyContext, Unit>> getProcessStrategy(ProcessId pid) =>
+            getProcessSetting<State<StrategyContext, Unit>>(pid, "strategy", "value", SuccessEff(Process.DefaultStrategy));
         
         [Pure]
         public static Aff<RT, A> getSettingGeneral<A>(
@@ -217,8 +232,8 @@ namespace Echo.Config
                 from result  in psc.SettingOverrides
                                    .FindValue<A>(key, propKey)
                                    .Match(
-                                       Some: x  => SuccessEff(x),
-                                       None: () => retreiveSettingGeneral<A>(settingsMaps, key, name, prop))
+                                       Some: SuccessEff,
+                                       None: retreiveSettingGeneral<A>(settingsMaps, key, name, prop))
                 select result;
                              
         [Pure]
@@ -229,7 +244,7 @@ namespace Echo.Config
             string prop) =>
                 from psc    in ActorContextAff<RT>.LocalSettings
                 from flags  in StatePersistsFlag
-                from result in flags != ProcessFlags.Default && psc.SystemName.IsValid
+                from result in flags.HasPersistence() 
                                     ? retreivePersistentSettingGeneral<A>(settingsMaps, key, name, prop)
                                     : retreiveSettingGeneralFromMaps<A>(settingsMaps, key, name, prop)
                 select result;
@@ -244,7 +259,7 @@ namespace Echo.Config
                 from tover   in Cluster.getHashField<RT, A>(key, propKey)
                 from result  in tover.Match(
                                     Some: x  => addOrUpdateProcessOverride(key, propKey, x),
-                                    None: () => retreiveSettingGeneralFromMaps<A>(settingsMaps, key, name, prop))
+                                    None: retreiveSettingGeneralFromMaps<A>(settingsMaps, key, name, prop))
                 select result;
 
         [Pure]

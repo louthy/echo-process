@@ -128,7 +128,7 @@ namespace Echo
             from ct in SuccessEff(new ShutdownCancellationToken(system))
             from _2 in Process.onPreShutdown(ct).Match(identity, ignore) 
             from _3 in ct.Cancelled
-                           ? SuccessEff(unit)
+                           ? unitEff
                            : from _4 in disposeSystem(system).Match(identity, ignore) 
                              from _5 in removeSystem(system)
                              select unit
@@ -149,6 +149,12 @@ namespace Echo
 
         public static Eff<RT, A> localSystem<A>(SystemName system, Eff<RT, A> ma) =>
             localEff<RT, RT, A>(env => env.LocalEchoEnv(env.EchoEnv.WithSystem(system)), ma);
+
+        public static Aff<RT, A> localSystem<A>(ProcessId pid, Aff<RT, A> ma) =>
+            localSystem(pid.System, ma);
+
+        public static Eff<RT, A> localSystem<A>(ProcessId pid, Eff<RT, A> ma) =>
+            localSystem(pid.System, ma);
 
         public static Aff<RT, A> localSystem<A>(ActorSystem system, Aff<RT, A> ma) =>
             localAff<RT, RT, A>(env => env.LocalEchoEnv(env.EchoEnv.WithSystem(system.SystemName)), ma);
@@ -186,7 +192,7 @@ namespace Echo
         /// <typeparam name="RT"></typeparam>
         /// <returns></returns>
         public static Eff<RT, ActorSystem> LocalSystem =>
-            EchoEnv.Bind(e => ActorContext.findSystem(e.SystemName));
+            EchoEnv.Bind(e => ActorContext.findSystem(e.SystemName)) | ActorContext.DefaultSystem;
 
         /// <summary>
         /// The 'user' process, which is the root for all processes spawned outside of an existing process
@@ -218,8 +224,13 @@ namespace Echo
             select res;
 
         public static Eff<RT, ProcessId> Parent =>
-            from req in Request
-            select req.Parent.Actor.Id;
+            Request.Map(r => r.Parent.Actor.Id);
+
+        public static Eff<RT, ActorItem> ParentProcess =>
+            Request.Map(r => r.Parent);
+
+        public static Eff<RT, Seq<ProcessId>> Siblings =>
+            SelfProcess.Map(a => a.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != a.Actor.Id).ToSeq());
         
         public static Eff<RT, ActorRequestContext> Request =>
             from e in EchoEnv

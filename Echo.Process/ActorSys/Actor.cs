@@ -2,78 +2,50 @@
 using System.Threading;
 using System.Reflection;
 using static LanguageExt.Prelude;
-using static Echo.ProcessAff;
 using System.Reactive.Subjects;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Reactive.Linq;
+using Echo;
 using Echo.Config;
 using LanguageExt.ClassInstances;
 using LanguageExt;
+using LanguageExt.Common;
+using LanguageExt.UnsafeValueAccess;
 
 namespace Echo
 {
-    class ActorState<S>
-    {
-        public static readonly ActorState<S> Default = new ActorState<S>(default, default, default, Echo.StrategyState.Empty, default);  
-        
-        public ActorState(HashMap<string, IDisposable> subs, HashMap<string, ActorItem> children, Option<S> state, StrategyState strategyState, Seq<IDisposable> remoteSubs)
-        {
-            Subs = subs;
-            Children = children;
-            State = state;
-            StrategyState = strategyState;
-            RemoteSubs = remoteSubs;
-        }
-
-        public readonly HashMap<string, IDisposable> Subs;
-        public readonly HashMap<string, ActorItem> Children;
-        public readonly Option<S> State;
-        public readonly StrategyState StrategyState;
-        public readonly Seq<IDisposable> RemoteSubs;
-
-        public ActorState<S> With(
-            HashMap<string, IDisposable>? Subs = null, 
-            HashMap<string, ActorItem>? Children = null, 
-            Option<S>? State = null, 
-            StrategyState StrategyState = null, 
-            Seq<IDisposable>? RemoteSubs = null) =>
-            new ActorState<S>(
-                Subs ?? this.Subs, 
-                Children ?? this.Children, 
-                State ?? this.State, 
-                StrategyState ?? this.StrategyState, 
-                RemoteSubs ?? this.RemoteSubs);
-    }
-
     /// <summary>
-    /// Internal class that represents the state of a single process.
+    /// Represents the entire state of a single actor process
     /// </summary>
     /// <typeparam name="S">State</typeparam>
     /// <typeparam name="T">Message type</typeparam>
-    class Actor<RT, S, T> : IActor 
+    class Actor<RT, S, A> : IActor<RT> 
         where RT : struct, HasEcho<RT>
     {
-        public readonly ProcessId Id;
-        public readonly ProcessName Name;
-        public readonly ActorItem Parent;
-        public readonly Func<S, T, Aff<RT, S>> ActorFn;
+        public readonly Func<S, A, Aff<RT, S>> ActorFn;
         public readonly Func<S, ProcessId, Aff<RT, S>> TermFn;
-        public readonly Func<IActor, Aff<RT, S>> SetupFn;
+        public readonly Func<IActor<RT>, Aff<RT, S>> SetupFn;
         public readonly Func<S, Aff<RT, Unit>> ShutdownFn;
-        public readonly ProcessFlags Flags;
-        public readonly State<StrategyContext, Unit> Strategy;
         public readonly Subject<object> PublishSubject;
         public readonly Subject<S> StateSubject;
         public readonly Atom<ActorState<S>> State;
 
+        public ProcessId Id { get; }
+        public ProcessName Name { get; }
+        public ActorItem Parent { get; }
+        public ProcessFlags Flags { get; }
+        public State<StrategyContext, Unit> Strategy { get; }
+        public HashMap<string, ActorItem> Children => State.Value.Children;
+ 
         public Actor(
             ProcessId id,
             ProcessName name,
             ActorItem parent,
-            Func<S, T, Aff<RT, S>> actorFn, 
+            Func<S, A, Aff<RT, S>> actorFn, 
             Func<S, ProcessId, Aff<RT, S>> termFn, 
-            Func<IActor, Aff<RT, S>> setupFn, 
+            Func<IActor<RT>, Aff<RT, S>> setupFn, 
             Func<S, Aff<RT, Unit>> shutdownFn, 
             ProcessFlags flags, 
             State<StrategyContext, Unit> strategy,
@@ -94,116 +66,356 @@ namespace Echo
             StateSubject = stateSubject;
             State = state;
         }
+
+        [Pure]
+        public Aff<RT, S> AssertState =>
+            State.Value.State.IsNone 
+                ? InitState
+                : SuccessEff(State.Value.State.ValueUnsafe());
         
-        public Aff<RT, Unit> InitState() =>
+        [Pure]
+        public Aff<RT, S> InitState =>
+            from astate in ProcessAff<RT>.catchAndLogErr(InitStateInternal, SuccessEff(State.Value))
+            from _      in astate.State.Map(NextState).IfNone(unitEff)
+            from state  in astate.State.Match(SuccessEff, FailEff<S>(Error.New("Setup failed, no state value available")))
+            select state;
+
+        [Pure]
+        Aff<RT, ActorState<S>> InitStateInternal =>
             State.SwapAff(state =>
-                        from nwState1 in SuccessEff(disposeRemoteSubs(state))
-                        from nwState2 in (Flags & ProcessFlags.PersistState) == ProcessFlags.PersistState
-                                             ? from exists in Cluster.exists<RT>(stateKey(Id))
-                                               from result in exists
-                                                   ? Cluster.getValue<RT, S>(stateKey(Id))
-                                                   : SetupFn(this)
-                                               select result
-                                             : SetupFn(this)
-                        from remSubs  in setupRemoteSubs(Id, Flags, StateSubject)
-                        select nwState1.With(State: nwState2, RemoteSubs: remSubs))
-                 .Map(_ => unit);
+                from nwState1 in state.DisposeRemoteSubs()
+                from nwState2 in Flags.HasPersistentState()
+                                    ? from exists in Cluster.exists<RT>(stateKey(Id))
+                                      from result in exists
+                                                        ? Cluster.getValue<RT, S>(stateKey(Id))
+                                                        : SetupFn(this)
+                                      select result
+                                    : SetupFn(this)
+                from remSubs in setupRemoteSubs(Id, Flags, StateSubject)
+                select nwState1.With(State: nwState2, RemoteSubs: remSubs));
+        
+        [Pure]
+        public EffPure<Unit> NextState(S state) =>
+            ProcessEff.catchAndLogErr(Eff(() => { StateSubject.OnNext(state); return unit; }), unitEff);
 
-        static ActorState<S> disposeRemoteSubs(ActorState<S> state)
-        {
-            state.RemoteSubs.Iter(s => s.Dispose());
-            return state.With(RemoteSubs: Empty);
-        }
 
-        internal static string stateKey(ProcessId id) => 
+        /// <summary>
+        /// Start up - placeholder
+        /// </summary>
+        [Pure]
+        public Aff<RT, InboxDirective> Startup =>
+            AssertState.Match(Succ: _ => SuccessEff(InboxDirective.Default),
+                              Fail: ActorAff<RT>.runStrategy)
+                       .Flatten();
+
+        /// <summary>
+        /// Restarts the process (and shutdowns down all children)
+        /// Clears the state, but keeps the mailbox items
+        /// </summary>
+        /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
+        [Pure]
+        public Aff<RT, Unit> Restart(bool unpauseAfterRestart) =>
+            State.SwapAff(state =>
+                    from ns1 in state.RemoveAllSubscriptions()
+                    from __2 in ns1.State.Map(ShutdownFn).IfNone(unitEff)
+                    from ns2 in ns1.Dispose()
+                    from __3 in Children.Values.Map(c => ProcessAff<RT>.kill(c.Actor.Id)).SequenceParallel()
+                    from __4 in ProcessAff<RT>.tellSystem(Id, SystemMessage.StartupProcess(unpauseAfterRestart))
+                    select ns2)
+                .Bind(_ => unitEff);
+
+        [Pure]
+        Aff<RT, Unit> ClusterShutdown() =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from __1 in Cluster.deleteMany<RT>(stateKey(Id),
+                                                  ActorInboxCommon.ClusterUserInboxKey(Id),
+                                                  ActorInboxCommon.ClusterSystemInboxKey(Id),
+                                                  ActorInboxCommon.ClusterMetaDataKey(Id),
+                                                  ActorInboxCommon.ClusterSettingsKey(Id))
+            from __2 in ActorSystemAff<RT>.deregisterById(Id)
+            from __3 in ProcessSystemConfigAff<RT>.clearInMemorySettingsOverride(ActorInboxCommon.ClusterSettingsKey(Id))
+            select unit;
+        
+        /// <summary>
+        /// Shutdown everything from this process and all its child processes
+        /// </summary>
+        [Pure]
+        public Aff<RT, Unit> Shutdown(bool maintainState) =>
+            State.SwapAff(state =>
+                from __0 in Flags.HasPersistence() && !maintainState 
+                               ? ClusterShutdown()
+                               : unitEff
+                from ns1 in state.RemoveAllSubscriptions()
+                from __2 in Eff(() => { PublishSubject.OnCompleted(); return unit; })
+                from __3 in Eff(() => { StateSubject.OnCompleted(); return unit; })
+                from ns2 in SuccessEff(ns1.ResetStrategyState())
+                from __5 in State.Value.State.Map(ShutdownFn).IfNone(unitEff)
+                from __6 in ns2.DisposeState()
+                from __7 in ActorSystemAff<RT>.dispatchTerminate(Id)
+                select ns2)
+                .Bind(_ => unitEff);
+        
+        /// <summary>
+        /// Publish observable stream
+        /// </summary>
+        [Pure]
+        public IObservable<object> PublishStream => 
+            PublishSubject;
+
+        /// <summary>
+        /// State observable stream
+        /// </summary>
+        [Pure]
+        public IObservable<object> StateStream => 
+            StateSubject.Select(s => (object)s);
+
+        /// <summary>
+        /// Current state for the strategy system
+        /// </summary>
+        [Pure]
+        public StrategyState StrategyState =>
+            State.Value.StrategyState;
+
+        /// <summary>
+        /// Publish to the PublishStream
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> Publish(object message) =>
+            ProcessEff.catchAndLogErr(Eff(fun(() => PublishSubject.OnNext(message))), unitEff);
+        
+        /// <summary>
+        /// Add a subscription
+        /// </summary>
+        /// <remarks>If one already exists then it is safely disposed</remarks>
+        [Pure]
+        public EffPure<Unit> AddSubscription(ProcessId pid, IDisposable sub) =>
+            State.SwapEff(state => state.AddSubscription(pid, sub)).Bind(_ => unitEff); 
+
+        /// <summary>
+        /// Remove a subscription and safely dispose it 
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> RemoveSubscription(ProcessId pid) =>
+            State.SwapEff(state => state.RemoveSubscription(pid)).Bind(_ => unitEff); 
+
+        /// <summary>
+        /// Safely dispose and remove all subscriptions
+        /// </summary>
+        /// <returns></returns>
+        [Pure]
+        public EffPure<Unit> RemoveAllSubscriptions() =>
+            State.SwapEff(state => state.RemoveAllSubscriptions()).Bind(_ => unitEff);
+
+        /// <summary>
+        /// Disowns a child process
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> UnlinkChild(ProcessId pid) =>
+            State.SwapEff(state => SuccessEff(state.UnlinkChild(pid))).Bind(_ => unitEff);
+
+        /// <summary>
+        /// Gains a child process
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> LinkChild(ActorItem item) =>
+            State.SwapEff(state => state.LinkChild(item)
+                                        .Match(
+                                            Some: SuccessEff, 
+                                            None: () => FailEff<ActorState<S>>(Error.New($"Child process already exists with the same name: {item.Actor.Name}"))))
+                 .Bind(_ => unitEff);
+
+        /// <summary>
+        /// Add a watcher of this Process
+        /// </summary>
+        /// <param name="pid">Id of the Process that will watch this Process</param>
+        [Pure]
+        public Eff<RT, Unit> AddWatcher(ProcessId pid) =>
+            ActorSystemAff<RT>.addWatcher(pid, Id);
+
+        /// <summary>
+        /// Remove a watcher of this Process
+        /// </summary>
+        /// <param name="pid">Id of the Process that will stop watching this Process</param>
+        [Pure]
+        public Eff<RT, Unit> RemoveWatcher(ProcessId pid) =>
+            ActorSystemAff<RT>.removeWatcher(pid, Id);
+
+        /// <summary>
+        /// Tell another process that we're watching it.  That means we get our Termination inbox called when the
+        /// watched process dies.
+        /// </summary>
+        /// <param name="pid">Process to watch</param>
+        [Pure]
+        public Aff<RT, Unit> DispatchWatch(ProcessId pid) =>
+            from d in ActorSystemAff<RT>.getDispatcher(pid)
+            from a in d.Watch<RT>(Id)
+            from b in ActorSystemAff<RT>.addWatcher(pid, Id)
+            select unit; 
+
+        [Pure]
+        public Aff<RT, Unit> DispatchUnWatch(ProcessId pid) =>
+            from d in ActorSystemAff<RT>.getDispatcher(pid)
+            from a in d.UnWatch<RT>(Id)
+            from b in ActorSystemAff<RT>.removeWatcher(pid, Id)
+            select unit; 
+
+        [Pure]
+        static string stateKey(ProcessId id) => 
             id.Path + "@state";
         
+        [Pure]
         internal static Aff<RT, Seq<IDisposable>> setupRemoteSubs(ProcessId id, ProcessFlags flags, Subject<S> stateSubject) =>
 
             // Watches for local state-changes and persists them
-            from spers in (flags & ProcessFlags.PersistState) == ProcessFlags.PersistState
-                ? logErr(
+            from spers in flags.HasPersistentState()
+                ? ProcessAff<RT>.logErr(
                     Eff<RT, IDisposable>(e => 
                         stateSubject.SelectMany(async state => await Cluster.setValue<RT, S>(stateKey(id), state).RunIO(e))
                             .Subscribe(state => { })))
                 : SuccessEff<IDisposable>(null)
             
             // Watches for local state-changes and publishes them remotely
-            from sdisp in (flags & ProcessFlags.RemoteStatePublish) == ProcessFlags.RemoteStatePublish
-                ? logErr(
+            from sdisp in flags.HasPublishRemoteState()
+                ? ProcessAff<RT>.logErr(
                     Eff<RT, IDisposable>(e => 
                         stateSubject.SelectMany(async state => await Cluster.publishToChannel<RT, S>(ActorInboxCommon.ClusterStatePubSubKey(id), state).RunIO(e))
                             .Subscribe(state => { })))
                 : SuccessEff<IDisposable>(null)
                 
             // Watches for publish events and remotely publishes them
-            from pubd  in (flags & ProcessFlags.RemotePublish) == ProcessFlags.RemotePublish
-                ? logErr(
+            from pubd  in flags.HasPublishRemote()
+                ? ProcessAff<RT>.logErr(
                     Eff<RT, IDisposable>(e => 
                         stateSubject.SelectMany(async state => await Cluster.publishToChannel<RT, S>(ActorInboxCommon.ClusterPubSubKey(id), state).RunIO(e))
                             .Subscribe(state => { })))
                 : SuccessEff<IDisposable>(null)
             
-            select new [] {spers, sdisp, pubd}.Filter(notnull).ToSeq();        
-        //     
-        //     
-        // {
-        //     S state;
-        //
-        //     try
-        //     {
-        //         SetupRemoteSubscriptions(cluster, flags);
-        //
-        //         if (cluster.IsSome && ((flags & ProcessFlags.PersistState) == ProcessFlags.PersistState))
-        //         {
-        //             try
-        //             {
-        //                 logInfo($"Restoring state: {StateKey}");
-        //
-        //                 state = cluster.IfNoneUnsafe(() => null).Exists(StateKey)
-        //                     ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
-        //                     : setupFn(this);
-        //
-        //             }
-        //             catch (Exception e)
-        //             {
-        //                 logSysErr(e);
-        //                 state = setupFn(this);
-        //             }
-        //         }
-        //         else
-        //         {
-        //             state = setupFn(this);
-        //         }
-        //
-        //         ActorContext.Request.RunOps();
-        //     }
-        //     catch (Exception e)
-        //     {
-        //         throw new ProcessSetupException(Id.Path, e);
-        //     }
-        //
-        //     try
-        //     {
-        //         stateSubject.OnNext(state);
-        //     }
-        //     catch (Exception ue)
-        //     {
-        //         // Not our errors, so just log and move on
-        //         logErr(ue);
-        //     }
-        //     return state;
-        // }          
+            select new [] {spers, sdisp, pubd}.Filter(notnull).ToSeq();
+
+        [Pure]
+        public Aff<RT, Unit> Dispose() =>
+            from _1 in RemoveAllSubscriptions()
+            from _2 in State.Value.State.Map(ShutdownFn).IfNone(SuccessAff(unit))
+            from _3 in DisposeState()
+            select unit;
+
+        [Pure]
+        EffPure<Unit> DisposeState() =>
+            State.SwapEff(s => s.Dispose())
+                 .Map(_ => unit);
+        
+        [Pure]
+        static Aff<RT, A> preProcessMessageContent(object message, string type) =>
+            message switch {
+                // Already what we need
+                A amsg =>  SuccessEff(amsg),
+                
+                // Null, invalid
+                null => ActorAff<RT>.writeDeadLetter<A>($"Message is null for {type} (expected {typeof(A)})", null),
+                
+                // String, try to convert it to an A
+                string smsg when typeof(A) != typeof(string) =>
+                    from sdmsg  in default(RT).SerialiseEff.Map(e => e.DeserialiseStructural<A>(smsg))
+                    from rsdmsg in sdmsg.Match(SuccessEff, ActorAff<RT>.writeDeadLetter<A>($"Message failed to deserialise for {type} (expected {typeof(A)})", message))
+                    select rsdmsg,
+
+                // Unknown
+                _ => ActorAff<RT>.writeDeadLetter<A>($"Message failed to deserialise for {type} (expected {typeof(A)})", message)
+            };
+
+        /// <summary>
+        /// Announce the outState if it's different from the inState
+        /// </summary>
+        [Pure]
+        Eff<RT, Unit> PublishNewState(S inState, S outState) =>
+            default(EqDefault<S>).Equals(outState, inState)
+                ? unitEff
+                : NextState(outState);
+        
+        /// <summary>
+        /// Clear the strategy state, so it has 0 retries, back-off, etc.
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> ResetStrategyState() =>
+            State.SwapEff(s => SuccessEff(s.ResetStrategyState()))
+                 .Bind(_ => unitEff);
+
+        /// <summary>
+        /// Update the strategy state
+        /// </summary>
+        [Pure]
+        public EffPure<Unit> SetStrategyState(StrategyState state) =>
+            State.SwapEff(s => SuccessEff(s.SetStrategyState(state)))
+                 .Bind(_ => unitEff);
+        
+        /// <summary>
+        /// Process an inbox message (tell)
+        /// </summary>
+        [Pure]
+        public Aff<RT, InboxDirective> ProcessTell =>
+            from __1 in ActorAff<RT>.assertNotCancelled()
+            from req in ActorContextAff<RT>.Request
+            from msg in preProcessMessageContent(req.CurrentMsg, "tell")
+            from ins in AssertState
+            from dir in (from ous in ActorFn(ins, msg)
+                         from __2 in ProcessAff<RT>.catchAndLogErr(PublishNewState(ins, ous), unitEff)
+                         from __3 in ResetStrategyState() 
+                         select InboxDirective.Default)
+                        .BiBind(SuccessAff, ActorAff<RT>.defaultErrorHandler)
+            select dir;
+
+        /// <summary>
+        /// Process an inbox message (ask)
+        /// </summary>
+        [Pure]
+        public Aff<RT, InboxDirective> ProcessAsk =>
+            from __1 in ActorAff<RT>.assertNotCancelled()
+            from req in ActorContextAff<RT>.Request
+            from msg in preProcessMessageContent(req.CurrentRequest.Message, "ask")
+            from res in ActorContextAff<RT>.localContext(req.SetCurrentMessage(msg),
+                from ins in AssertState
+                from dir in (from ous in ActorFn(ins, msg)
+                             from __2 in ProcessAff<RT>.catchAndLogErr(PublishNewState(ins, ous), unitEff)
+                             from __3 in ResetStrategyState()
+                             select InboxDirective.Default)
+                            .BiBind(SuccessAff, e => from _ in ProcessAff<RT>.catchAndLogErr(ProcessAff<RT>.replyError(e), unitEff)
+                                                     from r in ActorAff<RT>.defaultErrorHandler(e)
+                                                     select r)
+                select dir)
+            select res;
+
+        /// <summary>
+        /// A watched process has terminated, we have got the notification of that termination
+        /// and will run the termination inbox
+        /// </summary>
+        [Pure]
+        public Aff<RT, InboxDirective> ProcessTerminated(ProcessId tpid) =>
+            TermFn == null
+                ? SuccessEff(InboxDirective.Default)
+                : from ins in AssertState
+                  from dir in (from ous in TermFn(ins, tpid)
+                               from __2 in ProcessAff<RT>.catchAndLogErr(PublishNewState(ins, ous), unitEff)
+                               from __3 in ResetStrategyState() 
+                               select InboxDirective.Default)
+                              .BiBind(SuccessAff, ActorAff<RT>.defaultErrorHandler)
+                  select dir;
+        
+        /// <summary>
+        /// Hack to get around the fact that we want IActor to have no runtime attached
+        /// TODO: Think about alternatives 
+        /// </summary>
+        public IActor<LRT> WithRuntime<LRT>() where LRT : struct, HasEcho<LRT> =>
+            (IActor<LRT>) ((object) this);
     }
 
-    static class ActorAff<RT, S, A> where RT : struct, HasEcho<RT>
+    static class ActorAff<RT> where RT : struct, HasEcho<RT>
     {
-        public static Aff<RT, IActor> create(
+        public static Aff<RT, IActor> create<S, A>(
             bool cluster,
             ActorItem parent,
             ProcessName name,
             Func<S, A, Aff<RT, S>> actor,
-            Func<IActor, Aff<RT, S>> setup,
+            Func<IActor<RT>, Aff<RT, S>> setup,
             Func<S, Aff<RT, Unit>> shutdown,
             Func<S, ProcessId, Aff<RT, S>> term,
             State<StrategyContext, Unit> strategy,
@@ -225,902 +437,193 @@ namespace Echo
                 from state      in SuccessEff(Atom(ActorState<S>.Default))
                 select new Actor<RT, S, A>(id, name, parent, actorFn, term, setupFn, shutdownFn, flags, strategy, pubSubj, stateSubj, state) as IActor;
         
-        
-        static Func<S, Aff<RT, Unit>> loggingShutdown(Func<S, Aff<RT, Unit>> shutdown) =>
+        /// <summary>
+        /// Wraps the user's shutdown function in a logging handler
+        /// </summary>
+        [Pure]
+        static Func<S, Aff<RT, Unit>> loggingShutdown<S>(Func<S, Aff<RT, Unit>> shutdown) =>
             state =>
-                ProcessAff.logErr<RT, Unit>(shutdown(state));
-
- 
-
-        // static Aff<RT, S> getState =>
-        //     from ctx in ActorContextAff<RT>.Request
-        //     from res in ctx.Self.Actor.GetState<RT
-        // {
-        //     lock (sync)
-        //     {
-        //         var res = state.IfNoneUnsafe(InitState);
-        //         state = res;
-        //         return res;
-        //     }
-        // }
-
-      
-        
-        /// <summary>
-        /// Start up
-        /// </summary>
-        public static Aff<RT, InboxDirective> startup =>
-            from dir in                             
-        
-        /// <summary>
-        /// Start up - placeholder
-        /// </summary>
-        public InboxDirective Startup()
-        {
-            lock(sync)
-            {
-                if (cancellationTokenSource.IsCancellationRequested)
-                {
-                    return InboxDirective.Shutdown;
-                }
-
-                if (state.IsSome) return InboxDirective.Default;
-
-                var savedReq = ActorContext.Request.CurrentRequest;
-                var savedFlags = ActorContext.Request.ProcessFlags;
-                var savedMsg = ActorContext.Request.CurrentMsg;
-
-                try
-                {
-                    ActorContext.Request.CurrentRequest = null;
-                    ActorContext.Request.ProcessFlags = flags;
-                    ActorContext.Request.CurrentMsg = null;
-
-                    var stateValue = GetState();
-                    try
-                    {
-                        if (notnull(stateValue))
-                        {
-                            stateSubject.OnNext(stateValue);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        // Not our errors, so just log and move on
-                        logErr(e);
-                    }
-
-                    return InboxDirective.Default;
-                }
-                catch (Exception e)
-                {
-                    var directive = RunStrategy(
-                        Id,
-                        Parent.Actor.Id,
-                        Sender,
-                        Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
-                        e,
-                        null,
-                        Parent.Actor.Strategy
-                    );
-
-                    if(!(e is ProcessKillException)) tell(sys.Errors, e);
-                    return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause
-                }
-                finally
-                {
-                    ActorContext.Request.CurrentRequest = savedReq;
-                    ActorContext.Request.ProcessFlags = savedFlags;
-                    ActorContext.Request.CurrentMsg = savedMsg;
-                }
-            }
-        }
+                ProcessAff<RT>.logErr<Unit>(shutdown(state));
 
         /// <summary>
-        /// Failure strategy
+        /// Inbox for system messages relating to the process
         /// </summary>
-        State<StrategyContext, Unit> strategy;
-        public State<StrategyContext, Unit> Strategy
-        {
-            get
+        [Pure]
+        static Aff<RT, Unit> processSystemMessage(Message message) =>
+            message.Tag switch
             {
-                return strategy ?? sys.Settings.GetProcessStrategy(Id);
-            }
-            private set
-            {
-                strategy = value;
-            }
-        }
+                Message.TagSpec.GetChildren     => from cs in ProcessAff<RT>.Children
+                                                   from __ in ProcessAff<RT>.replyIfAsked(cs)
+                                                   select unit,
+                Message.TagSpec.ShutdownProcess => from _ in shutdownProcess(false)
+                                                   from r in ProcessAff<RT>.replyIfAsked(unit)
+                                                   select unit,
+                _ => unitEff
+            };
 
-        public Unit AddSubscription(ProcessId pid, IDisposable sub)
-        {
-            RemoveSubscription(pid);
-            subs = subs.Add(pid.Path, sub);
-            return unit;
-        }
+        [Pure]
+        public static Aff<RT, InboxDirective> defaultErrorHandler(Error e) =>
+            defaultErrorHandler((Exception)e);
 
-        public Unit RemoveSubscription(ProcessId pid)
-        {
-            subs.Find(pid.Path).IfSome(x => x.Dispose());
-            subs = subs.Remove(pid.Path);
-            return unit;
-        }
+        [Pure]
+        public static Aff<RT, InboxDirective> defaultErrorHandler(Exception e) =>
+            from r in runStrategy(e)
+            from _ in e is ProcessKillException pke
+                               ? FailEff<Unit>(pke)
+                               : ProcessAff<RT>.tell(ProcessAff<RT>.Errors, e)
+            select r;
 
-        Unit RemoveAllSubscriptions()
-        {
-            subs.Iter(x => x.Dispose());
-            subs = HashMap<string, IDisposable>();
-            return unit;
-        }
+        [Pure]
+        public static Aff<RT, InboxDirective> runStrategy(Error err) =>
+            runStrategy((Exception) err);
 
-        public ProcessFlags Flags => 
-            flags;
+        [Pure]
+        public static Aff<RT, InboxDirective> runStrategy(Exception ex) =>
+                (from message         in ActorContextAff<RT>.Request.Map(r => r.CurrentMsg)
+                 from pid             in ProcessAff<RT>.Self
+                 from parent          in ProcessAff<RT>.Parent
+                 from sender          in ProcessAff<RT>.Sender
+                 from siblings        in ActorContextAff<RT>.Siblings
+                 from strategy        in ActorContextAff<RT>.ParentProcess.Map(p => p.Actor.Strategy)
+                 from strategyState   in ActorContextAff<RT>.SelfProcess.Map(s => s.Actor.StrategyState)
+                 from failureStrategy in SuccessEff(strategy.Failure(pid, parent, sender, siblings, ex, message))
+                 from stratResult     in SuccessEff(failureStrategy.Run(strategyState))
+                 from result          in stratResult.Value.Match(
+                                            Some: decision => runStrategyOutcome(decision, ex),
+                                            None: ()       => ProcessEff.logErr($"Strategy failed (no decision) in {pid}")
+                                                                        .Map(_ => InboxDirective.Default),
+                                            Fail: ex       => ProcessEff.logErr($"Strategy exception (decision error) {pid}", ex)
+                                                                        .Map(_ => InboxDirective.Default))
+                 select result)
+                .Match(Succ: SuccessEff,
+                       Fail: err => from p in ProcessAff<RT>.Self
+                                    from _ in ProcessEff.logErr($"Strategy exception in {p}", err)
+                                    select InboxDirective.Default)
+                .Flatten();
 
+        [Pure]
+        static Aff<RT, InboxDirective> runStrategyOutcome(StrategyDecision decision, Exception ex) =>
+                from strategyState in ActorContextAff<RT>.SelfProcess.Map(s => s.Actor.StrategyState)
+                from pid           in ProcessAff<RT>.Self
+                from sender        in ProcessAff<RT>.Sender
+                from message       in ActorContextAff<RT>.Request.Map(r => r.CurrentMsg)
+                from ctx           in ActorContextAff<RT>.SelfProcess
+                from ___           in ctx.Actor.SetStrategyState(strategyState)
+                
+                // Run the process directive
+                from dr1 in decision.ProcessDirective.Type != DirectiveType.Stop && decision.Pause > 0 * seconds
+                                  // Tell all other sibling processes to pause 
+                                ? from __1 in decision.Affects.Map(ProcessAff<RT>.pause).SequenceParallel()
+                                  
+                                  // Delay the running of the process directive 
+                                  from __2 in (from _ in IO.Time.sleepFor<RT>(decision.Pause)
+                                               from d in runProcessDirective(pid, sender, ex, message, decision, true)
+                                               select d)
+                                              .FireAndForget()
+                                  select InboxDirective.Pause
+                                  
+                                  // Not pausing, so let's run the process directive straight away
+                                : runProcessDirective(pid, sender, ex, message, decision, true).Map(_ => InboxDirective.Default)
+                 
+                // Run the message directive
+                from dr2 in runMessageDirective(pid, sender, decision, ex, message)
+                select dr1 | dr2;
 
-        /// <summary>
-        /// Publish observable stream
-        /// </summary>
-        public IObservable<object> PublishStream => publishSubject;
-
-        /// <summary>
-        /// State observable stream
-        /// </summary>
-        public IObservable<object> StateStream => stateSubject;
-
-        /// <summary>
-        /// Publish to the PublishStream
-        /// </summary>
-        public Unit Publish(object message)
-        {
-            try
-            { 
-                publishSubject.OnNext(message);
-            }
-            catch (Exception ue)
-            {
-                // Not our errors, so just log and move on
-                logErr(ue);
-            }
-            return unit;
-        }
-
-        /// <summary>
-        /// Process path
-        /// </summary>
-        public ProcessId Id { get; }
-
-        /// <summary>
-        /// Process name
-        /// </summary>
-        public ProcessName Name { get; }
-
-        /// <summary>
-        /// Parent process
-        /// </summary>
-        public ActorItem Parent { get; }
-
-        /// <summary>
-        /// Child processes
-        /// </summary>
-        public HashMap<string, ActorItem> Children =>
-            children;
-
-        public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
-
-        /// <summary>
-        /// Clears the state (keeps the mailbox items)
-        /// </summary>
-        public Unit Restart(bool unpauseAfterRestart)
-        {
-            lock (sync)
-            {
-                RemoveAllSubscriptions();
-                state.IfSome(shutdownFn);
-                DisposeState();
-                foreach (var kid in Children)
-                {
-                    kill(kid.Value.Actor.Id);
-                }
-            }
-            tellSystem(Id, SystemMessage.StartupProcess(unpauseAfterRestart)); 
-            return unit;
-        }
-
-        /// <summary>
-        /// Disowns a child process
-        /// </summary>
-        public Unit UnlinkChild(ProcessId pid)
-        {
-            children.Swap(c => c.Remove(pid.Name.Value));
-            return unit;
-        }
-
-        /// <summary>
-        /// Gains a child process
-        /// </summary>
-        public Unit LinkChild(ActorItem item)
-        {
-            children.Swap(c => c.AddOrUpdate(item.Actor.Id.Name.Value, item));
-            return unit;
-        }
-
-        /// <summary>
-        /// Add a watcher of this Process
-        /// </summary>
-        /// <param name="pid">Id of the Process that will watch this Process</param>
-        public Unit AddWatcher(ProcessId pid) =>
-            sys.AddWatcher(pid, Id);
-
-        /// <summary>
-        /// Remove a watcher of this Process
-        /// </summary>
-        /// <param name="pid">Id of the Process that will stop watching this Process</param>
-        public Unit RemoveWatcher(ProcessId pid) =>
-            sys.RemoveWatcher(pid, Id);
-
-        public Unit DispatchWatch(ProcessId pid)
-        {
-            sys.GetDispatcher(pid).Watch(Id);
-            return ActorContext.System(Id).AddWatcher(pid, Id);
-        }
-
-        public Unit DispatchUnWatch(ProcessId pid)
-        {
-            sys.GetDispatcher(pid).UnWatch(Id);
-            return ActorContext.System(Id).RemoveWatcher(pid, Id);
-        }
-
-        /// <summary>
-        /// Shutdown everything from this node down
-        /// </summary>
-        public Unit Shutdown(bool maintainState)
-        {
-            cancellationTokenSource.Cancel(); // this will signal other operations not to start processing more messages (ProcessMessage) or startup again (Startup), even if they already received something from the queue
-            lock(sync)
-            {
-                if (maintainState == false && Flags != ProcessFlags.Default)
-                {
-                    cluster.IfSome(c =>
-                    {
-                        // TODO: Make this transactional 
-                        // {
-                        c.DeleteMany(
-                            StateKey,
-                            ActorInboxCommon.ClusterUserInboxKey(Id),
-                            ActorInboxCommon.ClusterSystemInboxKey(Id),
-                            ActorInboxCommon.ClusterMetaDataKey(Id),
-                            ActorInboxCommon.ClusterSettingsKey(Id));
-
-                            sys.DeregisterById(Id);
-                        // }
-
-                        sys.Settings.ClearInMemorySettingsOverride(ActorInboxCommon.ClusterSettingsKey(Id));
-                    });
-                }
-
-                RemoveAllSubscriptions();
-                publishSubject.OnCompleted();
-                stateSubject.OnCompleted();
-                remoteSubsAcquired = false;
-                strategyState = StrategyState.Empty;
-                state.IfSome(shutdownFn);
-                DisposeState();
-
-                sys.DispatchTerminate(Id);
-
-                return unit;
-            }
-        }
-
-        public Option<T> PreProcessMessageContent(object message)
-        {
-            if (message == null)
-            {
-                tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Message is null for tell (expected {typeof(T)})", message));
-                return None;
-            }
-
-            if (typeof(T) != typeof(string) && message is string)
-            {
-                try
-                {
-                    // This allows for messages to arrive from JS and be dealt with at the endpoint 
-                    // (where the type is known) rather than the gateway (where it isn't)
-                    return Some(Deserialise.Object<T>((string)message));
-                }
-                catch
-                {
-                    tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Invalid message type for tell (expected {typeof(T)})", message));
-                    return None;
-                }
-            }
-
-            if (!(message is T))
-            {
-                tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Invalid message type for tell (expected {typeof(T)})", message));
-                return None;
-            }
-
-            return Some((T)message);
-        }
-
-        public R ProcessRequest<R>(ProcessId pid, object message)
-        {
-            try
-            {
-                if (request != null)
-                {
-                    throw new Exception("async ask not allowed");
-                }
-
-                response = null;
-                request = new AutoResetEvent(false);
-                sys.Ask(pid, new ActorRequest(message, pid, Self, 0), Self);
-                request.WaitOne(sys.Settings.Timeout);
-
-                if (response == null)
-                {
-                    throw new TimeoutException("Request timed out");
-                }
-                else
-                {
-                    if (response.IsFaulted)
-                    {
-                        var ex = (Exception)response.Message;
-                        throw new ProcessException($"Process issue: {ex.Message}", pid.Path, Self.Path, ex);
-                    }
-                    else
-                    {
-                        return (R)response.Message;
-                    }
-                }
-            }
-            finally
-            {
-                if (request != null)
-                {
-                    request.Dispose();
-                    request = null;
-                }
-            }
-        }
-
-        public Unit ProcessResponse(ActorResponse response)
-        {
-            if (request == null)
-            {
-                ProcessMessage(response);
-            }
-            else
-            {
-                this.response = response;
-                request.Set();
-            }
-            return unit;
-        }
-
-        public InboxDirective ProcessAsk(ActorRequest request)
-        {
-            lock (sync)
-            {
-                if (cancellationTokenSource.IsCancellationRequested)
-                {
-                    replyError(new AskException(
-                        $"Can't ask {Id.Path} because actor shutdown in progress"));
-                    return InboxDirective.Shutdown;
-                }
-
-                var savedMsg = ActorContext.Request.CurrentMsg;
-                var savedFlags = ActorContext.Request.ProcessFlags;
-                var savedReq = ActorContext.Request.CurrentRequest;
-
-                try
-                {
-                    ActorContext.Request.CurrentRequest = request;
-                    ActorContext.Request.ProcessFlags = flags;
-                    ActorContext.Request.CurrentMsg = request.Message;
-
-                    //ActorContext.AssertSession();
-
-                    if (typeof(T) != typeof(string) && request.Message is string)
-                    {
-                        state = PreProcessMessageContent(request.Message).Match(
-                            Some: tmsg =>
-                            {
-                                var stateIn = GetState();
-                                var stateOut = actorFn(stateIn, tmsg);
-                                try
-                                {
-                                    if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                                    {
-                                        stateSubject.OnNext(stateOut);
-                                    }
-                                }
-                                catch (Exception ue)
-                                {
-                                    // Not our errors, so just log and move on
-                                    logErr(ue);
-                                }
-
-                                return stateOut;
-                            },
-                            None: () =>
-                            {
-                                replyError(new AskException(
-                                    $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                                return state;
-                            }
-                        );
-                    }
-                    else if (request.Message is T msg)
-                    {
-                        var stateIn = GetState();
-                        var stateOut = actorFn(stateIn, msg);
-                        try
-                        {
-                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                            {
-                                stateSubject.OnNext(stateOut);
-                            }
-                        }
-                        catch (Exception ue)
-                        {
-                            // Not our errors, so just log and move on
-                            logErr(ue);
-                        }
-
-                        state = stateOut;
-                    }
-                    else if (request.Message is Message m)
-                    {
-                        ProcessSystemMessage(m);
-                    }
-                    else
-                    {
-                        // Failure to deserialise is not our problem, its the sender's
-                        // so we don't throw here.
-                        replyError(new AskException(
-                            $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                        return InboxDirective.Default;
-                    }
-
-                    strategyState = strategyState.With(
-                        Failures: 0,
-                        FirstFailure: DateTime.MaxValue,
-                        LastFailure: DateTime.MaxValue,
-                        BackoffAmount: 0 * seconds
-                    );
-
-                    ActorContext.Request.RunOps();
-                }
-                catch (Exception e)
-                {
-                    ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
-                    replyError(e);
-                    ActorContext.Request.RunOps();
-                    return DefaultErrorHandler(request, e);
-                }
-                finally
-                {
-                    ActorContext.Request.CurrentMsg = savedMsg;
-                    ActorContext.Request.ProcessFlags = savedFlags;
-                    ActorContext.Request.CurrentRequest = savedReq;
-                }
-
-                return InboxDirective.Default;
-            }
-        }
-
-        void ProcessSystemMessage(Message message)
-        {
-            lock (sync)
-            {
-                switch (message.Tag)
-                {
-                    case Message.TagSpec.GetChildren:
-                        replyIfAsked(Children);
-                        break;
-                    case Message.TagSpec.ShutdownProcess:
-                        replyIfAsked(ShutdownProcess(false));
-                        break;
-                }
-            }
-        }
-
-        public InboxDirective ProcessTerminated(ProcessId pid)
-        {
-            if (termFn == null) return InboxDirective.Default;
-
-            lock (sync)
-            {
-                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
-
-                var savedReq   = ActorContext.Request.CurrentRequest;
-                var savedFlags = ActorContext.Request.ProcessFlags;
-                var savedMsg   = ActorContext.Request.CurrentMsg;
-
-                try
-                {
-                    ActorContext.Request.CurrentRequest = null;
-                    ActorContext.Request.ProcessFlags   = flags;
-                    ActorContext.Request.CurrentMsg     = pid;
-
-                    //ActorContext.AssertSession();
-
-                    var stateIn = GetState();
-                    var stateOut = termFn(stateIn, pid);
-                    state = stateOut;
-
-                    try
-                    {
-                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                        {
-                            stateSubject.OnNext(stateOut);
-                        }
-                    }
-                    catch (Exception ue)
-                    {
-                        // Not our errors, so just log and move on
-                        logErr(ue);
-                    }
-
-                    strategyState = strategyState.With(
-                        Failures: 0,
-                        FirstFailure: DateTime.MaxValue,
-                        LastFailure: DateTime.MaxValue,
-                        BackoffAmount: 0 * seconds
-                        );
-
-                    ActorContext.Request.RunOps();
-                }
-                catch (Exception e)
-                {
-                    return DefaultErrorHandler(pid, e);
-                }
-                finally
-                {
-                    ActorContext.Request.CurrentRequest = savedReq;
-                    ActorContext.Request.ProcessFlags   = savedFlags;
-                    ActorContext.Request.CurrentMsg     = savedMsg;
-                }
-                return InboxDirective.Default;
-            }
-        }
-
-        InboxDirective DefaultErrorHandler(object message, Exception e)
-        {
-            // Wipe all transactional outputs because of the error
-            ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
-
-            var directive = RunStrategy(
-                Id,
-                Parent.Actor.Id,
-                Sender,
-                Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
-                e,
-                message,
-                Parent.Actor.Strategy
-            );
-            if (!(e is ProcessKillException)) tell(sys.Errors, e);
-
-            // Run any transactional outputs caused by the strategy computation
-            ActorContext.Request.RunOps();
-            return directive;
-        }
-
-        /// <summary>
-        /// Process an inbox message
-        /// </summary>
-        /// <param name="message"></param>
-        /// <returns></returns>
-        public InboxDirective ProcessMessage(object message)
-        {
-            lock (sync)
-            {
-                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
-
-                var savedReq = ActorContext.Request.CurrentRequest;
-                var savedFlags = ActorContext.Request.ProcessFlags;
-                var savedMsg = ActorContext.Request.CurrentMsg;
-
-                try
-                {
-                    ActorContext.Request.CurrentRequest = null;
-                    ActorContext.Request.ProcessFlags = flags;
-                    ActorContext.Request.CurrentMsg = message;
-
-                    if (message is T)
-                    {
-                        var stateIn = GetState();
-                        var stateOut = actorFn(stateIn, (T)message);
-                        state = stateOut;
-                        try
-                        {
-                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                            {
-                                stateSubject.OnNext(stateOut);
-                            }
-                        }
-                        catch (Exception ue)
-                        {
-                            // Not our errors, so just log and move on
-                            logErr(ue);
-                        }
-                    }
-                    else if (typeof(T) != typeof(string) && message is string)
-                    {
-                        state = PreProcessMessageContent(message).Match(
-                                    Some: tmsg =>
-                                    {
-                                        var stateIn = GetState();
-                                        var stateOut = actorFn(stateIn, tmsg);
-                                        try
-                                        {
-                                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                                            {
-                                                stateSubject.OnNext(stateOut);
+        [Pure]
+        public static Aff<RT, InboxDirective> runMessageDirective(ProcessId pid, ProcessId sender, StrategyDecision decision, Exception e, object message) => 
+                decision.MessageDirective switch {
+                    
+                                            // Send the failed message to our parent
+                    ForwardToParent _ =>    from _ in ProcessAff<RT>.tell(pid.Parent, message, sender)
+                                            select InboxDirective.Default,
+                    
+                                            // Send the failed message to the back of our queue
+                    ForwardToSelf _ =>      from _ in ProcessAff<RT>.tell(pid, message, sender)
+                                            select InboxDirective.Default,
+                    
+                                            // Send the failed message to another specified process
+                    ForwardToProcess ftp => from _ in ProcessAff<RT>.tell(ftp.ProcessId, message, sender)
+                                            select InboxDirective.Default,
+                    
+                                            // Leave it in the queue, this is like putting it to the front of the queue
+                                            // because we never removed it in the first place
+                    StayInQueue _ =>        SuccessEff(InboxDirective.PushToFrontOfQueue),
+                    
+                                            // Send to dead letters
+                    _ =>                    e switch {
+                                                  ProcessKillException _ =>
+                                                      from _ in ProcessAff<RT>.tell(ProcessAff<RT>.DeadLetters, DeadLetter.create(sender, pid, e, "Process error: ", message))
+                                                      select InboxDirective.Default,
+                                                  
+                                                   _ => SuccessEff(InboxDirective.Default)
                                             }
-                                        }
-                                        catch (Exception ue)
-                                        {
-                                        // Not our errors, so just log and move on
-                                        logErr(ue);
-                                        }
-                                        return stateOut;
-                                    },
-                                    None: () => state
-                                );
-                    }
-                    else if (message is Message)
-                    {
-                        ProcessSystemMessage((Message)message);
-                    }
-                    else
-                    {
-                        logErr($"Can't tell {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {message}");
-                        return InboxDirective.Default;
-                    }
+                };
 
-                    strategyState = strategyState.With(
-                        Failures: 0,
-                        FirstFailure: DateTime.MaxValue,
-                        LastFailure: DateTime.MaxValue,
-                        BackoffAmount: 0 * seconds
-                        );
-
-                    ActorContext.Request.RunOps();
-                }
-                catch (Exception e)
-                {
-                    return DefaultErrorHandler(message, e);
-                }
-                finally
-                {
-                    ActorContext.Request.CurrentRequest = savedReq;
-                    ActorContext.Request.ProcessFlags = savedFlags;
-                    ActorContext.Request.CurrentMsg = savedMsg;
-                }
-                return InboxDirective.Default;
-            }
-        }
-
-        public InboxDirective RunStrategy(
-            ProcessId pid,
-            ProcessId parent,
-            ProcessId sender,
-            IEnumerable<ProcessId> siblings,
-            Exception ex, 
-            object message,
-            State<StrategyContext, Unit> strategy
-            )
-        {
-            try
-            {
-                // Build a strategy specifically for this event
-                var failureStrategy = strategy.Failure(
-                        pid,
-                        parent,
-                        sender,
-                        siblings,
-                        ex,
-                        message
-                    );
-
-                // Invoke the strategy with the running state
-                var result = failureStrategy.Run(strategyState);
-
-                return result.Value.Match(
-                    Some: decision =>
-                    {
-                        // Save the strategy state back to the actor
-                        strategyState = result.State;
-
-                        if (decision.ProcessDirective.Type != DirectiveType.Stop && decision.Pause > 0 * seconds)
-                        {
-                            decision.Affects.Iter(p => pause(p));
-
-                            var safeDelayDisposable = safedelay(
-                                () => RunProcessDirective(pid, sender, ex, message, decision, true),
-                                decision.Pause
-                            );
-                            cancellationTokenSource.Token.Register(() => safeDelayDisposable.Dispose());
-
-                            return InboxDirective.Pause | RunMessageDirective(pid, sender, decision, ex, message);
-                        }
-                        else
-                        {
-                            // Run the instruction for the Process (stop/restart/etc.)
-                            try
-                            {
-                                RunProcessDirective(pid, sender, ex, message, decision, false);
-                            }
-                            catch (Exception e)
-                            {
-                                // Error in RunProcessDirective => log and still run RunMessageDirective
-                                logErr("Strategy exception (RunProcessDirective) in " + Id, e);
-                            }
-                            // Run the instruction for the message (dead-letters/send-to-self/...)
-                            return RunMessageDirective(pid, sender, decision, ex, message);
-                        }
-                    },
-                    None: () =>
-                    {
-                        logErr("Strategy failed (no decision) in " + Id);
-                        return InboxDirective.Default;
-                    },
-                    Fail: e =>
-                    {
-                        logErr("Strategy exception (decision error) " + Id, e);
-                        return InboxDirective.Default;
-                    });
-            }
-            catch (Exception e)
-            {
-                logErr("Strategy exception in " + Id, e);
-                return InboxDirective.Default;
-            }
-        }
-
-        InboxDirective RunMessageDirective(
-            ProcessId pid,
-            ProcessId sender,
-            StrategyDecision decision, 
-            Exception e, 
-            object message
-            )
-        {
-            var directive = decision.MessageDirective;
-            switch (directive.Type)
-            {
-                case MessageDirectiveType.ForwardToParent:
-                    tell(pid.Parent, message, sender);
-                    return InboxDirective.Default;
-
-                case MessageDirectiveType.ForwardToSelf:
-                    tell(pid, message, sender);
-                    return InboxDirective.Default;
-
-                case MessageDirectiveType.ForwardToProcess:
-                    tell((directive as ForwardToProcess).ProcessId, message, sender);
-                    return InboxDirective.Default;
-
-                case MessageDirectiveType.StayInQueue:
-                    return InboxDirective.PushToFrontOfQueue;
-
-                default:
-                    if (!(e is ProcessKillException))
-                    {
-                        tell(sys.DeadLetters, DeadLetter.create(sender, pid, e, "Process error: ", message));
-                    }
-                    return InboxDirective.Default;
-            }
-        }
-
-        void RunProcessDirective(
+        public static Aff<RT, Unit> runProcessDirective(
             ProcessId pid,
             ProcessId sender,
             Exception e,
             object message,
             StrategyDecision decision,
-            bool unPauseAfterRestart
-        )
-        {
-            var directive = decision.ProcessDirective;
+            bool unPauseAfterRestart) =>
+                from _1 in decision.Affects
+                                   .Filter(x => x != pid)
+                                   .Map(cpid => decision.ProcessDirective switch {
+                                                    Escalate _ => ProcessAff<RT>.unpause(cpid),
+                                                    Resume _   => ProcessAff<RT>.unpause(cpid),
+                                                    Restart _  => ProcessAff<RT>.restart(cpid),
+                                                    Stop _     => ProcessAff<RT>.kill(cpid),
+                                                    _          => unitEff
+                                    })
+                                   .SequenceParallel()
+                            
+                from _2 in decision.ProcessDirective switch {
+                                Escalate _ => ProcessAff<RT>.tellSystem(ProcessAff<RT>.Parent, SystemMessage.ChildFaulted(pid, sender, e, message)),
+                                Resume _   => ProcessAff<RT>.unpause(pid),
+                                Restart _  => from slf in ActorContextAff<RT>.SelfProcess
+                                              from ___ in slf.Actor.WithRuntime<RT>().Restart(unPauseAfterRestart)
+                                              select unit,
+                                Stop _     => shutdownProcess(false),
+                                _          => unitEff
+                           }
+                select unit;
 
-            // Find out the processes that this strategy affects and apply
-            foreach (var cpid in decision.Affects.Filter(x => x != pid))
-            {
-                switch (directive.Type)
-                {
-                    case DirectiveType.Escalate:
-                    case DirectiveType.Resume:
-                        // Note: unpause probably won't do anything if unPauseAfterRestart==false because our strategy did not pause them (but unpause should not harm)
-                        unpause(cpid);
-                        break;
-                    case DirectiveType.Restart:
-                        restart(cpid);
-                        break;
-                    case DirectiveType.Stop:
-                        kill(cpid);
-                        break;
-                }
-            }
 
-            switch (directive.Type)
-            {
-                case DirectiveType.Escalate:
-                    tellSystem(Parent.Actor.Id, SystemMessage.ChildFaulted(pid, sender, e, message), Self);
-                    break;
-                case DirectiveType.Resume:
-                    // Note: unpause should not be necessary if unPauseAfterRestart==false because our strategy did not pause before (but unpause should not harm)
-                    unpause(pid);
-                    break;
-                case DirectiveType.Restart:
-                    Restart(unPauseAfterRestart);
-                    break;
-                case DirectiveType.Stop:
-                    ShutdownProcess(false);
-                    break;
-            }
-        }
+        public static Aff<RT, Unit> shutdownProcess(bool maintainState) =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from req in ActorContextAff<RT>.Request
+            from slf in SuccessEff(req.Self)
+            from par in SuccessEff(req.Parent)
+            from shi in ActorSystemAff<RT>.InboxShutdownItem
+            from shu in shutdownProcessRec(slf, par, (ILocalActorInbox)shi.Inbox, maintainState)
+            select unit;    
 
-        public Unit ShutdownProcess(bool maintainState)
-        {
-            cancellationTokenSource.Cancel();
-            lock (sync)
-            {
-                return Parent.Actor.Children.Find(Name.Value).IfSome(self =>
-                {
-                    ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
-                    Parent.Actor.UnlinkChild(Id);
-                    children.Swap(_ => HashMap<string, ActorItem>());
-                });
-            }
-        }
+        static Aff<RT, Unit> shutdownProcessRec(ActorItem item, ActorItem parent, ILocalActorInbox shutdownProcess, bool maintainState) =>
+            from shu in item.Actor.Children
+                                  .Values
+                                  .Map(child => shutdownProcessRec(child, item, shutdownProcess, maintainState))
+                                  .SequenceParallel()
+            from unl in parent.Actor.UnlinkChild(item.Actor.Id)
+            from dis in shutdownProcess.Tell<RT>(item.Inbox, ProcessId.NoSender, None) 
+            from res in item.Actor.WithRuntime<RT>().Shutdown(maintainState)
+            select res;
 
-        void ShutdownProcessRec(ActorItem item, Option<ILocalActorInbox> inboxShutdown, bool maintainState)
-        {
-            var process = item.Actor;
-            var inbox = item.Inbox;
+        public static Eff<RT, Unit> assertNotCancelled() =>
+            from c in Prelude.cancelToken<RT>().Map(t => t.IsCancellationRequested)
+            from r in c ? FailEff<Unit>(Error.New("Cancelled")) : unitEff
+            select r;
 
-            foreach (var child in process.Children.Values)
-            {
-                ShutdownProcessRec(child, inboxShutdown, maintainState);
-            }
-
-            inboxShutdown.Match(
-                Some: ibs => ibs.Tell(inbox, ProcessId.NoSender, None),
-                None: ()  => inbox.Dispose()
-            );
-
-            process.Shutdown(maintainState);
-        }
-
-        public void Dispose()
-        {
-            RemoveAllSubscriptions();
-            state.IfSome(shutdownFn);
-            DisposeState();
-            cancellationTokenSource.Dispose();
-        }
-
-        void DisposeState()
-        {
-            state.IfSome(s => (s as IDisposable)?.Dispose());
-            state = None;
-        }
-
-        public InboxDirective ChildFaulted(ProcessId pid, ProcessId sender, Exception ex, object message)
-        {
-            return RunStrategy(
-                pid,
-                Parent.Actor.Id,
-                sender,
-                Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
-                ex,
-                message,
-                Parent.Actor.Strategy
-            );
-        }
+        public static Aff<RT, A> writeDeadLetter<A>(string letter, object message) =>
+            from slf in ProcessAff<RT>.Self
+            from sys in ActorContextAff<RT>.LocalSystem
+            from sdr in ProcessAff<RT>.Sender
+            from res in ActorSystemAff<RT>.tell(
+                            sys.DeadLetters,
+                            DeadLetter.create(sdr, slf, letter, message),
+                            Schedule.Immediate,
+                            sdr)
+            from rep in ProcessAff<RT>.isAsk.Bind(f => f ? ProcessAff<RT>.replyError(new AskException($"Ask failed: {letter}")) : unitEff)
+            from fai in FailEff<A>(Error.New(letter))  
+            select fai;
     }
 }

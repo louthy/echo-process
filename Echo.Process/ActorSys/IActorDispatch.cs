@@ -25,7 +25,7 @@ namespace Echo
         Aff<RT, bool> Exists<RT>() where RT : struct, HasEcho<RT>
         Aff<RT, bool> CanAccept<RT, A>() where RT : struct, HasEcho<RT>;
         Aff<RT, bool> HasStateTypeOf<RT, A>() where RT : struct, HasEcho<RT>;
-        IEnumerable<Type> GetValidMessageTypes<RT>() where RT : struct, HasEcho<RT>;
+        Aff<RT, IEnumerable<Type>> GetValidMessageTypes<RT>() where RT : struct, HasEcho<RT>;
         Aff<RT, bool> Ping<RT>() where RT : struct, HasEcho<RT>;
     }
 }

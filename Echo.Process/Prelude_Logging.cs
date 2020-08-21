@@ -78,6 +78,6 @@ namespace Echo
         /// <summary>
         /// Log subject - Internal
         /// </summary>
-        private static readonly Subject<ProcessLogItem> log = new Subject<ProcessLogItem>();
+        internal static readonly Subject<ProcessLogItem> log = new Subject<ProcessLogItem>();
     }
 }

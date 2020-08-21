@@ -308,7 +308,7 @@ namespace Echo
                                                 .IfNone(() => configs.Filter(c => c.NodeName == "root").Map(startFromConfig<RT>)))
             from r        in startups.Values.SequenceParallel()
             from _        in setup == null
-                                ? SuccessEff(unit)
+                                ? unitEff
                                 : SuccessEff(fun(setup)())
             select unit;
 
@@ -335,37 +335,31 @@ namespace Echo
         static Aff<RT, Unit> startClusterFromConfig<RT>(ProcessSystemConfig config) 
             where RT : struct, HasEcho<RT> =>
             
-            // TODO: Build a temporary EchoEnv with a System and Config so the next few lines work
-            
-            // Extract cluster settings and update
-            from provider        in clusterSetting(config, "provider",   SuccessEff("redis"))
-            from role            in clusterSetting(config, "role",       FailEff<string>(Error.New("Cluster 'role' setting missing")))
-            from clusterConn     in clusterSetting(config, "connection", SuccessEff("localhost"))
-            from clusterDb       in clusterSetting(config, "database",   SuccessEff("0"))
-            from userEnv         in clusterSetting(config, "user-env",   SuccessEff("value"))
-            
-            // Extract the values from the settings / value pairs
-            from env             in SuccessEff(config.SystemName)
+            // Extract cluster settings
+            from provider    in clusterSetting(config, "provider", SuccessEff("redis"))
+            from role        in clusterSetting(config, "role", FailEff<string>(Error.New("Cluster 'role' setting missing")))
+            from clusterConn in clusterSetting(config, "connection", SuccessEff("localhost"))
+            from clusterDb   in clusterSetting(config, "database", SuccessEff("0"))
+            from userEnv     in clusterSetting(config, "user-env", SuccessEff("value"))
+            from env         in SuccessEff(config.SystemName)
             
             // Build an appProfile
-            from appProfile      in SuccessEff(new AppProfile(config.NodeName, role, clusterConn, clusterDb, env, userEnv))
+            from appProfile  in SuccessEff(new AppProfile(config.NodeName, role, clusterConn, clusterDb, env, userEnv))
         
             // Look for an existing actor-system with the same system name
-            from current         in ActorContext.findSystem(env).Match(Some, _ => None)
+            from current     in ActorContext.findSystem(env).Match(Some, _ => None)
             
             // Work out if something significant has changed that will cause us to restart
-            from restart         in SuccessEff(current.Map(c => c.AppProfile.Value.NodeName != appProfile.NodeName ||
-                                                                c.AppProfile.Value.Role != appProfile.Role ||
-                                                                c.AppProfile.Value.ClusterConn != appProfile.ClusterConn ||
-                                                                c.AppProfile.Value.ClusterDb != appProfile.ClusterDb))
+            from restart     in SuccessEff(current.Map(c => c.AppProfile.Value.NodeName != appProfile.NodeName ||
+                                                            c.AppProfile.Value.Role != appProfile.Role ||
+                                                            c.AppProfile.Value.ClusterConn != appProfile.ClusterConn ||
+                                                            c.AppProfile.Value.ClusterDb != appProfile.ClusterDb))
                 
             // Restart, update, or start-new
-            from result          in restart.Match(
-                                       Some: r => r
-                                           ? restartClusterFromConfig<RT>(config, env)
-                                           : updateSettings<RT>(config, appProfile, env),
-                                       None: () => startClusterFromConfig<RT>(provider, clusterConn, clusterDb, role, appProfile, config, env))
-            
+            from result      in restart.Match(
+                                   True:  () => restartClusterFromConfig<RT>(config, env),
+                                   False: () => updateSettings<RT>(config, appProfile, env),
+                                   None:  () => startClusterFromConfig<RT>(provider, clusterConn, clusterDb, role, appProfile, config, env))
             select result;
 
         static Aff<RT, Unit> startClusterFromConfig<RT>(
