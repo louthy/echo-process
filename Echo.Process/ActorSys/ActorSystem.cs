@@ -174,7 +174,7 @@ namespace Echo
     {
         const string ClusterOnlineKey = "cluster-node-online";
 
-        public static Func<S, Unit> NoShutdown<S>() => (S s) => unit;
+        public static Func<S, Aff<RT, Unit>> NoShutdown<S>() => (S s) => SuccessAff(unit);
 
         /*enum DisposeState
         {
@@ -558,116 +558,130 @@ namespace Echo
             }
         }
 
-        public static ProcessName GetRootProcessName(Option<ICluster> cluster) =>
-            cluster.Map(x => x.NodeName)
-                   .IfNone(ActorSystemConfig.Default.RootProcessName);
-
-        public ProcessId ActorCreate<S, T>(
-            ActorItem parent,
-            ProcessName name,
-            Func<T, Unit> actorFn,
-            Func<S, Unit> shutdownFn,
-            Func<S, ProcessId, S> termFn,
-            State<StrategyContext, Unit> strategy,
-            ProcessFlags flags,
-            int maxMailboxSize,
-            bool lazy) =>
-                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+        public static Eff<RT, ProcessName> RootProcessName =>
+            ProcessAff<RT>.Root.Map(r => r.Name);
 
         public static Eff<RT, Unit> updateSettings(ProcessSystemConfig settings, AppProfile profile) =>
             from sys in ActorContextAff<RT>.LocalSystem
             from res in sys.UpdateSettings(settings, profile)
             select res;
 
-        public ProcessId ActorCreate<S, T>(
+        public static Aff<RT, ProcessId> actorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
-            Action<T> actorFn,
-            Func<S, Unit> shutdownFn,
-            Func<S, ProcessId, S> termFn,
+            Func<T, Aff<RT, S>> actorFn,
+            Func<S, Aff<RT, Unit>> shutdownFn,
+            Func<S, ProcessId, Aff<RT, S>> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
-            bool lazy
-            ) =>
-            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+            bool lazy) =>
+                actorCreate<S, T>(
+                    parent, 
+                    name, 
+                    (s, t) => Eff(() => { actorFn(t); return default(S); }), 
+                    () => SuccessEff(default(S)), 
+                    shutdownFn ?? NoShutdown<S>(), 
+                    termFn, 
+                    strategy, 
+                    flags, 
+                    maxMailboxSize, 
+                    lazy);
 
-        public ProcessId ActorCreate<S, T>(
+        public static Aff<RT, ProcessId> actorCreate<S, A>(
             ActorItem parent,
             ProcessName name,
-            Func<S, T, S> actorFn,
-            Func<S> setupFn,
-            Func<S, Unit> shutdownFn,
-            Func<S, ProcessId, S> termFn,
+            Action<A> actorFn,
+            Func<S, Aff<RT, Unit>> shutdownFn,
+            Func<S, ProcessId, Aff<RT, S>> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
-            bool lazy
-            ) =>
-            ActorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+            bool lazy) =>
+                actorCreate<S, A>(
+                    parent, 
+                    name, 
+                    (s, t) => Eff(() => { actorFn(t); return default(S); }), 
+                    () => SuccessEff(default(S)), 
+                    shutdownFn ?? NoShutdown<S>(), 
+                    termFn, 
+                    strategy, 
+                    flags, 
+                    maxMailboxSize, 
+                    lazy);
 
-        public ProcessId ActorCreate<S, T>(
+        public static Aff<RT, ProcessId> actorCreate<S, A>(
             ActorItem parent,
             ProcessName name,
-            Func<S, T, S> actorFn,
-            Func<IActor, S> setupFn,
-            Func<S, Unit> shutdownFn,
-            Func<S, ProcessId, S> termFn,
+            Func<S, A, Aff<RT, S>> actorFn,
+            Func<Aff<RT, S>> setupFn,
+            Func<S, Aff<RT, Unit>> shutdownFn,
+            Func<S, ProcessId, Aff<RT, S>> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
-            bool lazy)
-        {
-            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
+            bool lazy) =>
+                actorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+        
+        public static Aff<RT, ProcessId> actorCreate<S, A>(
+            ActorItem parent,
+            ProcessName name,
+            Func<S, A, Aff<RT, S>> actorFn,
+            Func<IActor, Aff<RT, S>> setupFn,
+            Func<S, Aff<RT, Unit>> shutdownFn,
+            Func<S, ProcessId, Aff<RT, S>> termFn,
+            State<StrategyContext, Unit> strategy,
+            ProcessFlags flags,
+            int maxMailboxSize,
+            bool lazy) =>
+                from sys in ActorContextAff<RT>.LocalSystem
+                from act in ActorAff<RT>.create<S, A>(
+                    sys.Cluster,
+                    parent, 
+                    name, 
+                    actorFn, 
+                    setupFn, 
+                    shutdownFn ?? NoShutdown<S>(), 
+                    termFn, 
+                    strategy, 
+                    flags)
+                from ibx in SuccessEff(sys.Cluster && act.Flags.HasListenRemoteAndLocal() ? new ActorInboxDual<S, A>() as IActorInbox
+                                     : sys.Cluster && act.Flags.HasPersistInbox()         ? new ActorInboxRemote<S, A>() as IActorInbox
+                                     : new ActorInboxLocal<S, A>() as IActorInbox)
+                from itm in SuccessEff(new ActorItem(act, ibx, act.Flags))
 
-            IActorInbox inbox = null;
-            if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && cluster.IsSome)
-            {
-                inbox = new ActorInboxDual<S, T>();
-            }
-            else if ((actor.Flags & ProcessFlags.PersistInbox) == ProcessFlags.PersistInbox && cluster.IsSome)
-            {
-                inbox = new ActorInboxRemote<S, T>();
-            }
-            else
-            {
-                inbox = new ActorInboxLocal<S, T>();
-            }
+                from res in  (from __1 in parent.Actor.LinkChild(itm)
+                              from __2 in actorRegister(act)
+                              from __3 in SuccessEff(ibx.Startup(act, parent, sys.Cluster, maxMailboxSize))
+                              from __4 in lazy
+                                             ? unitEff
+                                             : ActorSystemAff<RT>.tellSystem(act.Id, SystemMessage.StartupProcess(false))
+                              select act.Id)
+                             .Match(SuccessEff, e => from _ in act.WithRuntime<RT>().Shutdown(false)
+                                                     from r in FailEff<ProcessId>(e)
+                                                     select r)
+                             .Flatten()
+                select res;
 
-            var item = new ActorItem(actor, inbox, actor.Flags);
 
-            parent.Actor.LinkChild(item);
-
-            // Auto register if there are config settings and we
-            // have the variable name it was assigned to.
-            ActorContext.System(actor.Id).Settings.GetProcessRegisteredName(actor.Id).Iter(regName =>
-            {
-                // Also check if 'dispatch' is specified in the config, if so we will
-                // register the Process as a role dispatcher PID instead of just its
-                // PID.  
-                ActorContext.System(actor.Id).Settings.GetProcessDispatch(actor.Id)
-                      .Match(
-                        Some: disp => Process.register(regName, Disp[$"role-{disp}"][Role.Current].Append(actor.Id.Skip(1))),
-                        None: () => Process.register(regName, actor.Id)
-                      );
-            });
-
-            try
-            {
-                inbox.Startup(actor, parent, cluster, maxMailboxSize);
-                if (!lazy)
-                {
-                    TellSystem(actor.Id, SystemMessage.StartupProcess(false));
-                }
-            }
-            catch
-            {
-                item?.Actor?.ShutdownProcess(false);
-                throw;
-            }
-            return item.Actor.Id;
-        }
-
+        static Aff<RT, Unit> actorRegister(IActor act) =>
+            ProcessSystemConfigAff<RT>.getProcessRegisteredName(act.Id)
+                .Match(
+                    Succ: regName =>
+                        from sys in ActorContextAff<RT>.LocalSystem
+                                              
+                        // Also check if 'dispatch' is specified in the config, if so we will
+                        // register the Process as a role dispatcher PID instead of just its
+                        // PID.  
+                                              
+                        from dsp in ProcessSystemConfigAff<RT>.getProcessRegisteredName(act.Id)
+                                        .Match(Succ: disp => ProcessAff<RT>.register(regName, sys.Disp[$"role-{disp}"][Role.Current].Append(act.Id.Skip(1))),
+                                               Fail: erro => ProcessAff<RT>.register(regName, act.Id))
+                                        .Flatten()
+                        select unit,
+                    Fail: _ => unitEff)
+                .Flatten();      
+        
         [Pure]
         public static Eff<RT, ActorItem> JsItem =>
             from chs in RootChildren
@@ -1001,17 +1015,14 @@ namespace Echo
         /// Get the name to use to register the Process
         /// </summary>
         [Pure]
-        static Aff<RT, Option<A>> getProcessSetting<A>(ProcessId pid, string name) =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from ors in ProcessSystemConfigAff<RT>.getProcessSetting<A>(pid, name, "value", ProcessFlags.Default, sys.Settings)
-            from suc in sys.ApplyUpdates(ors) 
-            select suc;
+        static Aff<RT, A> getProcessSetting<A>(ProcessId pid, string name) =>
+            ProcessSystemConfigAff<RT>.getProcessSetting<A>(pid, name, "value");
 
         /// <summary>
         /// Get the name to use to register the Process
         /// </summary>
         [Pure]
-        public static Aff<RT, Option<ProcessName>> getProcessRegisteredName(ProcessId pid) =>
+        public static Aff<RT, ProcessName> getProcessRegisteredName(ProcessId pid) =>
             getProcessSetting<ProcessName>(pid, "register-as");
 
         /// <summary>
@@ -1020,7 +1031,7 @@ namespace Echo
         /// using a Role[dispatch][...relative path to process...]
         /// </summary>
         [Pure]
-        public static Aff<RT, Option<string>> getProcessDispatch(ProcessId pid) =>
+        public static Aff<RT, string> getProcessDispatch(ProcessId pid) =>
             getProcessSetting<string>(pid, "dispatch");
 
         /// <summary>
@@ -1028,7 +1039,7 @@ namespace Echo
         /// This is used by routers to specify the type of routing
         /// </summary>
         [Pure]
-        public static Aff<RT, Option<string>> getRouterDispatch(ProcessId pid) =>
+        public static Aff<RT, string> getRouterDispatch(ProcessId pid) =>
             getProcessSetting<string>(pid, "route");
 
         /// <summary>
@@ -1036,35 +1047,38 @@ namespace Echo
         /// </summary>
         [Pure]
         public static Aff<RT, Seq<ProcessToken>> getRouterWorkers(ProcessId pid) =>
-            from res in getProcessSetting<Seq<ProcessToken>>(pid, "workers")
-            select res.IfNone(Empty);
+            getProcessSetting<Seq<ProcessToken>>(pid, "workers")
+                .Match(SuccessEff, _ => SuccessEff(Seq<ProcessToken>()))
+                .Flatten();
 
         /// <summary>
         /// Get the router worker count
         /// </summary>
         [Pure]
-        public static Aff<RT, Option<int>> getRouterWorkerCount(ProcessId pid) =>
-            getProcessSetting<int>(pid, "worker-count");
+        public static Aff<RT, int> getRouterWorkerCount(ProcessId pid) =>
+            getProcessSetting<int>(pid, "worker-count")
+                .Match(SuccessEff, _ => SuccessEff(2))
+                .Flatten();
 
         /// <summary>
         /// Get the router worker name
         /// </summary>
         [Pure]
         public static Aff<RT, string> getRouterWorkerName(ProcessId pid) =>
-            from res in getProcessSetting<string>(pid, "worker-name")
-            select res.IfNone("worker");
-
+            getProcessSetting<string>(pid, "worker-name")
+                .Match(SuccessEff, _ => SuccessEff("worker"))
+                .Flatten();
+        
         /// <summary>
         /// Get the mailbox size for a Process.  Returns a default size if one
         /// hasn't been set in the config.
         /// </summary>
         [Pure]
         public static Aff<RT, int> getProcessMailboxSize(ProcessId pid) =>
-            from stg in getProcessSetting<int>(pid, "mailbox-size")
-            from res in stg.Match(
-                            Some: SuccessEff,
-                            None: () => ActorContextAff<RT>.LocalSystem.Map(sys => sys.Settings.Value.MaxMailboxSize))
-            select res;
+            getProcessSetting<int>(pid, "mailbox-size")
+                .Match(Succ: SuccessEff,
+                       Fail: _ => ActorContextAff<RT>.LocalSystem.Map(sys => sys.Settings.Value.MaxMailboxSize))
+                .Flatten();
 
         /// <summary>
         /// Get the flags for a Process.  Returns ProcessFlags.Default if none
@@ -1072,8 +1086,10 @@ namespace Echo
         /// </summary>
         [Pure]
         public static Aff<RT, ProcessFlags> getProcessFlags(ProcessId pid) =>
-            from res in getProcessSetting<ProcessFlags>(pid, "flags")
-            select res.IfNone(ProcessFlags.Default);
+            getProcessSetting<ProcessFlags>(pid, "flags")
+                .Match(Succ: SuccessEff,
+                       Fail: _ => SuccessEff(ProcessFlags.Default))
+                .Flatten();
 
         /// <summary>
         /// Get the strategy for a Process.  Returns Process.DefaultStrategy if one
@@ -1081,9 +1097,10 @@ namespace Echo
         /// </summary>
         [Pure]
         public static Aff<RT, State<StrategyContext, Unit>> getProcessStrategy(ProcessId pid) =>
-            from res in getProcessSetting< State<StrategyContext, Unit>>(pid, "strategy")
-            select res.IfNone(Process.DefaultStrategy);
-        
+            getProcessSetting< State<StrategyContext, Unit>>(pid, "strategy")
+                .Match(Succ: SuccessEff,
+                       Fail: _ => SuccessEff(Process.DefaultStrategy))
+                .Flatten();        
 
         const string deregError = @"
 When de-registering a Process, you should use its actual ProcessId, not its registered

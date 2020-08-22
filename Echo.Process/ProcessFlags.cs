@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Echo.Config;
 
 namespace Echo
 {
@@ -97,5 +98,11 @@ namespace Echo
 
         public static bool HasPublishRemote(this ProcessFlags flgs) =>
             (flgs & ProcessFlags.RemotePublish) == ProcessFlags.RemotePublish;
+
+        public static bool HasListenRemoteAndLocal(this ProcessFlags flgs) =>
+            (flgs & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal;
+
+        public static bool HasPersistInbox(this ProcessFlags flgs) =>
+            (flgs & ProcessFlags.PersistInbox) == ProcessFlags.PersistInbox;
     }
 }

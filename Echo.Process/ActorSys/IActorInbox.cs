@@ -5,7 +5,7 @@ namespace Echo
 {
     interface IActorInbox : IDisposable
     {
-        Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize);
+        Unit Startup(IActor process, ActorItem parent, bool cluster, int maxMailboxSize);
         Unit Pause();
         Unit Unpause();
         Unit Shutdown();

@@ -19,8 +19,9 @@ namespace Echo
     /// <summary>
     /// Represents the entire state of a single actor process
     /// </summary>
+    /// <typeparam name="RT">Runtime</typeparam>
     /// <typeparam name="S">State</typeparam>
-    /// <typeparam name="T">Message type</typeparam>
+    /// <typeparam name="A">Message type</typeparam>
     class Actor<RT, S, A> : IActor<RT> 
         where RT : struct, HasEcho<RT>
     {

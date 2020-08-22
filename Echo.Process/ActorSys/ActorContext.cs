@@ -14,10 +14,6 @@ namespace Echo
 {
     static class ActorContext
     {
-        //static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
-        //static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
-        //static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
-        
         readonly static Atom<SystemName> defaultSystem = Atom<SystemName>(default);
         readonly static Atom<Seq<ActorSystem>> systems = Atom(Seq<ActorSystem>());
         

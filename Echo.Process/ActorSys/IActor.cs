@@ -46,7 +46,7 @@ namespace Echo
         /// Link child
         /// </summary>
         /// <param name="pid">Child to link</param>
-        EffPure<Unit> LinkChild(ActorItem<RT> pid);
+        EffPure<Unit> LinkChild(ActorItem pid);
 
         /// <summary>
         /// Unlink child
@@ -139,9 +139,6 @@ namespace Echo
         Aff<RT, InboxDirective> ProcessTell { get; }
         Aff<RT, InboxDirective> ProcessAsk { get; }
         Aff<RT, InboxDirective> ProcessTerminated(ProcessId id);
-
-        Aff<RT, R> ProcessRequest<R>(ProcessId pid, object message);
-        Aff<RT, Unit> ProcessResponse(ActorResponse response);
 
         Aff<RT, Unit> DispatchWatch(ProcessId pid);
         Aff<RT, Unit> DispatchUnWatch(ProcessId pid);

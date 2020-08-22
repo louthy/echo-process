@@ -283,7 +283,7 @@ namespace Echo.Config
                       from result   in tover.IsSome
                                         ? addOrUpdateProcessOverride(key, propKey, tover.ValueUnsafe())
                                         : retreiveSettingGeneralFromMaps<A>(settingsMaps.Tail, key, name, prop)
-                      select result; 
+                      select result;
 
         [Pure]
         public static Aff<RT, Unit> postConnect =>
@@ -297,5 +297,12 @@ namespace Echo.Config
                                                                     SessionTimeoutCheck: ses,
                                                                     TransactionalIO:     tra)))
             select unit;
+
+        /// <summary>
+        /// Get the name to use to register the Process
+        /// </summary>
+        [Pure]
+        public static Aff<RT, ProcessName> getProcessRegisteredName(ProcessId pid) =>
+            getProcessSetting<ProcessName>(pid, "register-as", "value");        
     }
 }
