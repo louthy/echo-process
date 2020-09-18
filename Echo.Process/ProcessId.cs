@@ -386,7 +386,7 @@ namespace Echo
             value != null;
 
         [Pure]
-        public EffPure<Unit> AssertValid() =>
+        public Eff<Unit> AssertValid() =>
             IsValid
                 ? unitEff
                 : FailEff<Unit>(new InvalidProcessIdException());

@@ -37,14 +37,14 @@ namespace Echo
         static Subject<SystemName> shutdownSubj = new Subject<SystemName>();
         static Subject<ShutdownCancellationToken> preShutdownSubj = new Subject<ShutdownCancellationToken>();
 
-        internal static EffPure<Unit> onShutdown(SystemName system) =>
+        internal static Eff<Unit> onShutdown(SystemName system) =>
             Eff(() => {
                 shutdownSubj.OnNext(system);
                 shutdownSubj.OnCompleted();
                 return unit;
             });
 
-        internal static EffPure<Unit> onPreShutdown(ShutdownCancellationToken token) =>
+        internal static Eff<Unit> onPreShutdown(ShutdownCancellationToken token) =>
             Eff(() => {
                 preShutdownSubj.OnNext(token);
                 if (!token.Cancelled)

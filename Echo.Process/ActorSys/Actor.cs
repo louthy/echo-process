@@ -96,7 +96,7 @@ namespace Echo
                 select nwState1.With(State: nwState2, RemoteSubs: remSubs));
         
         [Pure]
-        public EffPure<Unit> NextState(S state) =>
+        public Eff<Unit> NextState(S state) =>
             ProcessEff.catchAndLogErr(Eff(() => { StateSubject.OnNext(state); return unit; }), unitEff);
 
 
@@ -181,7 +181,7 @@ namespace Echo
         /// Publish to the PublishStream
         /// </summary>
         [Pure]
-        public EffPure<Unit> Publish(object message) =>
+        public Eff<Unit> Publish(object message) =>
             ProcessEff.catchAndLogErr(Eff(fun(() => PublishSubject.OnNext(message))), unitEff);
         
         /// <summary>
@@ -189,14 +189,14 @@ namespace Echo
         /// </summary>
         /// <remarks>If one already exists then it is safely disposed</remarks>
         [Pure]
-        public EffPure<Unit> AddSubscription(ProcessId pid, IDisposable sub) =>
+        public Eff<Unit> AddSubscription(ProcessId pid, IDisposable sub) =>
             State.SwapEff(state => state.AddSubscription(pid, sub)).Bind(_ => unitEff); 
 
         /// <summary>
         /// Remove a subscription and safely dispose it 
         /// </summary>
         [Pure]
-        public EffPure<Unit> RemoveSubscription(ProcessId pid) =>
+        public Eff<Unit> RemoveSubscription(ProcessId pid) =>
             State.SwapEff(state => state.RemoveSubscription(pid)).Bind(_ => unitEff); 
 
         /// <summary>
@@ -204,21 +204,21 @@ namespace Echo
         /// </summary>
         /// <returns></returns>
         [Pure]
-        public EffPure<Unit> RemoveAllSubscriptions() =>
+        public Eff<Unit> RemoveAllSubscriptions() =>
             State.SwapEff(state => state.RemoveAllSubscriptions()).Bind(_ => unitEff);
 
         /// <summary>
         /// Disowns a child process
         /// </summary>
         [Pure]
-        public EffPure<Unit> UnlinkChild(ProcessId pid) =>
+        public Eff<Unit> UnlinkChild(ProcessId pid) =>
             State.SwapEff(state => SuccessEff(state.UnlinkChild(pid))).Bind(_ => unitEff);
 
         /// <summary>
         /// Gains a child process
         /// </summary>
         [Pure]
-        public EffPure<Unit> LinkChild(ActorItem item) =>
+        public Eff<Unit> LinkChild(ActorItem item) =>
             State.SwapEff(state => state.LinkChild(item)
                                         .Match(
                                             Some: SuccessEff, 
@@ -301,7 +301,7 @@ namespace Echo
             select unit;
 
         [Pure]
-        EffPure<Unit> DisposeState() =>
+        Eff<Unit> DisposeState() =>
             State.SwapEff(s => s.Dispose())
                  .Map(_ => unit);
         
@@ -337,7 +337,7 @@ namespace Echo
         /// Clear the strategy state, so it has 0 retries, back-off, etc.
         /// </summary>
         [Pure]
-        public EffPure<Unit> ResetStrategyState() =>
+        public Eff<Unit> ResetStrategyState() =>
             State.SwapEff(s => SuccessEff(s.ResetStrategyState()))
                  .Bind(_ => unitEff);
 
@@ -345,7 +345,7 @@ namespace Echo
         /// Update the strategy state
         /// </summary>
         [Pure]
-        public EffPure<Unit> SetStrategyState(StrategyState state) =>
+        public Eff<Unit> SetStrategyState(StrategyState state) =>
             State.SwapEff(s => SuccessEff(s.SetStrategyState(state)))
                  .Bind(_ => unitEff);
         

@@ -345,7 +345,7 @@ namespace Echo.Config
         }
 
         [Pure]
-        public SettingOverrides ApplyUpdates(SettingOverride update) =>
+        public SettingOverrides ApplyUpdate(SettingOverride update) =>
             new SettingOverrides(ApplyUpdate(Settings, update));
  
         static HashMap<string, HashMap<string, (object Value, long Timestamp)>> ApplyUpdate(

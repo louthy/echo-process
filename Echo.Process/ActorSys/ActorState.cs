@@ -68,7 +68,7 @@ namespace Echo
         /// </summary>
         /// <remarks>If one already exists then it is safely disposed</remarks>
         [Pure]
-        public EffPure<ActorState<S>> AddSubscription(ProcessId pid, IDisposable sub) =>
+        public Eff<ActorState<S>> AddSubscription(ProcessId pid, IDisposable sub) =>
             from self in RemoveSubscription(pid)
             select With(Subs: self.Subs.Add(pid.Path, sub));
 
@@ -76,12 +76,12 @@ namespace Echo
         /// Remove a subscription and safely dispose it 
         /// </summary>
         [Pure]
-        public EffPure<ActorState<S>> RemoveSubscription(ProcessId pid) =>
+        public Eff<ActorState<S>> RemoveSubscription(ProcessId pid) =>
             from _ in Subs.Values.Map(DisposeEff).Sequence()
             select With(Subs: Subs.Remove(pid.Path));
 
         [Pure]
-        static EffPure<Unit> DisposeEff(IDisposable d) =>
+        static Eff<Unit> DisposeEff(IDisposable d) =>
             Eff(() => { d.Dispose(); return unit; })
                 .Match(SuccessEff, ProcessEff.logErr)
                 .Flatten();
@@ -91,7 +91,7 @@ namespace Echo
         /// </summary>
         /// <returns></returns>
         [Pure]
-        public EffPure<ActorState<S>> RemoveAllSubscriptions() =>
+        public Eff<ActorState<S>> RemoveAllSubscriptions() =>
             from _ in Subs.Values.Map(DisposeEff).Sequence()
             select With(Subs: Empty);
 
@@ -124,19 +124,19 @@ namespace Echo
             With(StrategyState: state);
 
         [Pure]
-        public EffPure<ActorState<S>> Dispose() =>
+        public Eff<ActorState<S>> Dispose() =>
             from _1 in RemoveAllSubscriptions()
             from _2 in DisposeRemoteSubs()
             from _3 in DisposeState()
             select With(RemoteSubs: Empty, Subs: Empty, State: None);
 
         [Pure]
-        public EffPure<ActorState<S>> DisposeRemoteSubs() =>
+        public Eff<ActorState<S>> DisposeRemoteSubs() =>
             from _ in RemoteSubs.Map(DisposeEff).Sequence()
             select With(RemoteSubs: Empty);
 
         [Pure]
-        public EffPure<ActorState<S>> DisposeState() =>
+        public Eff<ActorState<S>> DisposeState() =>
             from _ in State.Bind(x => x is IDisposable dx ? Some(dx) : None)
                            .Map(DisposeEff)
                            .Sequence()

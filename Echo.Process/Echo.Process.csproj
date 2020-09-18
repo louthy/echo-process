@@ -52,13 +52,13 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="[3.5.12-beta,)" />
-    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.12-beta,)" />
+    <PackageReference Include="LanguageExt.Core" Version="[3.5.14-beta,)" />
+    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.14-beta,)" />
     <PackageReference Include="Newtonsoft.Json" Version="[10.0.2,)" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
     <PackageReference Include="System.Threading.Channels" Version="4.5.0" />
 
-    <PackageReference Include="LanguageExt.CodeGen" Version="[3.5.12-beta,)" PrivateAssets="all" />
+    <PackageReference Include="LanguageExt.CodeGen" Version="[3.5.14-beta,)" PrivateAssets="all" />
 
     <PackageReference Include="CodeGeneration.Roslyn.BuildTime" Version="0.6.1" PrivateAssets="all" />
 

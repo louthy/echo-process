@@ -319,7 +319,7 @@ namespace Echo
                 None: () => startNonClusterFromConfig<RT>(config))
             select r;
 
-        static EffPure<A> clusterSetting<A>(ProcessSystemConfig config, string name, EffPure<A> defaultValue)
+        static Eff<A> clusterSetting<A>(ProcessSystemConfig config, string name, Eff<A> defaultValue)
         {
             foreach (var settings in config.ClusterSettingsMaps)
             {

@@ -10,7 +10,7 @@ using System.Threading;
 
 namespace Echo
 {
-    class Ping : IDisposable
+    class Ping
     {
         static long Id;
         public readonly ActorSystem System;
@@ -18,7 +18,7 @@ namespace Echo
         public readonly IObservable<Resp> Responses;
         public readonly Subject<Resp> EarlyResponses = new Subject<Resp>();
 
-        public Ping(ActorSystem sender)
+        public Ping(SystemName system)
         {
             System = sender;
             Responses = System.Cluster.Match(
@@ -106,7 +106,7 @@ namespace Echo
                    });
         }
 
-        public void Dispose()
+        public Eff<Unit> Dispose()
         {
             System.Cluster.Iter(c => c.UnsubscribeChannel("ping-responses"));
             Requests.Dispose();

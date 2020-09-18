@@ -420,7 +420,7 @@ namespace Echo
         /// <summary>
         /// List of system names running on this node
         /// </summary>
-        public static EffPure<Seq<SystemName>> Systems =>
+        public static Eff<Seq<SystemName>> Systems =>
             ActorContext.SystemNames;
 
         /// <summary>

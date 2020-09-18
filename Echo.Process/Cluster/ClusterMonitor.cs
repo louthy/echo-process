@@ -36,11 +36,11 @@ namespace Echo
         public class State
         {
             public readonly HashMap<ProcessName, ClusterNode> Members;
-            public readonly IActorSystem System;
+            public readonly SystemName System;
 
-            public static State Empty(IActorSystem system) => new State(HashMap<ProcessName, ClusterNode>(), system);
+            public static State Empty(SystemName system) => new State(HashMap<ProcessName, ClusterNode>(), system);
 
-            public State(HashMap<ProcessName, ClusterNode> members, IActorSystem system)
+            public State(HashMap<ProcessName, ClusterNode> members, SystemName system)
             {
                 Members = members.Filter(node => node != null);
                 System = system;
@@ -58,7 +58,7 @@ namespace Echo
         /// <summary>
         /// Root Process setup
         /// </summary>
-        public static State Setup(IActorSystem system) =>
+        public static State Setup(SystemName system) =>
             Heartbeat(State.Empty(system), system.Cluster);
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace Echo
                 case MsgTag.Heartbeat:
                     try
                     {
-                        return Heartbeat(state, state.System.Cluster);
+                        return Heartbeat(state);
                     }
                     catch(Exception e)
                     {
@@ -95,7 +95,7 @@ namespace Echo
         /// <param name="state">Current state</param>
         /// <returns>Latest state from the cluster, or a map with just one item 'root'
         /// in it that represents this node.</returns>
-        static State Heartbeat(State state, Option<ICluster> cluster) =>
+        static State Heartbeat(State state) =>
             cluster.Map(
                 c =>
                 {

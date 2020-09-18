@@ -274,15 +274,15 @@ namespace Echo.Config
                       from propKey  in SuccessEff($"{name}@{prop}")
                       from settings in SuccessEff(settingsMaps.Head)
                       from tover    in SuccessEff(from opt1 in prop == "value"
-                                                      ? from tok in settings.Find(name)  
-                                                        from map in ProcessSystemConfig.mapTokenType<A>(tok, psc).Map(v => (A)v.Value)
-                                                        select map
-                                                      : settings.Find(name).Map(v => v.GetItem<A>(prop))
+                                                                  ? from tok in settings.Find(name)  
+                                                                    from map in ProcessSystemConfig.mapTokenType<A>(tok, psc).Map(v => (A)v.Value)
+                                                                    select map
+                                                                  : settings.Find(name).Map(v => v.GetItem<A>(prop))
                                                   from opt2 in opt1
                                                   select opt2)
                       from result   in tover.IsSome
-                                        ? addOrUpdateProcessOverride(key, propKey, tover.ValueUnsafe())
-                                        : retreiveSettingGeneralFromMaps<A>(settingsMaps.Tail, key, name, prop)
+                                           ? addOrUpdateProcessOverride(key, propKey, tover.ValueUnsafe())
+                                           : retreiveSettingGeneralFromMaps<A>(settingsMaps.Tail, key, name, prop)
                       select result;
 
         [Pure]

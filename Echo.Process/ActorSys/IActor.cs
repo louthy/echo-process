@@ -46,18 +46,18 @@ namespace Echo
         /// Link child
         /// </summary>
         /// <param name="pid">Child to link</param>
-        EffPure<Unit> LinkChild(ActorItem pid);
+        Eff<Unit> LinkChild(ActorItem pid);
 
         /// <summary>
         /// Unlink child
         /// </summary>
         /// <param name="pid">Child to unlink</param>
-        EffPure<Unit> UnlinkChild(ProcessId pid);
+        Eff<Unit> UnlinkChild(ProcessId pid);
 
         /// <summary>
         /// Publish to the PublishStream
         /// </summary>
-        EffPure<Unit> Publish(object message);
+        Eff<Unit> Publish(object message);
 
         /// <summary>
         /// Publish stream - for calls to Process.publish
@@ -73,28 +73,28 @@ namespace Echo
         /// Add a subscription
         /// </summary>
         /// <remarks>If one already exists then it is safely disposed</remarks>
-        EffPure<Unit> AddSubscription(ProcessId pid, IDisposable sub);
+        Eff<Unit> AddSubscription(ProcessId pid, IDisposable sub);
         
         /// <summary>
         /// Remove a subscription and safely dispose it 
         /// </summary>
-        EffPure<Unit> RemoveSubscription(ProcessId pid);
+        Eff<Unit> RemoveSubscription(ProcessId pid);
         
         /// <summary>
         /// Safely dispose and remove all subscriptions
         /// </summary>
         /// <returns></returns>
-        EffPure<Unit> RemoveAllSubscriptions();
+        Eff<Unit> RemoveAllSubscriptions();
 
         /// <summary>
         /// Clear the strategy state, so it has 0 retries, back-off, etc.
         /// </summary>
-        EffPure<Unit> ResetStrategyState();
+        Eff<Unit> ResetStrategyState();
         
         /// <summary>
         /// Update the strategy state
         /// </summary>
-        EffPure<Unit> SetStrategyState(StrategyState state);
+        Eff<Unit> SetStrategyState(StrategyState state);
 
         /// <summary>
         /// Current state for the strategy system

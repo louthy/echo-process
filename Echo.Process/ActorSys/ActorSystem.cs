@@ -10,8 +10,9 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using LanguageExt.Interfaces;
 using static LanguageExt.Prelude;
-using System.Collections.Generic;
+using G = System.Collections.Generic;
 using System.Diagnostics.Contracts;
+using System.Reactive.Concurrency;
 using System.Security.Cryptography;
 
 namespace Echo
@@ -20,13 +21,49 @@ namespace Echo
     {
         public static readonly WatchState Empty = new WatchState(default, default);
          
-        public readonly HashMap<ProcessId, LanguageExt.HashSet<ProcessId>> Watchers;
-        public readonly HashMap<ProcessId, LanguageExt.HashSet<ProcessId>> Watchings;
+        public readonly HashMap<ProcessId, HashSet<ProcessId>> Watchers;
+        public readonly HashMap<ProcessId, HashSet<ProcessId>> Watchings;
 
         WatchState(
-            HashMap<ProcessId, LanguageExt.HashSet<ProcessId>> watchers,
-            HashMap<ProcessId, LanguageExt.HashSet<ProcessId>> watchings) =>
+            HashMap<ProcessId, HashSet<ProcessId>> watchers,
+            HashMap<ProcessId, HashSet<ProcessId>> watchings) =>
             (Watchers, Watchings) = (watchers, watchings);
+
+        public WatchState AddWatcher(ProcessId watching, ProcessId watcher) =>
+            new WatchState(Watchers.AddOrUpdate(watching, Some: ws => ws.AddOrUpdate(watcher), None: () => Prelude.HashSet(watcher)), Watchings);
+
+        public WatchState AddWatching(ProcessId watcher, ProcessId watching) =>
+            new WatchState(Watchers, Watchings.AddOrUpdate(watcher, Some: ws => ws.AddOrUpdate(watching), None: () => Prelude.HashSet(watching)));
+
+        public WatchState RemoveWatcher(ProcessId watching, ProcessId watcher)
+        {
+            var idwatchers = Watchers.Find(watching)
+                                     .Match(Some: ws => ws.Remove(watcher), None: HashSet<ProcessId>());
+            
+            var watchers = idwatchers.IsEmpty
+                               ? Watchers.Remove(watching)
+                               : Watchers.SetItem(watching, idwatchers);
+            
+            return new WatchState(watchers, Watchings);
+        }
+
+        public WatchState RemoveWatcher(ProcessId watching) =>
+            new WatchState(Watchers.Remove(watching), Watchings);
+
+        public WatchState RemoveWatching(ProcessId watcher, ProcessId watching)
+        {
+            var idwatchings = Watchings.Find(watcher)
+                                       .Match(Some: ws => ws.Remove(watching), None: HashSet<ProcessId>());
+            
+            var watchings = idwatchings.IsEmpty
+                               ? Watchings.Remove(watcher)
+                               : Watchings.SetItem(watcher, idwatchings);
+            
+            return new WatchState(Watchers, watchings);
+        }
+        
+        public WatchState RemoveWatching(ProcessId watcher) =>
+            new WatchState(Watchers, Watchings.Remove(watcher));
     }
 
     /// <summary>
@@ -83,7 +120,6 @@ namespace Echo
         public readonly Atom<RegisteredState> Registered;
         public readonly Atom<ProcessSystemConfig> Settings;
         public readonly Atom<AppProfile> AppProfile;
-        public readonly ActorRequestContext UserContext;
         public readonly IDisposable StartupSubscription;
         public readonly ActorItem RootItem;
         public readonly bool Cluster;
@@ -94,14 +130,15 @@ namespace Echo
         
         // TODO: Below not yet constructed
         
-        public ILocalActorInbox LocalRoot => (ILocalActorInbox)rootItem.Inbox;
-        public IActorInbox RootInbox => rootItem.Inbox;
-        public ProcessId Root { get; }
-        public ProcessId User { get; }
-        public ProcessId Errors { get; }
-        public ProcessId Scheduler { get; }
-        public ProcessId DeadLetters { get; }
-        public ProcessId Disp { get; }
+        public ILocalActorInbox LocalRoot => (ILocalActorInbox)RootItem.Inbox;
+        public IActorInbox RootInbox => RootItem.Inbox;
+
+        public readonly ProcessId Root;
+        public readonly ProcessId User;
+        public readonly ProcessId Errors;
+        public readonly ProcessId Scheduler;
+        public readonly ProcessId DeadLetters;
+        public readonly ProcessId Disp;
         public readonly ProcessId RootJS;
         public readonly ProcessId System;
         private readonly ProcessName NodeName;
@@ -109,7 +146,6 @@ namespace Echo
 
         public SystemName Name => SystemName;
         public SessionManager Sessions => SessionManager;
-        
 
         public ActorSystem(
             Atom<ClusterMonitor.State> clusterState, 
@@ -117,21 +153,30 @@ namespace Echo
             Atom<RegisteredState> registered, 
             Atom<ProcessSystemConfig> settings, 
             Atom<AppProfile> appProfile, 
-            ActorRequestContext userContext, 
             IDisposable startupSubscription, 
             ActorItem rootItem, 
             bool cluster,
             long startupTimestamp, 
             SessionManager sessionManager, 
             Ping ping, 
-            SystemName systemName)
+            SystemName systemName,
+            ProcessName nodeName)
         {
+            Root        = ProcessId.Top[systemName.Value];
+            RootJS      = Root["js"];
+            User        = Root[ActorSystemConfig.Default.UserProcessName];
+            System      = Root[ActorSystemConfig.Default.SystemProcessName];
+            DeadLetters = System[ActorSystemConfig.Default.DeadLettersProcessName];
+            Errors      = System[ActorSystemConfig.Default.ErrorsProcessName];
+            Scheduler   = System[ActorSystemConfig.Default.SchedulerName];
+            AskId       = System[ActorSystemConfig.Default.AskProcessName];
+            NodeName    = nodeName; //cluster.Map(c => c.NodeName).IfNone("user");
+            
             ClusterState = clusterState;
             Watch = watch;
             Registered = registered;
             Settings = settings;
             AppProfile = appProfile;
-            UserContext = userContext;
             StartupSubscription = startupSubscription;
             RootItem = rootItem;
             Cluster = cluster;
@@ -141,32 +186,70 @@ namespace Echo
             SystemName = systemName;
         }
 
-        public EffPure<Unit> UpdateSettings(ProcessSystemConfig settings, AppProfile profile) =>
+        public ActorSystem With(ActorItem RootItem = null,
+            SessionManager SessionManager = null,
+            Ping Ping = null) =>
+            new ActorSystem(
+                ClusterState,
+                Watch,
+                Registered,
+                Settings,
+                AppProfile,
+                StartupSubscription,
+                RootItem ?? this.RootItem,
+                this.Cluster,
+                StartupTimestamp,
+                SessionManager ?? this.SessionManager,
+                Ping ?? this.Ping,
+                SystemName);
+
+        public Eff<Unit> UpdateSettings(ProcessSystemConfig settings, AppProfile profile) =>
             from _1 in Settings.SwapEff(_ => SuccessEff(settings))
             from _2 in AppProfile.SwapEff(_ => SuccessEff(profile))
             select unit;
 
-        public EffPure<Unit> ApplyUpdate(SettingOverride update) =>
+        public Eff<Unit> ApplyUpdate(SettingOverride update) =>
             from _ in swapEff(Settings, s => SuccessEff(s.With(SettingOverrides: s.SettingOverrides.ApplyUpdate(update))))
             select unit;
 
-        public EffPure<Unit> ApplyUpdates(SettingOverrideUpdates updates) =>
+        public Eff<Unit> ApplyUpdates(SettingOverrideUpdates updates) =>
             from _ in swapEff(Settings, s => SuccessEff(s.With(SettingOverrides: s.SettingOverrides.ApplyUpdates(updates))))
             select unit;
 
-        public EffPure<Unit> ApplyUpdates<A>(Option<SettingOverrideUpdates> ma) =>
+        public Eff<Unit> ApplyUpdates<A>(Option<SettingOverrideUpdates> ma) =>
             ma.Match(
                 Some: ApplyUpdates,
                 None: () => unitEff);
 
-        public EffPure<RegisteredState> RemoveLocalRegisteredByName(ProcessName name) =>
+        public Eff<RegisteredState> RemoveLocalRegisteredByName(ProcessName name) =>
             swapEff(Registered, s => SuccessEff(s.RemoveLocalRegisteredByName(name)));
 
-        public EffPure<RegisteredState> RemoveLocalRegisteredById(ProcessId pid) =>
+        public Eff<RegisteredState> RemoveLocalRegisteredById(ProcessId pid) =>
             swapEff(Registered, s => SuccessEff(s.RemoveLocalRegisteredById(pid)));
 
-        public EffPure<RegisteredState> AddLocalRegistered(ProcessName name, ProcessId pid) =>
+        public Eff<RegisteredState> AddLocalRegistered(ProcessName name, ProcessId pid) =>
             swapEff(Registered, s => SuccessEff(s.AddLocalRegistered(name, pid, SystemName)));
+
+        public Eff<WatchState> ProcessTerminated(ProcessId terminating) =>
+            Watch.SwapEff(ws => SuccessEff(ws.RemoveWatcher(terminating).RemoveWatching(terminating)));
+
+        public Eff<Unit> AddWatcher(ProcessId watcher, ProcessId watching) =>
+            Watch.SwapEff(ws => SuccessEff(ws.AddWatcher(watching, watcher).AddWatching(watcher, watching)))
+                 .Map(_ => unit);
+        
+        public Eff<Unit> RemoveWatcher(ProcessId watcher, ProcessId watching) =>
+            Watch.SwapEff(ws => SuccessEff(ws.RemoveWatcher(watching, watcher).RemoveWatching(watcher, watching)))
+                 .Map(_ => unit);
+
+        public Aff<RT, Unit> Dispose<RT>() where RT : struct, HasEcho<RT> =>
+            from _1 in Ping.Dispose()
+            from _2 in Eff(() => { StartupSubscription.Dispose(); return unit; })
+            from _3 in RootItem.Actor.Children.Values
+                               .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
+                               .Map(c => ActorSystemAff<RT>.withContext(c, ActorAff<RT>.shutdownProcess(true)))
+                               .SequenceSerial()
+            from _4 in Cluster ? Echo.Cluster.disconnect<RT>() : SuccessEff(true)
+            select unit;
     }
 
     static class ActorSystemAff<RT> 
@@ -175,16 +258,6 @@ namespace Echo
         const string ClusterOnlineKey = "cluster-node-online";
 
         public static Func<S, Aff<RT, Unit>> NoShutdown<S>() => (S s) => SuccessAff(unit);
-
-        /*enum DisposeState
-        {
-            Active,
-            Disposing,
-            Disposed
-        }
-
-        DisposeState disposeState;*/
-
 
         public static Aff<RT, ActorSystem> Init<RT>(SystemName systemName, bool cluster, AppProfile appProfile, ProcessSystemConfig settings) 
             where RT : struct, HasCancel<RT>
@@ -264,319 +337,217 @@ namespace Echo
             public long Timestamp;
         }
 
-        IDisposable NotifyCluster(Option<ICluster> cluster, long timestamp) =>
-            cluster.Map(c =>
-            {
-                c.PublishToChannel(ClusterOnlineKey, new ClusterOnline { Name = c.NodeName.Value, Timestamp = timestamp });
-                return c.SubscribeToChannel<ClusterOnline>(ClusterOnlineKey)
-                        .Where(node => node.Name == c.NodeName.Value && node.Timestamp > timestamp)
-                        .Take(1)
-                        .Subscribe(_ => shutdownAll()); // Protects against multiple nodes with the same name running
-            })
-           .IfNone(() => Observable.Return(new ClusterOnline()).Take(1).Subscribe());
+        /// <summary>
+        /// Sends an notification to the cluster that we're coming online, also watches out for other services coming
+        /// online with the same node-name.  If so, we shutdown.
+        /// </summary>
+        /// <param name="cluster"></param>
+        /// <param name="system"></param>
+        /// <param name="timestamp"></param>
+        /// <returns></returns>
+        public static Aff<RT, IDisposable> notifyCluster(bool cluster, SystemName system, long timestamp) =>
+            cluster
+                ? SuccessEff(Observable.Return(new ClusterOnline()).Take(1).Subscribe())
+                : from _ in Cluster.publishToChannel<RT, ClusterOnline>(ClusterOnlineKey, new ClusterOnline { Name = system.Value, Timestamp = timestamp })
+                  from s in Cluster.subscribeToChannel<RT, ClusterOnline>(ClusterOnlineKey)
+                  from d in watchForNodesWithSameName(system, timestamp, s)  
+                  select d;
 
-        public ClusterMonitor.State ClusterState =>
-            clusterState;
+        /// <summary>
+        /// Protects against multiple nodes with the same name running
+        /// </summary>
+        static Eff<RT, IDisposable> watchForNodesWithSameName(SystemName system, long timestamp, IObservable<ClusterOnline> obs) =>
+            from e in runtime<RT>()
+            select obs.Where(node => node.Name == system.Value && node.Timestamp > timestamp)
+                      .Take(1)
+                      .SelectMany(async _ => await (from _1 in ProcessEff.logErr($"Another node has come online with the same node-name ({system}), shutting down")
+                                                    from _2 in ProcessAff<RT>.shutdownSystem(system)
+                                                    select unit).RunIO(e).ConfigureAwait(false))
+                      .ObserveOn(TaskPoolScheduler.Default)
+                      .Subscribe(_ => { });
+        
+        [Pure]
+        public static Eff<RT, ClusterMonitor.State> ClusterState =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            select sys.ClusterState.Value;
 
-        void ClusterWatch(Option<ICluster> cluster)
-        {
-            var monitor = System[ActorSystemConfig.Default.MonitorProcessName];
+        [Pure]
+        static Aff<RT, Unit> clusterWatch =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from res in sys.Cluster
+                            ? from cfg in ActorContextAff<RT>.GlobalSettings
+                              from mon in SuccessEff(sys.System[ActorSystemConfig.Default.MonitorProcessName])
+                              from __1 in clusterNodeOnlineWatcher
+                              from __2 in clusterNodeOfflineWatcher
+                              from __3 in clusterStateWatcher
+                              select unit
+                            : unitEff
+            select res;
 
-            cluster.IfSome(c =>
-            {
-                observe<NodeOnline>(monitor).Subscribe(x =>
-                {
-                    logInfo("Online: " + x.Name);
-                });
+        [Pure]
+        static Aff<RT, IDisposable> clusterNodeOnlineWatcher =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from mon in SuccessEff(sys.System[ActorSystemConfig.Default.MonitorProcessName])
+            from dis in observe<NodeOnline>(mon).Map(s => s.Subscribe(x => Process.logInfo("Online: " + x.Name)))
+            select dis;
+ 
+        [Pure]
+        static Aff<RT, IDisposable> clusterNodeOfflineWatcher =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from mon in SuccessEff(sys.System[ActorSystemConfig.Default.MonitorProcessName])
+            from env in runtime<RT>()
+            from dis in observe<NodeOffline>(mon)
+                            .Map(s => s.SelectMany(async x => await removeWatchingOfRemote(x.Name)
+                                                                        .Map(_ => x)
+                                                                        .RunIO(env)
+                                                                        .ConfigureAwait(false))
+                                       .Where(x => x.IsSucc)
+                                       .Select(x => x.IfFail(_ => default(NodeOffline)))
+                                       .Subscribe(x => Process.logInfo("Offline: " + x.Name)))
+            select dis;
 
-                observe<NodeOffline>(monitor).Subscribe(x =>
-                {
-                    logInfo("Offline: " + x.Name);
-                    RemoveWatchingOfRemote(x.Name);
-                });
+        [Pure]
+        static Aff<RT, IDisposable> clusterStateWatcher =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from mon in SuccessEff(sys.System[ActorSystemConfig.Default.MonitorProcessName])
+            from dis in observeState<ClusterMonitor.State>(mon).Map(s => s.Subscribe(x => sys.ClusterState.Swap(_ => x)))
+            select dis;
 
-                observeState<ClusterMonitor.State>(monitor).Subscribe(x =>
-                {
-                    clusterState = x;
-                });
-            });
+        [Pure]
+        static Aff<RT, Unit> schedulerStart =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from res in sys.Cluster
+                            ? from cfg in ActorContextAff<RT>.GlobalSettings
+                              from pid in SuccessEff(sys.System[cfg.SchedulerName])
+                              from ___ in tell(pid,  Echo.Scheduler.Msg.Check, Schedule.Immediate, sys.User)
+                              select unit
+                            : unitEff
+            select res;
 
-            Tell(monitor, new ClusterMonitor.Msg(ClusterMonitor.MsgTag.Heartbeat), Schedule.Immediate, User);
-        }
+        [Pure]
+        static Aff<RT, Unit> removeWatchingOfRemote(ProcessName node) =>
+            ActorContextAff<RT>.localSystem(new SystemName(node.Value),
+                from lsys in ActorContextAff<RT>.LocalSystem
+                from root in SuccessEff(ProcessId.Top[node])
+                from wats in SuccessEff(lsys.Watch.Value.Watchings.Keys.Filter(w => w.Take(1) == root))
+                from ____ in wats.Map(remoteDispatchTerminate).SequenceParallel()
+                select unit);
 
-        void SchedulerStart(Option<ICluster> cluster)
-        {
-            var pid = System[ActorSystemConfig.Default.SchedulerName];
-            cluster.IfSome(c => Tell(pid, Echo.Scheduler.Msg.Check, Schedule.Immediate, User));
-        }
+        [Pure]
+        public static Aff<RT, Unit> remoteDispatchTerminate(ProcessId terminating) =>
+            ActorContextAff<RT>.localSystem(terminating,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from trm in SuccessEff(new TerminatedMessage(terminating))
+                from ws  in sys.Watch.Value.Watchings.Find(terminating).Match(SuccessEff, SuccessEff(HashSet<ProcessId>()))
+                from __1 in ws.Map(w => ProcessAff<RT>.catchAndLogErr(tellUserControl(w, trm), unitEff)).SequenceParallel()
+                from __2 in sys.ProcessTerminated(terminating)
+                select unit);
 
-        public Aff<RT, Unit> Dispose<RT>() where RT : struct, HasEcho<RT>
-        {
-            if (disposeState != DisposeState.Active) return;
-            lock (sync)
-            {
-                if (disposeState != DisposeState.Active) return;
-                disposeState = DisposeState.Disposing;
+        [Pure]
+        public static Eff<RT, Unit> addWatcher(ProcessId watcher, ProcessId watching) =>
+            ActorContextAff<RT>.localSystem(watcher,
+                from sys in ActorContextAff<RT>.LocalSystem 
+                from __1 in sys.AddWatcher(watcher, watching)
+                from __2 in ProcessEff.logInfo(watcher + " is watching " + watching)
+                select unit); 
+        
+        [Pure]
+        public static Eff<RT, Unit> removeWatcher(ProcessId watcher, ProcessId watching) =>
+            ActorContextAff<RT>.localSystem(watcher,
+                from sys in ActorContextAff<RT>.LocalSystem 
+                from __1 in sys.RemoveWatcher(watcher, watching)
+                from __2 in ProcessEff.logInfo(watcher + " is watching " + watching)
+                select unit); 
 
-                if (rootItem != null)
-                {
-                    try
-                    {
-                        Ping.Dispose();
-                    }
-                    catch (Exception e)
-                    {
-                        logErr(e);
-                    }
-                    try
-                    {
-                        startupSubscription?.Dispose();
-                        startupSubscription = null;
-                    }
-                    catch (Exception e)
-                    {
-                        logErr(e);
-                    }
-                    try
-                    {
-                        rootItem.Actor.Children.Values
-                            .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
-                            .Iter(c => c.Actor.ShutdownProcess(true));
-                    }
-                    catch(Exception e)
-                    {
-                        logErr(e);
-                    }
-                    cluster.IfSome(c => c?.Dispose());
-                }
-                rootItem = null;
-                disposeState = DisposeState.Disposed;
-            }
-        }
+        [Pure]
+        public static Aff<RT, Unit> dispatchTerminate(ProcessId terminating) =>
+            ActorContextAff<RT>.localSystem(terminating,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from was in sys.Watch.Value.Watchers.Find(terminating).Match(
+                                Some: SuccessEff,
+                                None: FailEff<LanguageExt.HashSet<ProcessId>>(Error.New($"Watcher not found: {terminating}")))
+                from trm in SuccessEff(new TerminatedMessage(terminating))
+                from __1 in was.Map(w => ProcessAff<RT>.catchAndLogErr(tellUserControl(w, trm).Map(_ => unit), unitEff))
+                               .SequenceParallel()
+                from __2 in sys.Watch.Value.Watchings
+                              .Find(terminating)
+                              .Map(ws => ws.Map(w => from d in ActorSystemAff<RT>.getDispatcher(w)
+                                                     from _ in d.UnWatch<RT>(terminating)
+                                                     select unit)
+                                            .SequenceParallel())
+                              .Sequence()
+                from __3 in sys.ProcessTerminated(terminating)
+                select unit);
 
-        private Unit RemoveWatchingOfRemote(ProcessName node)
-        {
-            var root = ProcessId.Top[node];
+        [Pure]
+        public static Aff<RT, Seq<A>> askMany<A>(Seq<ProcessId> pids, object message, ProcessId sender) =>
+            pids.Map(pid => ask<A>(pid, message, sender)).SequenceParallel();
 
-            foreach (var watching in watchings)
-            {
-                if (watching.Key.Take(1) == root)
-                {
-                    RemoteDispatchTerminate(watching.Key);
-                }
-            }
-            return unit;
-        }
+        [Pure]
+        public static Aff<RT, A> ask<A>(ProcessId pid, object message, ProcessId sender) =>
+            ask(pid, message, typeof(A), sender).Map(obj => (A)obj);
 
-        public static Eff<RT, Unit> addWatcher(ProcessId watcher, ProcessId watching)
-        {
-            logInfo(watcher + " is watching " + watching);
-
-            lock (sync)
-            {
-                watchers = watchers.AddOrUpdate(watching,
-                    Some: set => set.AddOrUpdate(watcher),
-                    None: () => Set(watcher)
-                );
-
-                watchings = watchings.AddOrUpdate(watcher,
-                    Some: set => set.AddOrUpdate(watching),
-                    None: () => Set(watching)
-                );
-            }
-            return unit;
-        }
-
-        public static Eff<RT, Unit> removeWatcher(ProcessId watcher, ProcessId watching)
-        {
-            logInfo(watcher + " stopped watching " + watching);
-
-            lock (sync)
-            {
-                watchers = watchers.AddOrUpdate(watching,
-                    Some: set => set.Remove(watcher),
-                    None: () => Set<ProcessId>()
-                );
-
-                if (watchers[watching].IsEmpty)
-                {
-                    watchers = watchers.Remove(watching);
-                }
-
-                watchings = watchings.AddOrUpdate(watcher,
-                    Some: set => set.Remove(watching),
-                    None: () => Set<ProcessId>()
-                );
-
-                if (watchings[watcher].IsEmpty)
-                {
-                    watchers = watchers.Remove(watcher);
-                }
-
-            }
-            return unit;
-        }
-
-        public Unit RemoteDispatchTerminate(ProcessId terminating)
-        {
-            watchings.Find(terminating).IfSome(ws =>
-            {
-                var term = new TerminatedMessage(terminating);
-                ws.Iter(w =>
-                {
-                    try
-                    {
-                        TellUserControl(w, term);
-                    }
-                    catch (Exception e)
-                    {
-                        logErr(e);
-                    }
-                });
-            });
-            watchings.Remove(terminating);
-            watchers = watchers.Remove(terminating);
-
-            return unit;
-        }
-
-        public static Aff<RT, Unit> dispatchTerminate(ProcessId terminating)
-        {
-            watchers.Find(terminating).IfSome(ws =>
-            {
-                var term = new TerminatedMessage(terminating);
-                ws.Iter(w =>
-                {
-                    try
-                    {
-                        TellUserControl(w, term);
-                    }
-                    catch (Exception e)
-                    {
-                        logErr(e);
-                    }
-                });
-            });
-
-            watchers = watchers.Remove(terminating);
-
-            watchings.Find(terminating).IfSome(ws => ws.Iter(w => GetDispatcher(w).UnWatch(terminating)));
-            watchings.Remove(terminating);
-
-            return unit;
-        }
-
-        public Option<ICluster> Cluster =>
-            cluster;
-
-        public IEnumerable<T> AskMany<T>(IEnumerable<ProcessId> pids, object message, int take)
-        {
-            take = Math.Min(take, pids.Count());
-
-            var responses = new List<AskActorRes>();
-            using (var handle = new CountdownEvent(take))
-            {
-                foreach (var pid in pids)
-                {
-                    var req = new AskActorReq(
-                        message,
-                        res =>
-                        {
-                            responses.Add(res);
-                            handle.Signal();
-                        },
-                        pid.SetSystem(SystemName),
-                        Self,
-                        typeof(T));
-                    tell(AskId, req);
-                }
-
-                handle.Wait(ActorContext.System(pids.Head()).Settings.Timeout);
-            }
-            return responses.Where(r => !r.IsFaulted).Map(r => (T)r.Response);
-        }
-
-        public T Ask<T>(ProcessId pid, object message, ProcessId sender) =>
-            (T)Ask(pid, message, typeof(T), sender);
-
-        public object Ask(ProcessId pid, object message, Type returnType, ProcessId sender)
-        {
-            if (false) //Process.InMessageLoop)
-            {
-                //return SelfProcess.Actor.ProcessRequest<T>(pid, message);
-            }
-            else
-            {
-                var sessionId = ActorContext.SessionId;
-                AskActorRes response = null;
+        [Pure]
+        static Aff<RT, A> waitHandle<A>(Func<AutoResetEvent, Aff<RT, A>> f) =>
+            AffMaybe<RT, A>(async env => {
                 using (var handle = new AutoResetEvent(false))
                 {
-                    var req = new AskActorReq(
-                        message,
-                        res => {
-                            response = res;
-                            handle.Set();
-                        },
-                        pid,
-                        sender,
-                        returnType
-                    );
-
-                    var askItem = GetAskItem();
-
-                    askItem.IfSome(
-                        ask =>
-                        {
-                            var inbox = ask.Inbox as ILocalActorInbox;
-                            inbox.Tell(req, sender, sessionId);
-                            handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
-                        });
-
-                    if (askItem)
-                    {
-                        if (response == null)
-                        {
-                            throw new TimeoutException("Request timed out");
-                        }
-                        else
-                        {
-                            if (response.IsFaulted)
-                            {
-                                throw response.Exception;
-                            }
-                            else
-                            {
-                                return response.Response;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        throw new Exception("Ask process doesn't exist");
-                    }
+                    return await f(handle).RunIO(env);
                 }
-            }
-        }
+            });
 
+        [Pure]
+        static Eff<Unit> waitOne(AutoResetEvent handle, TimeSpan timeout) =>
+            Eff(() => {
+                handle.WaitOne(timeout);
+                return unit;
+            });
+
+        [Pure]
+        public static Aff<RT, object> ask(ProcessId pid, object message, Type returnType, ProcessId sender) =>
+            ActorContextAff<RT>.localSystem(pid,
+                from atm in SuccessEff(Atom<AskActorRes>(null))
+                from sid in ActorContextAff<RT>.SessionId
+                from res in waitHandle<object>(handle => 
+                    from req in SuccessEff(new AskActorReq(
+                                               message,
+                                               res => { atm.Swap(_ => res); handle.Set(); },
+                                               pid,
+                                               sender,
+                                               returnType))
+                    from aks in AskItem.Map(ai => ai.Inbox as ILocalActorInbox)
+                    from __1 in aks.Tell<RT>(req, sender, sid)
+                    from tim in ActorContextAff<RT>.LocalSettings.Map(s => s.Timeout)
+                    from __2 in waitOne(handle, tim)
+                    from rsp in atm.Value == null   ? throw new TimeoutException("Request timed out")
+                              : atm.Value.IsFaulted ? FailEff<object>(atm.Value.Exception)  
+                              : SuccessEff(atm.Value.Response)
+                    select rsp)
+                select res);
+
+        [Pure]
         public static Eff<RT, ProcessName> RootProcessName =>
             ProcessAff<RT>.Root.Map(r => r.Name);
 
+        [Pure]
         public static Eff<RT, Unit> updateSettings(ProcessSystemConfig settings, AppProfile profile) =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from res in sys.UpdateSettings(settings, profile)
-            select res;
+            ActorContextAff<RT>.localSystem(settings.SystemName,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in sys.UpdateSettings(settings, profile)
+                select res);
 
-        public static Aff<RT, ProcessId> actorCreate<S, T>(
+        [Pure]
+        public static Aff<RT, ProcessId> actorCreate<S, A>(
             ActorItem parent,
             ProcessName name,
-            Func<T, Aff<RT, S>> actorFn,
+            Func<A, Aff<RT, S>> actorFn,
             Func<S, Aff<RT, Unit>> shutdownFn,
             Func<S, ProcessId, Aff<RT, S>> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy) =>
-                actorCreate<S, T>(
+                actorCreate<S, A>(
                     parent, 
                     name, 
                     (s, t) => Eff(() => { actorFn(t); return default(S); }), 
@@ -588,6 +559,7 @@ namespace Echo
                     maxMailboxSize, 
                     lazy);
 
+        [Pure]
         public static Aff<RT, ProcessId> actorCreate<S, A>(
             ActorItem parent,
             ProcessName name,
@@ -610,6 +582,7 @@ namespace Echo
                     maxMailboxSize, 
                     lazy);
 
+        [Pure]
         public static Aff<RT, ProcessId> actorCreate<S, A>(
             ActorItem parent,
             ProcessName name,
@@ -622,9 +595,9 @@ namespace Echo
             int maxMailboxSize,
             bool lazy) =>
                 actorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
-        
-        public static Aff<RT, ProcessId> actorCreate<S, A>(
-            ActorItem parent,
+
+        [Pure]
+        public static Aff<RT, ProcessId> actorCreate<S, A>(ActorItem parent,
             ProcessName name,
             Func<S, A, Aff<RT, S>> actorFn,
             Func<IActor, Aff<RT, S>> setupFn,
@@ -634,36 +607,48 @@ namespace Echo
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy) =>
+            ActorContextAff<RT>.localSystem(
+                parent.Actor.Id,
+
                 from sys in ActorContextAff<RT>.LocalSystem
+
+                // Create the actor
                 from act in ActorAff<RT>.create<S, A>(
-                    sys.Cluster,
-                    parent, 
-                    name, 
-                    actorFn, 
-                    setupFn, 
-                    shutdownFn ?? NoShutdown<S>(), 
-                    termFn, 
-                    strategy, 
+                    sys.Cluster, // hello
+                    parent,      // world
+                    name,
+                    actorFn,
+                    setupFn,
+                    shutdownFn ?? NoShutdown<S>(),
+                    termFn,
+                    strategy,
                     flags)
-                from ibx in SuccessEff(sys.Cluster && act.Flags.HasListenRemoteAndLocal() ? new ActorInboxDual<S, A>() as IActorInbox
-                                     : sys.Cluster && act.Flags.HasPersistInbox()         ? new ActorInboxRemote<S, A>() as IActorInbox
+
+                // Create the inbox
+                from ibx in SuccessEff(sys.Cluster && act.Flags.HasListenRemoteAndLocal() ? new ActorInboxDual<S, A>()
+                                     : sys.Cluster && act.Flags.HasPersistInbox()         ? new ActorInboxRemote<S, A>()
                                      : new ActorInboxLocal<S, A>() as IActorInbox)
+
+                // Package in an ActorItem
                 from itm in SuccessEff(new ActorItem(act, ibx, act.Flags))
 
-                from res in  (from __1 in parent.Actor.LinkChild(itm)
-                              from __2 in actorRegister(act)
-                              from __3 in SuccessEff(ibx.Startup(act, parent, sys.Cluster, maxMailboxSize))
-                              from __4 in lazy
+                // Hook up the actor to its parent, register it, and start it
+                from res in (from __1 in parent.Actor.LinkChild(itm)
+                             from __2 in actorRegister(act)
+                             from __3 in SuccessEff(ibx.Startup(act, parent, sys.Cluster, maxMailboxSize))
+                             from __4 in lazy
                                              ? unitEff
                                              : ActorSystemAff<RT>.tellSystem(act.Id, SystemMessage.StartupProcess(false))
-                              select act.Id)
-                             .Match(SuccessEff, e => from _ in act.WithRuntime<RT>().Shutdown(false)
-                                                     from r in FailEff<ProcessId>(e)
-                                                     select r)
-                             .Flatten()
-                select res;
+                             select act.Id)
+                           .Match(SuccessEff, e => from _ in act.WithRuntime<RT>().Shutdown(false)
+                                                   from r in FailEff<ProcessId>(e)
+                                                   select r)
+                           .Flatten()
+                select res);
 
-
+        /// <summary>
+        /// Register an actor with its registered name from the conf file settings
+        /// </summary>
         static Aff<RT, Unit> actorRegister(IActor act) =>
             ProcessSystemConfigAff<RT>.getProcessRegisteredName(act.Id)
                 .Match(
@@ -731,49 +716,53 @@ namespace Echo
 
         [Pure]
         public static Aff<RT, ProcessId> register(ProcessName name, ProcessId pid) =>
-            from _   in pid.AssertValid()
-            from sys in ActorContextAff<RT>.LocalSystem 
-            from res in sys.Cluster
-                            ? from disp in getDispatcher(pid)
-                              from loca in disp.IsLocal<RT>()
-                              from res2 in isLocal(pid, sys) && loca
-                                               ? addLocalRegistered(name, pid.SetSystem(sys.SystemName))
-                                               :            // TODO - Make this transactional
-                                                 from _1 in Echo.Cluster.setAddOrUpdate<RT, string>(ProcessId.Top["__registered"][name].Path, pid.Path)
-                                                 from _2 in Echo.Cluster.setAddOrUpdate<RT, string>(pid.Path + "-registered", name.Value)
-                                                 select unit
-                              select unit
-                            : addLocalRegistered(name, pid)
-            select sys.Disp["reg"][name];
+            ActorContextAff<RT>.localSystem(pid,
+                from _   in pid.AssertValid()
+                from sys in ActorContextAff<RT>.LocalSystem 
+                from res in sys.Cluster
+                                ? from disp in getDispatcher(pid)
+                                  from loca in disp.IsLocal<RT>()
+                                  from res2 in isLocal(pid, sys) && loca
+                                                   ? addLocalRegistered(name, pid.SetSystem(sys.SystemName))
+                                                   :            // TODO - Make this transactional
+                                                     from _1 in Echo.Cluster.setAddOrUpdate<RT, string>(ProcessId.Top["__registered"][name].Path, pid.Path)
+                                                     from _2 in Echo.Cluster.setAddOrUpdate<RT, string>(pid.Path + "-registered", name.Value)
+                                                     select unit
+                                  select unit
+                                : addLocalRegistered(name, pid)
+                select sys.Disp["reg"][name]);
 
         [Pure]
         public static Aff<RT, Unit> addLocalRegistered(ProcessName name, ProcessId pid) =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from res in sys.AddLocalRegistered(name, pid)
-            select unit;
+            ActorContextAff<RT>.localSystem(pid,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in sys.AddLocalRegistered(name, pid)
+                select unit);
 
         [Pure]
         public static Aff<RT, Unit> deregisterByName(ProcessName name) =>
             from sys in ActorContextAff<RT>.LocalSystem
             from res in sys.Cluster
-                ? from _1      in removeLocalRegisteredByName(name)
-                  from regpath in SuccessEff((ProcessId.Top["__registered"][name]).Path)
-                               // TODO - Make this transactional
-                  from pids    in Echo.Cluster.getSet<RT, string>(regpath)
-                  from _2      in pids.Map(pid => Echo.Cluster.setRemove<RT, string>($"{pid}-registered", name.Value)).SequenceSerial()
-                  from _3      in Echo.Cluster.delete<RT>(regpath)
-                  select unit
-                : removeLocalRegisteredByName(name)
+                            ? from _1      in removeLocalRegisteredByName(name)
+                              from regpath in SuccessEff((ProcessId.Top["__registered"][name]).Path)
+
+                              // TODO - Make this transactional
+                              from pids    in Echo.Cluster.getSet<RT, string>(regpath)
+                              from _2      in pids.Map(pid => Echo.Cluster.setRemove<RT, string>($"{pid}-registered", name.Value)).SequenceSerial()
+                              from _3      in Echo.Cluster.delete<RT>(regpath)
+                              select unit
+                            : removeLocalRegisteredByName(name)
             select unit;
         
         [Pure]
         public static Aff<RT, Unit> deregisterById(ProcessId pid) =>
-            from ___ in pid.AssertValid()
-            from sys in ActorContextAff<RT>.LocalSystem
-            from res in pid.Take(2) == sys.Disp["reg"]
-                            ? FailEff<Unit>(new InvalidProcessIdException(deregError))
-                            : deregisterByIdInternal(pid, sys)
-            select res;
+            ActorContextAff<RT>.localSystem(pid,
+                from ___ in pid.AssertValid()
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in pid.Take(2) == sys.Disp["reg"]
+                                ? FailEff<Unit>(new InvalidProcessIdException(deregError))
+                                : deregisterByIdInternal(pid, sys)
+                select res);
 
         [Pure]
         static Aff<RT, Unit> deregisterByIdInternal(ProcessId pid, ActorSystem sys) =>
@@ -794,42 +783,60 @@ namespace Echo
                 : removeLocalRegisteredById(pid);
 
         [Pure]
-        static Eff<RT, Unit> removeLocalRegisteredById(ProcessId pid)
-            =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from res in sys.RemoveLocalRegisteredById(pid)
-            select unit;
+        static Eff<RT, Unit> removeLocalRegisteredById(ProcessId pid) =>
+            ActorContextAff<RT>.localSystem(pid,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in sys.RemoveLocalRegisteredById(pid)
+                select unit);
 
         [Pure]
-        static Eff<RT, Unit> removeLocalRegisteredByName(ProcessName name)
-            =>
+        static Eff<RT, Unit> removeLocalRegisteredByName(ProcessName name) =>
             from sys in ActorContextAff<RT>.LocalSystem
             from res in sys.RemoveLocalRegisteredByName(name)
             select unit;
 
         [Pure]
-        public static Aff<RT, A> withContext<A>(ActorItem self,
-            ActorItem parent,
+        public static Aff<RT, A> withContext<A>(ActorItem self, Aff<RT, A> ma) =>
+            ActorContextAff<RT>.localSystem(
+                self.Actor.Id,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, ProcessId.NoSender, self.Actor.Parent, null, null, self.Actor.Flags), ma)
+                select res);
+
+        [Pure]
+        public static Eff<RT, A> withContext<A>(ActorItem self, Eff<RT, A> ma) =>
+            ActorContextAff<RT>.localSystem(
+                self.Actor.Id,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, ProcessId.NoSender, self.Actor.Parent, null, null, self.Actor.Flags), ma)
+                select res);
+ 
+        [Pure]
+        public static Aff<RT, A> withContext<A>(
+            ActorItem self,
             ProcessId sender,
             ActorRequest request,
             object msg,
             Option<SessionId> sessionId,
             Aff<RT, A> ma) =>
-                from sys in ActorContextAff<RT>.LocalSystem
-                from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, sender, parent, msg, request, ProcessFlags.Default), ma)
-                select res;
+                ActorContextAff<RT>.localSystem(
+                    self.Actor.Id,
+                    from sys in ActorContextAff<RT>.LocalSystem
+                    from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, sender, self.Actor.Parent, msg, request, self.Actor.Flags), ma)
+                    select res);
 
         [Pure]
         public static Eff<RT, A> withContext<A>(ActorItem self,
-            ActorItem parent,
             ProcessId sender,
             ActorRequest request,
             object msg,
             Option<SessionId> sessionId,
             Eff<RT, A> ma) =>
-                from sys in ActorContextAff<RT>.LocalSystem
-                from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, sender, parent, msg, request, ProcessFlags.Default), ma)
-                select res;
+                ActorContextAff<RT>.localSystem(
+                    self.Actor.Id,
+                    from sys in ActorContextAff<RT>.LocalSystem
+                    from res in ActorContextAff<RT>.localContext(new ActorRequestContext(sys, self, sender, self.Actor.Parent, msg, request, self.Actor.Flags), ma)
+                    select res);
 
         [Pure]
         internal static Aff<RT, IObservable<A>> observe<A>(ProcessId pid) =>
@@ -862,7 +869,7 @@ namespace Echo
                 : new ActorDispatchNotExist(pid);
 
         [Pure]
-        internal static Option<Func<ProcessId, IEnumerable<ProcessId>>> getProcessSelector(ProcessId pid)
+        internal static Option<Func<ProcessId, G.IEnumerable<ProcessId>>> getProcessSelector(ProcessId pid)
         {
             if (pid.Count() < 3) throw new InvalidProcessIdException("Invalid role Process ID");
             var type = pid.Skip(1).Take(1).Name;
@@ -870,7 +877,7 @@ namespace Echo
         }
 
         [Pure]
-        public static IEnumerable<ProcessId> resolveProcessIdSelection(ProcessId pid) =>
+        public static G.IEnumerable<ProcessId> resolveProcessIdSelection(ProcessId pid) =>
             getProcessSelector(pid)
                 .Map(selector => selector(pid.Skip(2)))
                 .IfNone(() => new ProcessId[0]);
@@ -931,75 +938,76 @@ namespace Echo
 
         [Pure]
         public static Aff<RT, Unit> ask(ProcessId pid, object message, ProcessId sender) =>
-            from d in getDispatcher(pid)
-            from s in senderOrDefault(sender)
-            from r in d.Ask<RT>(message, s)
-            select r;
+            ActorContextAff<RT>.localSystem(pid,
+                from d in getDispatcher(pid)
+                from s in senderOrDefault(sender)
+                from r in d.Ask<RT>(message, s)
+                select r);
 
         [Pure]
         public static Aff<RT, Unit> tell(ProcessId pid, object message, Schedule schedule, ProcessId sender) =>
-            from d in getDispatcher(pid)
-            from s in senderOrDefault(sender)
-            from r in d.Tell<RT>(message, schedule, s, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User)
-            select r;
+            ActorContextAff<RT>.localSystem(pid,
+                from d in getDispatcher(pid)
+                from s in senderOrDefault(sender)
+                from r in d.Tell<RT>(message, schedule, s, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User)
+                select r);
 
         [Pure]
         public static Aff<RT, Unit> tell(Eff<RT, ProcessId> pid, object message, Schedule schedule, ProcessId sender) =>
             from p in pid
-            from d in getDispatcher(p)
-            from s in senderOrDefault(sender)
-            from r in d.Tell<RT>(message, schedule, s, message is ActorRequest ? Message.TagSpec.UserAsk : Message.TagSpec.User)
+            from r in tell(p, message, schedule, sender)
             select r;
 
         [Pure]
         public static Aff<RT, Unit> tellUserControl(ProcessId pid, UserControlMessage message) =>
-            from d in getDispatcher(pid)
-            from s in ProcessAff<RT>.Self
-            from r in d.TellUserControl<RT>(message, s)
-            select r;
+            ActorContextAff<RT>.localSystem(pid,
+                from d in getDispatcher(pid)
+                from s in ProcessAff<RT>.Self
+                from r in d.TellUserControl<RT>(message, s)
+                select r);
 
         [Pure]
         public static Aff<RT, Unit> tellUserControl(Eff<RT, ProcessId> pid, UserControlMessage message) =>
             from p in pid
-            from d in getDispatcher(p)
-            from s in ProcessAff<RT>.Self
-            from r in d.TellUserControl<RT>(message, s)
+            from r in tellUserControl(p, message)
             select r;
 
         [Pure]
         public static Aff<RT, Unit> tellSystem(ProcessId pid, SystemMessage message) =>
-            from d in getDispatcher(pid)
-            from s in ProcessAff<RT>.Self
-            from r in d.TellSystem<RT>(message, s)
-            select r;
+            ActorContextAff<RT>.localSystem(pid,
+                from d in getDispatcher(pid)
+                from s in ProcessAff<RT>.Self
+                from r in d.TellSystem<RT>(message, s)
+                select r);
 
         [Pure]
         public static Aff<RT, Unit> tellSystem(Eff<RT, ProcessId> pid, SystemMessage message) =>
             from p in pid
-            from d in getDispatcher(p)
-            from s in ProcessAff<RT>.Self
-            from r in d.TellSystem<RT>(message, s)
+            from r in tellSystem(p, message)
             select r;
 
         [Pure]
         public static Aff<RT, HashMap<string, ProcessId>> getChildren(ProcessId pid) =>
-            from d in getDispatcher(pid)
-            from r in d.GetChildren<RT>()
-            select r;
+            ActorContextAff<RT>.localSystem(pid,
+                from d in getDispatcher(pid)
+                from r in d.GetChildren<RT>()
+                select r);
 
         [Pure]
         public static Aff<RT, Unit> kill(ProcessId pid, bool maintainState) =>
-            maintainState
-                ? getDispatcher(pid).Bind(d => d.Shutdown<RT>())
-                : getDispatcher(pid).Bind(d => d.Kill<RT>());
+            ActorContextAff<RT>.localSystem(pid,
+                maintainState
+                    ? getDispatcher(pid).Bind(d => d.Shutdown<RT>())
+                    : getDispatcher(pid).Bind(d => d.Kill<RT>()));
 
         [Pure]
         public static Eff<RT, Option<ActorItem>> localActor(ProcessId pid) =>
-            from sys in ActorContextAff<RT>.LocalSystem
-            from res in pid.System == sys.SystemName
-                            ? SuccessEff(localActor(sys.RootItem, pid.Skip(1), pid))
-                            : SuccessEff(Option<ActorItem>.None)
-            select res; 
+            ActorContextAff<RT>.localSystem(pid,
+                from sys in ActorContextAff<RT>.LocalSystem
+                from res in pid.System == sys.SystemName
+                                ? SuccessEff(localActor(sys.RootItem, pid.Skip(1), pid))
+                                : SuccessEff(Option<ActorItem>.None)
+                select res); 
 
         [Pure]
         static Option<ActorItem> localActor(ActorItem current, ProcessId walk, ProcessId pid)
@@ -1016,14 +1024,15 @@ namespace Echo
         /// </summary>
         [Pure]
         static Aff<RT, A> getProcessSetting<A>(ProcessId pid, string name) =>
-            ProcessSystemConfigAff<RT>.getProcessSetting<A>(pid, name, "value");
+            ActorContextAff<RT>.localSystem(pid,
+                ProcessSystemConfigAff<RT>.getProcessSetting<A>(pid, name, "value"));
 
         /// <summary>
         /// Get the name to use to register the Process
         /// </summary>
         [Pure]
         public static Aff<RT, ProcessName> getProcessRegisteredName(ProcessId pid) =>
-            getProcessSetting<ProcessName>(pid, "register-as");
+            getProcessSetting<ProcessName>(pid, "register-as"))
 
         /// <summary>
         /// Get the dispatch method

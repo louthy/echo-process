@@ -20,14 +20,14 @@ namespace Echo.Session
         const string SessionsNotify = "sys-sessions-notify";
         public readonly SessionSync Sync;
 
-        readonly Option<ICluster> cluster;
+        readonly bool cluster;
         readonly SystemName system;
         readonly ProcessName nodeName;
         IDisposable notify;
         IDisposable ended;
         IDisposable touch;
 
-        public SessionManager(Option<ICluster> cluster, SystemName system, ProcessName nodeName, VectorConflictStrategy strategy)
+        public SessionManager(bool cluster, SystemName system, ProcessName nodeName, VectorConflictStrategy strategy)
         {
             this.cluster = cluster;
             this.system = system;

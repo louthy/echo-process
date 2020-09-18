@@ -13,7 +13,7 @@ namespace Echo
         /// <summary>
         /// Log info - Internal 
         /// </summary>
-        internal static EffPure<Unit> logInfo(object message) =>
+        internal static Eff<Unit> logInfo(object message) =>
             Eff(() => {
                 Debug.WriteLine(new ProcessLogItem(ProcessLogItemType.Info, (message ?? "").ToString()));
                 return unit;
@@ -22,7 +22,7 @@ namespace Echo
         /// <summary>
         /// Log info - Internal 
         /// </summary>
-        internal static EffPure<Unit> logInfo(object message) => 
+        internal static Eff<Unit> logInfo(object message) => 
             unitEff;
 #endif 
 
@@ -32,95 +32,95 @@ namespace Echo
                     ? unit
                     : fun(action)(value);
 
-        static EffPure<Unit> onNext(string value, ProcessLogItemType type) =>
+        static Eff<Unit> onNext(string value, ProcessLogItemType type) =>
             Eff(() =>
                 IfNotNull(value, _ => Process.log.OnNext(new ProcessLogItem(type, value.ToString()))));
 
-        static EffPure<Unit> onNext(Exception value, ProcessLogItemType type) =>
+        static Eff<Unit> onNext(Exception value, ProcessLogItemType type) =>
             Eff(() =>
                 IfNotNull(value, _ => Process.log.OnNext(new ProcessLogItem(type, value))));
 
-        static EffPure<Unit> onNext(string message, Exception value, ProcessLogItemType type) =>
+        static Eff<Unit> onNext(string message, Exception value, ProcessLogItemType type) =>
             Eff(() =>
                 IfNotNull(message, _ => IfNotNull(value, _ => Process.log.OnNext(new ProcessLogItem(type, message, value)))));
 
         /// <summary>
         /// Log warning - Internal 
         /// </summary>
-        public static EffPure<Unit> logWarn(string message) =>
+        public static Eff<Unit> logWarn(string message) =>
             onNext(message, ProcessLogItemType.Warning);
 
         /// <summary>
         /// Log system error - Internal 
         /// </summary>
-        internal static EffPure<Unit> logSysErr(string message) =>
+        internal static Eff<Unit> logSysErr(string message) =>
             onNext(message, ProcessLogItemType.SysError);
 
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        internal static EffPure<Unit> logSysErr(Exception ex) =>
+        internal static Eff<Unit> logSysErr(Exception ex) =>
             onNext(ex, ProcessLogItemType.SysError);
 
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        internal static EffPure<Unit> logSysErr(Error ex) =>
+        internal static Eff<Unit> logSysErr(Error ex) =>
             onNext(ex, ProcessLogItemType.SysError);
 
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        internal static EffPure<Unit> logSysErr(string message, Exception ex) =>
+        internal static Eff<Unit> logSysErr(string message, Exception ex) =>
             onNext(message, ex, ProcessLogItemType.SysError);
 
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        internal static EffPure<Unit> logSysErr(string message, Error ex) =>
+        internal static Eff<Unit> logSysErr(string message, Error ex) =>
             onNext(message, ex, ProcessLogItemType.SysError);
 
         /// <summary>
         /// Log user error - Internal 
         /// </summary>
-        public static EffPure<Unit> logUserErr(string message) =>
+        public static Eff<Unit> logUserErr(string message) =>
             onNext(message, ProcessLogItemType.UserError);
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        public static EffPure<Unit> logErr(Exception ex) =>
+        public static Eff<Unit> logErr(Exception ex) =>
             onNext(ex, ProcessLogItemType.Error);
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        public static EffPure<Unit> logErr(Error ex) =>
+        public static Eff<Unit> logErr(Error ex) =>
             onNext(ex, ProcessLogItemType.Error);
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        public static EffPure<Unit> logErr(string message, Exception ex) =>
+        public static Eff<Unit> logErr(string message, Exception ex) =>
             onNext(message, ex, ProcessLogItemType.Error);
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        public static EffPure<Unit> logErr(string message, Error ex) =>
+        public static Eff<Unit> logErr(string message, Error ex) =>
             onNext(message, ex, ProcessLogItemType.Error);
 
         /// <summary>
         /// Log user or system error - Internal 
         /// </summary>
-        public static EffPure<Unit> logErr(string message) =>
+        public static Eff<Unit> logErr(string message) =>
             onNext(message,  ProcessLogItemType.Error);
 
         /// <summary>
         /// Logs any exception thrown by `ma` and returns the Aff.  Always returns in a Succ state, using the
         /// defaultValue if necessary 
         /// </summary>
-        public static AffPure<A> catchAndLogErr<A>(AffPure<A> ma, AffPure<A> defaultValue, string message = null) =>
+        public static Aff<A> catchAndLogErr<A>(Aff<A> ma, Aff<A> defaultValue, string message = null) =>
             AffMaybe<A>(async () => {
 
                 var res = await ma.RunIO().ConfigureAwait(false);
@@ -146,7 +146,7 @@ namespace Echo
         /// <summary>
         /// Logs any exception thrown by `ma` and returns the Eff in a Fail state, otherwise Succ 
         /// </summary>
-        public static AffPure<A> logErr<A>(AffPure<A> ma, string message = null) =>
+        public static Aff<A> logErr<A>(Aff<A> ma, string message = null) =>
             AffMaybe<A>(async () => {
 
                 var res = await ma.RunIO().ConfigureAwait(false);
@@ -168,7 +168,7 @@ namespace Echo
         /// Logs any exception thrown by `ma` and returns the Eff.  Always returns in a Succ state, using the
         /// defaultValue if necessary 
         /// </summary>
-        public static EffPure<A> catchAndLogErr<A>(EffPure<A> ma, EffPure<A> defaultValue, string message = null) =>
+        public static Eff<A> catchAndLogErr<A>(Eff<A> ma, Eff<A> defaultValue, string message = null) =>
             EffMaybe<A>(() => {
 
                 var res = ma.RunIO();
@@ -194,7 +194,7 @@ namespace Echo
         /// <summary>
         /// Logs any exception thrown by `ma` and returns the Eff in a Fail state, otherwise Succ 
         /// </summary>
-        public static EffPure<A> logErr<A>(EffPure<A> ma, string message = null) =>
+        public static Eff<A> logErr<A>(Eff<A> ma, string message = null) =>
             EffMaybe<A>(() => {
 
                 var res = ma.RunIO();
@@ -216,7 +216,7 @@ namespace Echo
         /// Logs any exception thrown by `ma` and returns the Aff.  Always returns in a Succ state, using the
         /// defaultValue if necessary 
         /// </summary>
-        public static AffPure<A> catchAndLogSysErr<A>(AffPure<A> ma, AffPure<A> defaultValue, string message = null) =>
+        public static Aff<A> catchAndLogSysErr<A>(Aff<A> ma, Aff<A> defaultValue, string message = null) =>
             AffMaybe<A>(async () => {
 
                 var res = await ma.RunIO().ConfigureAwait(false);
@@ -242,7 +242,7 @@ namespace Echo
         /// <summary>
         /// Logs any exception thrown by `ma` and returns the Eff in a Fail state, otherwise Succ 
         /// </summary>
-        public static AffPure<A> logSysErr<A>(AffPure<A> ma, string message = null) =>
+        public static Aff<A> logSysErr<A>(Aff<A> ma, string message = null) =>
             AffMaybe<A>(async () => {
 
                 var res = await ma.RunIO().ConfigureAwait(false);
@@ -264,7 +264,7 @@ namespace Echo
         /// Logs any exception thrown by `ma` and returns the Eff.  Always returns in a Succ state, using the
         /// defaultValue if necessary 
         /// </summary>
-        public static EffPure<A> catchAndLogSysErr<A>(EffPure<A> ma, EffPure<A> defaultValue, string message = null) =>
+        public static Eff<A> catchAndLogSysErr<A>(Eff<A> ma, Eff<A> defaultValue, string message = null) =>
             EffMaybe<A>(() => {
 
                 var res = ma.RunIO();
@@ -290,7 +290,7 @@ namespace Echo
         /// <summary>
         /// Logs any exception thrown by `ma` and returns the Eff in a Fail state, otherwise Succ 
         /// </summary>
-        public static EffPure<A> logSysErr<A>(EffPure<A> ma, string message = null) =>
+        public static Eff<A> logSysErr<A>(Eff<A> ma, string message = null) =>
             EffMaybe<A>(() => {
 
                 var res = ma.RunIO();

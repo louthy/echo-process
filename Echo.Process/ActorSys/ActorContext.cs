@@ -7,6 +7,7 @@ using static LanguageExt.Prelude;
 using Echo.Config;
 using LanguageExt;
 using System.Threading;
+using Echo.Session;
 using LanguageExt.Common;
 using LanguageExt.UnsafeValueAccess;
 
@@ -17,33 +18,33 @@ namespace Echo
         readonly static Atom<SystemName> defaultSystem = Atom<SystemName>(default);
         readonly static Atom<Seq<ActorSystem>> systems = Atom(Seq<ActorSystem>());
         
-        public static EffPure<Seq<ActorSystem>> Systems => 
+        public static Eff<Seq<ActorSystem>> Systems => 
             SuccessEff(systems.Value);
         
-        public static EffPure<Seq<SystemName>> SystemNames => 
+        public static Eff<Seq<SystemName>> SystemNames => 
             SuccessEff(systems.Value.Map(s => s.SystemName));
 
-        public static EffPure<Unit> addOrUpdateSystem(ActorSystem system) =>
+        public static Eff<Unit> addOrUpdateSystem(ActorSystem system) =>
             systems.SwapEff(syss => SuccessEff(system.Cons(syss.Filter(s => s.SystemName != system.SystemName))))
                    .Map(_ => unit);
 
-        public static EffPure<Unit> removeSystem(SystemName system) =>
+        public static Eff<Unit> removeSystem(SystemName system) =>
             from _1 in clearDefaultSystemIfMatch(system)
             from _2 in systems.SwapEff(syss => SuccessEff(syss.Filter(s => s.SystemName != system)))
             select unit; 
 
-        public static EffPure<Unit> setDefaultSystem(SystemName defaultSys) =>
+        public static Eff<Unit> setDefaultSystem(SystemName defaultSys) =>
             defaultSystem.SwapEff(ds => SuccessEff(defaultSys))
                          .Map(_ => unit);
 
-        public static EffPure<Unit> clearDefaultSystemIfMatch(SystemName comparand) =>
+        public static Eff<Unit> clearDefaultSystemIfMatch(SystemName comparand) =>
             defaultSystem.SwapEff(ds => SuccessEff(ds == comparand ? default : ds))
                          .Map(_ => unit);
 
-        public static EffPure<bool> systemExists(SystemName system) =>
+        public static Eff<bool> systemExists(SystemName system) =>
             findSystem(system).Match(Succ: _ => true, Fail: _ => false);
 
-        public static EffPure<ActorSystem> findSystem(SystemName system) =>
+        public static Eff<ActorSystem> findSystem(SystemName system) =>
             EffMaybe<ActorSystem>(() => {
                 foreach (var item in systems.Value)
                 {
@@ -53,13 +54,13 @@ namespace Echo
             });
        
 
-        public static EffPure<ActorSystem> system(ProcessId pid) =>
+        public static Eff<ActorSystem> system(ProcessId pid) =>
             findSystem(pid.System);
 
-        public static EffPure<ActorSystem> system(SystemName system) =>
+        public static Eff<ActorSystem> system(SystemName system) =>
             findSystem(system) | DefaultSystem;
 
-        public static EffPure<ActorSystem> DefaultSystem =>
+        public static Eff<ActorSystem> DefaultSystem =>
             findSystem(defaultSystem);
     }
 
@@ -69,14 +70,39 @@ namespace Echo
         public static Aff<RT, Unit> startSystem(SystemName system, bool cluster, AppProfile appProfile, ProcessSystemConfig config) =>
             from exists in ActorContext.systemExists(system)
             from result in exists
-                              ? FailEff<Unit>(Error.New($"Process-system ({system}) already started"))
-                              : startSystemInternal(system, cluster, appProfile, config)
+                               ? FailEff<Unit>(Error.New($"Process-system ({system}) already started"))
+                               : startSystemInternal(system, cluster, appProfile, config)
             select result;
 
-        static Aff<RT, Unit> startSystemInternal(SystemName system, bool cluster, AppProfile appProfile, ProcessSystemConfig config) => 
+        static Eff<Unit> assertSystemNotExist(SystemName system) =>
+            ActorContext.findSystem(system)
+                        .Match(Succ: FailEff<Unit>(Error.New($"Process-system ({system}) already started")),
+                               Fail: SuccessEff(unit));
+        
+        static Aff<RT, Unit> startSystemInternal(SystemName system, bool cluster, AppProfile appProfile, ProcessSystemConfig config) =>
+            from __1 in assertSystemNotExist(system)
+            from not in ActorSystemAff<RT>.notifyCluster(cluster, system, DateTime.UtcNow.Ticks)
+            from sys in SuccessEff(
+                            new ActorSystem(
+                                Atom(ClusterMonitor.State.Empty(system)),
+                                Atom(WatchState.Empty),
+                                Atom(RegisteredState.Empty),
+                                Atom(config),
+                                Atom(appProfile),
+                                not,
+                                null,
+                                cluster,
+                                DateTime.UtcNow.Ticks,
+                                new SessionManager(cluster, system, appProfile.NodeName, VectorConflictStrategy.Branch),
+                                new Ping(system),
+                                system))
+            from __2 in ActorContext.addOrUpdateSystem(sys)
+            from __3 in ActorContextAff<RT>.localSystem(system,  systemBootstrap)
+            select unit;
+                
         
             // TODO: Convert code below into Aff LINQ
-        ;
+        
         //
         // {
         //     if (SystemExists(system))
@@ -110,6 +136,53 @@ namespace Echo
         //         throw;
         //     }
         // }
+        
+        public static Aff<RT, Unit> systemBootstrap =>
+            from sys in ActorContextAff<RT>.LocalSystem
+            from _ in ProcessEff.logInfo("Process system starting up")
+            from rootParent in SuccessEff(new ActorItem(new NullProcess<RT>(sys.SystemName), new NullInbox(), ProcessFlags.Default))
+            from rootProcess in new Actor<RT, Unit, Unit>(
+                rootParent.Actor.Id[rootProcessName],
+                cluster,
+                parent,
+                rootProcessName,
+                SystemInbox,
+                _ => this,
+                ActorSystem.NoShutdown<ActorSystemBootstrap>(),
+                null,
+                Process.DefaultStrategy,
+                ProcessFlags.Default,
+                settings, 
+                system
+            )
+        
+            ;
+        
+
+            /*// Top tier
+            system = ActorSystemAff<RT>.actorCreate<object>(root, Config.SystemProcessName, publish, null, ProcessFlags.Default);
+            user   = ActorCreate<object>(root, Config.UserProcessName, publish, null, ProcessFlags.Default);
+            js     = ActorCreate<ProcessId, RelayMsg>(root, "js", RelayActor.Inbox, () => System.User["process-hub-js"], null, ProcessFlags.Default);
+
+            // Second tier
+            sessionMonitor = ActorCreate<(SessionSync, Time), Unit>(system, Config.Sessions, SessionMonitor.Inbox, () => SessionMonitor.Setup(Sync, Settings.SessionTimeoutCheckFrequency), null, ProcessFlags.Default);
+            deadLetters    = ActorCreate<DeadLetter>(system, Config.DeadLettersProcessName, publish, null, ProcessFlags.Default);
+            errors         = ActorCreate<Exception>(system, Config.ErrorsProcessName, publish, null, ProcessFlags.Default);
+            monitor        = ActorCreate<ClusterMonitor.State, ClusterMonitor.Msg>(system, Config.MonitorProcessName, ClusterMonitor.Inbox, () => ClusterMonitor.Setup(System), null, ProcessFlags.Default);
+
+            Cluster.Iter(c =>
+                         {
+                             scheduler = ActorCreate<Scheduler.State, Scheduler.Msg>(system, Config.SchedulerName, Scheduler.Inbox, () => Scheduler.State.Empty, null, ProcessFlags.ListenRemoteAndLocal);
+                         });
+
+            inboxShutdown = ActorCreate<IActorInbox>(system, Config.InboxShutdownProcessName, inbox => inbox.Shutdown(), null, ProcessFlags.Default, 100000);
+
+            reply = ask = ActorCreate<(long, Dictionary<long, AskActorReq>), object>(system, Config.AskProcessName, AskActor.Inbox, AskActor.Setup, null, ProcessFlags.ListenRemoteAndLocal);
+
+            logInfo("Process system startup complete");
+
+            return this;
+        }*/
 
         public static Eff<RT, bool> InMessageLoop =>
             Eff<RT, bool>(e => e.EchoEnv.InMessageLoop);
