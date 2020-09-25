@@ -44,7 +44,7 @@ namespace Echo
                 case Message.TagSpec.StartupProcess:    return (StartupProcessMessage)DeserialiseMsgContent(msg);
                 case Message.TagSpec.ShutdownProcess:   return (ShutdownProcessMessage)DeserialiseMsgContent(msg);
 
-                case Message.TagSpec.Restart:           return SystemMessage.Restart;
+                case Message.TagSpec.Restart:           return (SystemRestartMessage)DeserialiseMsgContent(msg);
                 case Message.TagSpec.Pause:             return SystemMessage.Pause;
                 case Message.TagSpec.Unpause:           return SystemMessage.Unpause;
 

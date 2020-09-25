@@ -18,7 +18,8 @@ namespace Echo
                 switch (msg.Tag)
                 {
                     case Message.TagSpec.Restart:
-                        actor.Restart(inbox.IsPaused);
+                        var rm = msg as SystemRestartMessage;
+                        actor.Restart(rm.UnpauseAfterRestart);
                         break;
 
                     case Message.TagSpec.LinkChild:

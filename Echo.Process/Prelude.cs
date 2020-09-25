@@ -296,8 +296,8 @@ namespace Echo
         /// Forces a running process to restart.  This will reset its state and drop
         /// any subscribers, or any of its subscriptions.
         /// </summary>
-        public static Unit restart(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.Restart);
+        public static Unit restart(ProcessId pid, bool unpauseAfterRestart = true) =>
+            ActorContext.System(pid).TellSystem(pid, SystemMessage.Restart(unpauseAfterRestart));
 
         /// <summary>
         /// Pauses a running process.  Messages will still be accepted into the Process'
