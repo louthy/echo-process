@@ -61,11 +61,25 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static Unit subscribe(ProcessId pid)
+        public static Unit subscribe(ProcessId pid) => 
+            subscribe<object>(pid);
+
+        /// <summary>
+        /// Subscribes our inbox to another process publish stream.  When it calls 'publish' it will
+        /// arrive in our inbox.
+        /// </summary>
+        /// <param name="pid">Process to subscribe to</param>
+        /// <typeparam name="T">Type filter</typeparam>
+        /// <remarks>
+        /// Process 'pid' can publish any number of types, any published messages not of type T will be ignored.
+        /// This should be used from within a process' message loop only
+        /// </remarks>
+        /// <returns>IDisposable, call IDispose to end the subscription</returns>
+        public static Unit subscribe<T>(ProcessId pid)
         {
             var savedSelf = Self;
             return InMessageLoop
-                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(savedSelf, x, pid)))
+                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<T>(pid).Subscribe(x => tell(savedSelf, x, pid)))
                 : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribe));
         }
 
