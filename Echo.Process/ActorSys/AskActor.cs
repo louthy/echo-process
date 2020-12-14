@@ -92,7 +92,7 @@ namespace Echo
                 }
                 else
                 {
-                    logWarn($"Request ID doesn't exist: {res.RequestId}");
+                    logWarn($"Request ID doesn't exist: {res.RequestId}. {res}");
                 }
             }
 
