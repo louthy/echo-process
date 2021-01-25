@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScheduledMessages", "Sample
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SessionIdTest", "SessionIdTest\SessionIdTest.csproj", "{0F91C384-13F0-40A9-83FE-66832F3F73E6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Echo.Process.AspNetCore", "Echo.Process.AspNetCore\Echo.Process.AspNetCore.csproj", "{8B8D6744-FFB2-4033-B673-932D1BE965EC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		AppVeyorBuild|Any CPU = AppVeyorBuild|Any CPU
@@ -240,6 +242,24 @@ Global
 		{0F91C384-13F0-40A9-83FE-66832F3F73E6}.Release|x64.Build.0 = Release|Any CPU
 		{0F91C384-13F0-40A9-83FE-66832F3F73E6}.Release|x86.ActiveCfg = Release|Any CPU
 		{0F91C384-13F0-40A9-83FE-66832F3F73E6}.Release|x86.Build.0 = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|Any CPU.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|x64.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|x64.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|x86.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.AppVeyorBuild|x86.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|x64.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Debug|x86.Build.0 = Debug|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|x64.ActiveCfg = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|x64.Build.0 = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|x86.ActiveCfg = Release|Any CPU
+		{8B8D6744-FFB2-4033-B673-932D1BE965EC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
