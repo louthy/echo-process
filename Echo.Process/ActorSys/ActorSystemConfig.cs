@@ -22,12 +22,7 @@ namespace Echo
         public readonly ProcessName SchedulerName                = "scheduler";
 
         public readonly JsonSerializerSettings JsonSerializerSettings =
-            new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.All,
-                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
-                MissingMemberHandling = MissingMemberHandling.Ignore
-            };
+            JsonSerializer.Settings;
 
         public readonly static ActorSystemConfig Default =
             new ActorSystemConfig();
