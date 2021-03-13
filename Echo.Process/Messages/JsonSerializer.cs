@@ -13,9 +13,9 @@ namespace Echo
         /// </summary>
         static JsonSerializerSettings Setup(JsonSerializerSettings settings)
         {
-            settings.TypeNameHandling = TypeNameHandling.All;
-            settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+            settings.TypeNameHandling      = TypeNameHandling.Objects;
             settings.MissingMemberHandling = MissingMemberHandling.Ignore;
+            settings.SerializationBinder   = new JsonBinder();
             return settings;
         }
 

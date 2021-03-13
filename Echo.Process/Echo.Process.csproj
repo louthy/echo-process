@@ -24,7 +24,7 @@
       <License>https://github.com/louthy/echo-process/blob/master/LICENSE.md</License>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
-    <LangVersion>7.3</LangVersion>
+    <LangVersion>latest</LangVersion>
   
 </PropertyGroup>
   <ItemGroup>
