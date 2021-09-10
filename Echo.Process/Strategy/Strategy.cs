@@ -27,9 +27,11 @@ namespace Echo
             new State<StrategyContext, A>( s =>
             {
                 var (a, ns) = f(s);
+                #nullable disable
                 return a.Match(
                     Some: na => (na, ns, false),
                     Fail: () => (default(A), s, true));
+                #nullable enable
             });
 
         /// <summary>
@@ -315,7 +317,7 @@ namespace Echo
         /// Used within the Strategy.Match function to match an Exception to a Directive.  
         /// Use the function's generic type to specify the type of Exception to match.
         /// </summary>
-        /// <typeparam name="TException">Type of Exception to match</typeparam>
+        /// <param name="exceptionType">Type of Exception to match</param>
         /// <param name="map">Map from the TException to a Directive</param>
         /// <returns>Strategy computation as a State monad</returns>
         internal static State<Exception, Option<Directive>> With(Func<Exception, Directive> map, Type exceptionType) =>
@@ -329,7 +331,7 @@ namespace Echo
         /// Used within the Strategy.Match function to match an Exception to a Directive.  
         /// Use the function's generic type to specify the type of Exception to match.
         /// </summary>
-        /// <typeparam name="TException">Type of Exception to match</typeparam>
+        /// <param name="exceptionType">Type of Exception to match</param>
         /// <param name="directive">Directive to use if the Exception matches TException</param>
         /// <returns>Strategy computation as a State monad</returns>
         internal static State<Exception, Option<Directive>> With(Directive directive, Type exceptionType) =>

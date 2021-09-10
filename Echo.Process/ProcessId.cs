@@ -36,7 +36,7 @@ namespace Echo
     /// without concerns for internals.
     /// </para>
     /// </summary>
-    public struct ProcessId : IEquatable<ProcessId>, IComparable<ProcessId>, IComparable
+    public readonly struct ProcessId : IEquatable<ProcessId>, IComparable<ProcessId>, IComparable
     {
         internal readonly ProcessIdInternal value;
 
@@ -50,7 +50,7 @@ namespace Echo
         /// Absolute path of the process ID
         /// </summary>
         public string Path =>
-            value?.Path;
+            value?.Path ?? "";
 
         /// <summary>
         /// Ctor
@@ -71,39 +71,35 @@ namespace Echo
             value = new ProcessIdInternal(res.value.Parts, res.value.Name, res.System, res.value.Path);
         }
 
-        ProcessId(ProcessName[] parts, SystemName system, ProcessName name, string path)
-        {
+        ProcessId(ProcessName[] parts, SystemName system, ProcessName name, string path) =>
             value = new ProcessIdInternal(parts, name, system, path);
-        }
 
-        ProcessId(ProcessIdInternal value)
-        {
+        ProcessId(ProcessIdInternal value) =>
             this.value = value;
-        }
 
         public static Either<Exception, ProcessId> TryParse(string path)
         {
-            if (path == null || path.Length == 0)
+            if (path.Length == 0)
             {
                 return new InvalidProcessIdException();
             }
 
             var system = "";
 
-            if( path.StartsWith("//"))
+            if (path.StartsWith("//"))
             {
                 var end = path.IndexOf(Sep, 2);
                 end = end == -1
-                    ? path.IndexOf("@", 2)
-                    : end;
+                          ? path.IndexOf("@", 2, StringComparison.Ordinal)
+                          : end;
 
-                if(end == -1)
+                if (end == -1)
                 {
                     return new InvalidProcessIdException($"Invalid ProcessId ({path}), nothing following the system specifier");
                 }
 
                 system = path.Substring(2, end - 2);
-                path = path.Substring(end);
+                path   = path.Substring(end);
             }
 
             if (path[0] == '@')
@@ -116,9 +112,9 @@ namespace Echo
                 return new InvalidProcessIdException();
             }
 
-            ProcessName[] parts = null;
-            ProcessName name;
-            string finalPath = null;
+            ProcessName[]? parts = null;
+            ProcessName    name;
+            string?        finalPath = null;
 
             if (path.Length == 1)
             {
@@ -136,19 +132,15 @@ namespace Echo
                 }
             }
 
-            finalPath = parts == null
-                ? ""
-                : parts.Length == 0
-                    ? Sep.ToString()
-                    : Sep + String.Join(Sep.ToString(), parts);
+            finalPath = parts.Length == 0
+                            ? Sep.ToString()
+                            : Sep + string.Join(Sep.ToString(), parts);
 
             if (path != Sep.ToString())
             {
-                name = parts == null
-                    ? ""
-                    : parts.Length == 0
-                        ? Sep.ToString()
-                        : parts.Last();
+                name = parts.Length == 0
+                           ? Sep.ToString()
+                           : parts.Last();
             }
             else
             {
@@ -169,8 +161,13 @@ namespace Echo
             if (name.Length == 0) return new InvalidProcessNameException("Registerd process name has nothing following the '@'");
 
             var parts = name.Split(':');
-            if (parts.Length == 0) return new InvalidProcessNameException();
-            if (parts.Length > 2) return new InvalidProcessNameException("Too many ':' in the registered process name");
+            switch (parts.Length)
+            {
+                case 0:
+                    return new InvalidProcessNameException();
+                case > 2:
+                    return new InvalidProcessNameException("Too many ':' in the registered process name");
+            }
 
             if ((from p in parts
                  from c in p

@@ -92,7 +92,7 @@ namespace Echo
                                       ActorContext.Request?.Ops?.Run();
                                   });
                 }
-            }).Subscribe(onNext: _ => { }, onCompleted: () => { }, onError: logErr);
+            }).Subscribe(onNext: _ => { }, onCompleted: () => { }, onError: e => logErr(e));
         }
 
         internal static IDisposable safedelay(Action f, DateTime delayUntil) =>

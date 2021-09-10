@@ -5,11 +5,7 @@
   <PropertyGroup Label="Configuration" Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <DefineConstants>NETSTANDARD</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Label="Configuration">
-    <NoWarn>1701;1702;1705;IDE1006</NoWarn>
-  </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
     <PackageVersion>2.1.7-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
@@ -25,7 +21,9 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
     <LangVersion>latest</LangVersion>
-  
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <NoWarn>1701;1702;1705;IDE1006</NoWarn>
+    <Nullable>enable</Nullable>
 </PropertyGroup>
   <ItemGroup>
       <None Include="..\Images\echo icon small.png">
@@ -52,13 +50,12 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="[3.5.18-beta,)" />
-    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.18-beta,)" />
+    <PackageReference Include="LanguageExt.Core" Version="3.5.53-beta" />
+    <PackageReference Include="LanguageExt.Sys" Version="3.5.53-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.5.53-beta" />
     <PackageReference Include="Newtonsoft.Json" Version="[10.0.2,)" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
-      <Reference Include="System.Web" />
+    <PackageReference Include="System.Threading.Channels" Version="6.0.0-preview.7.21377.19" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
   </ItemGroup>

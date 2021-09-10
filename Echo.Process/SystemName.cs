@@ -14,12 +14,14 @@ namespace Echo
     /// It enforces the rules for system names.  SystemNames have the same rules
     /// as file-names in windows.  
     /// </remarks>
-    public struct SystemName : IEquatable<SystemName>, IComparable<SystemName>, IComparable
+    public readonly struct SystemName : IEquatable<SystemName>, IComparable<SystemName>, IComparable
     {
         readonly string value;
 
         public static readonly char[] InvalidNameChars =
             MArray<char>.Inst.Append(System.IO.Path.GetInvalidFileNameChars(), new[] { '[', ']', ',' }).Distinct().ToArray();
+
+        public static readonly SystemName None = default;
 
         /// <summary>
         /// Ctor
@@ -41,7 +43,7 @@ namespace Echo
             value ?? "";
 
         public bool IsValid =>
-            !String.IsNullOrEmpty(Value);
+            !string.IsNullOrEmpty(Value);
 
         public static Either<Exception, SystemName> TryParse(string value)
         {

@@ -24,7 +24,7 @@ namespace Echo.Config
     {
         public readonly SystemName SystemName;
         public readonly Option<ClusterToken> Cluster;
-        public readonly string NodeName = "";
+        public readonly string NodeName;
         readonly HashMap<string, ValueToken> roleSettings;
         readonly HashMap<ProcessId, ProcessToken> processSettings;
         readonly HashMap<string, State<StrategyContext, Unit>> stratSettings;
@@ -54,18 +54,18 @@ namespace Echo.Config
             HashMap<string, ValueToken> roleSettings,
             HashMap<ProcessId, ProcessToken> processSettings,
             HashMap<string, State<StrategyContext, Unit>> stratSettings,
-            ClusterToken cluster,
+            ClusterToken? cluster,
             Types types
             )
         {
-            SystemName = systemName;
-            NodeName = nodeName;
+            SystemName            = systemName;
+            NodeName              = nodeName;
             this.settingOverrides = HashMap<string, HashMap<string, object>>();
-            this.roleSettings = roleSettings;
-            this.processSettings = processSettings;
-            this.stratSettings = stratSettings;
-            this.Cluster = cluster;
-            this.types = types;
+            this.roleSettings     = roleSettings;
+            this.processSettings  = processSettings;
+            this.stratSettings    = stratSettings;
+            this.Cluster          = cluster == null ? None : Some(cluster);
+            this.types            = types;
         }
 
         /// <summary>
