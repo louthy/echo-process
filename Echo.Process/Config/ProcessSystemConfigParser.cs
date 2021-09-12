@@ -133,16 +133,16 @@ namespace Echo.Config
 
             // Operator table
             Operator<ValueToken>[][] table = {
-                new [] { prefix("-"), prefix("+"), prefix("!") },
-                new [] { binary("*", Assoc.Left), binary("/", Assoc.Left), binary("%", Assoc.Left) },
+                new [] { binary("||", Assoc.Left) },
+                new [] { binary("&&", Assoc.Left) },
+                new [] { binary("==", Assoc.None), binary("!=", Assoc.None) },
+                new [] { binary("<", Assoc.None), binary(">", Assoc.None), binary(">=", Assoc.None) , binary("<=", Assoc.None) },
                 new [] { binary("+", Assoc.Left), binary("-", Assoc.Left) },
-                new [] { binary("<", Assoc.Left), binary(">", Assoc.Left), binary(">=", Assoc.Left) , binary("<=", Assoc.Left) },
-                new [] { binary("==", Assoc.Left), binary("!=", Assoc.Left) },
+                new [] { binary("*", Assoc.Left), binary("/", Assoc.Left), binary("%", Assoc.Left) },
                 new [] { binary("&", Assoc.Left) },
                 new [] { binary("^", Assoc.Left) },
                 new [] { binary("|", Assoc.Left) },
-                new [] { binary("&&", Assoc.Left) },
-                new [] { binary("||", Assoc.Left) },
+                new [] { prefix("-"), prefix("+"), prefix("!") },
             };
 
 

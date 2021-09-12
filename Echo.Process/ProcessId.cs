@@ -154,7 +154,7 @@ namespace Echo
             TryParseRegisteredProcess(name)
                 .Match(
                     Right: r => r,
-                    Left: ex => raise<ProcessId>(ex));
+                    Left: raise<ProcessId>);
 
         static Either<Exception, ProcessId> TryParseRegisteredProcess(string name)
         {

@@ -14,7 +14,7 @@ namespace Echo.ActorSys2.BuiltIn
         /// <summary>
         /// Bootstrap the whole process-system by creating the root process
         /// </summary>
-        public static Aff<RT, Unit> bootstrap(SystemName system, ProcessName rootProcessName, ProcessSystemConfig config) =>
+        public static Aff<RT, Actor<RT>> bootstrap(SystemName system, ProcessName rootProcessName, ProcessSystemConfig config) =>
             from root in SuccessEff(Actor<RT, EqDefault<RootProcessState>, RootProcessState, SysMessage>
                                        .make(
                                             ProcessId.Top.Child(rootProcessName).SetSystem(system),
@@ -27,7 +27,7 @@ namespace Echo.ActorSys2.BuiltIn
                                             Strategy.Identity))
             from canc in fork(root.Effect)
             from _ in root.User(new UserPost(ProcessId.NoSender, SysMessage.Bootstrap, 0))
-            select unit;
+            select root;
 
         /// <summary>
         /// Root process setup

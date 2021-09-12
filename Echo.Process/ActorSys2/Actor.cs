@@ -25,7 +25,18 @@ namespace Echo.ActorSys2
         Func<SysPost, Eff<Unit>> Sys,
         Aff<RT, Unit> Effect,
         ActorState<RT> State)
-        where RT : struct, HasEcho<RT>;
+        where RT : struct, HasEcho<RT>
+    {
+        public static readonly Actor<RT> None = new Actor<RT>(
+            default, 
+            _ => unitEff, 
+            _ => unitEff, 
+            unitEff, 
+            ActorState<RT>.None);
+
+        public bool IsNone =>
+            !Name.IsValid;
+    }
 
     /// <summary>
     /// Actor that manages the life-type of a Process 
@@ -40,7 +51,7 @@ namespace Echo.ActorSys2
         /// <summary>
         /// Internal state of the actor
         /// </summary>
-        public record ActorState(
+        record ActorState(
                 ProcessId Self,
                 ProcessId Parent,
                 HashMap<ProcessName, Actor<RT>> Children,
@@ -141,7 +152,7 @@ namespace Echo.ActorSys2
         /// </summary>
         static Aff<RT, S> userSetup =>
             from state in setup
-            from _2    in putState(state)
+            from _     in putState(state)
             select state;
 
         /// <summary>
@@ -154,7 +165,7 @@ namespace Echo.ActorSys2
         static Eff<RT, Unit> startUserInbox =>
             from u in getUserChannel
             from x in cancelInbox
-            from c in fork(Producer.yield<RT, Channel<UserPost>>(u) | channelPipe<UserPost>() | processUserMessage)
+            from c in fork(u | (channelPipe<UserPost>() | processUserMessage))
             from _ in putCancel(c)
             select unit;
 
@@ -164,15 +175,23 @@ namespace Echo.ActorSys2
         /// function.  Otherwise it passes it on to the dead-letters Process 
         /// </summary>
         static Consumer<RT, UserPost, Unit> processUserMessage =>
-            from u in getUserInbox
             from p in awaiting<UserPost>()
             from x in p.Message switch
                       {
-                          A msg => runUserMessage(msg, u, p),
+                          A msg => runUserMessage(msg, p) | catchInbox(p),
                           _     => Process<RT>.forwardToDeadLetters(p)
                       }
             select unit;
-        
+
+        /// <summary>
+        /// User space error handler
+        /// </summary>
+        static AffCatch<RT, Unit> catchInbox(UserPost post) =>
+            @catch(e => from s in getSelf
+                        from _ in Process<RT>.tellParentSystem(new ChildFaultedSysPost(e, post, s))
+                        from x in cancel<RT>()
+                        select unit);
+
         /// <summary>
         /// Processes a user-message
         /// </summary>
@@ -182,19 +201,12 @@ namespace Echo.ActorSys2
         ///
         /// If the inbox function fails then we tell the parent we're broken and cancel this forked inbox. 
         /// </remarks>
-        static Aff<RT, Unit> runUserMessage(A msg, Func<S, A, Aff<RT, S>> inbox, UserPost post) =>
-            from o in getState | userSetup
-            from _ in inbox(o, msg)
-                       .MatchAff(Succ: s => from _1 in putState(s)
-                                            from _2 in isStateEqual(o, s)
-                                                           ? SuccessEff(unit)
-                                                           : publishState(s)
-                                            select unit, 
-                                 
-                                 Fail: e => from s in getSelf
-                                            from _ in tellParent(new ChildFaultedSysPost(e, post, s))
-                                            from x in cancel<RT>()
-                                            select unit)
+        static Aff<RT, Unit> runUserMessage(A msg, UserPost post) =>
+            from ib in getUserInbox
+            from os in getState | userSetup
+            from ns in ib(os, msg)
+            from _1 in putState(ns)
+            from _2 in isStateEqual(os, ns) ? SuccessEff(unit) : publishState(ns)
             select unit;
 
         /// <summary>
@@ -220,7 +232,7 @@ namespace Echo.ActorSys2
                           WatchSysPost(var pid)                                   => watch(pid),
                           UnWatchSysPost(var pid)                                 => unwatch(pid),
                           _                                                       => Process<RT>.forwardToDeadLetters(p)
-                      }
+                      } | logSysError
             select unit;
 
         /// <summary>
@@ -322,7 +334,7 @@ namespace Echo.ActorSys2
             // Run the user shutdown
             from state    in getState
             from shutdown in getShutdown
-            from _7       in shutdown(state) | unitEff // TODO: Log error
+            from _7       in shutdown(state) | logError // TODO: Log error
 
             select unit;
         
@@ -348,9 +360,8 @@ namespace Echo.ActorSys2
         /// </summary>
         /// <param name="pauseForMilliseconds">Pre-pause before resuming</param>
         static Aff<RT, Unit> resume(int pauseForMilliseconds) =>
-            from _ in Time<RT>.sleepFor(TimeSpan.FromMilliseconds(pauseForMilliseconds))
-            from x in startUserInbox 
-            select unit;
+            Time<RT>.sleepFor(TimeSpan.FromMilliseconds(pauseForMilliseconds))
+                    .Bind(static _ => startUserInbox); 
 
         /// <summary>
         /// Pause the inbox
@@ -381,12 +392,6 @@ namespace Echo.ActorSys2
         /// </summary>
         static Aff<RT, Unit> unwatch(ProcessId watched) =>
             getSelf.Bind(s => Process<RT>.unwatch(s, watched));
-
-        /// <summary>
-        /// Tell parent
-        /// </summary>
-        static Aff<RT, Unit> tellParent(object msg) =>
-            getParent.Bind(p => Process<RT>.tell(p, msg));
 
         /// <summary>
         /// Create a context within the runtime that belongs entirely to this Actor
@@ -536,8 +541,9 @@ namespace Echo.ActorSys2
         /// <param name="state"></param>
         /// <returns></returns>
         static Aff<RT, Unit> publishState(S state) =>
-            get.Bind(a => (state | a.StateChanged).RunEffect())
-          | unitEff;
+            #nullable disable
+            get.Bind(a => (state | a.StateChanged).RunEffect()) | logError;
+            #nullable enable
 
         /// <summary>
         /// Publish a value
@@ -545,18 +551,25 @@ namespace Echo.ActorSys2
         /// <param name="value"></param>
         /// <returns></returns>
         static Eff<RT, Unit> publish(object value) =>
-            get.Map(a => { a.Publish.OnNext(value); return unit; }) 
-          | unitEff;
+            get.Map(a => { a.Publish.OnNext(value); return unit; }) | logError;
 
         /// <summary>
         /// Shutdown the publish stream
         /// </summary>
         static Eff<RT, Unit> publishComplete =>
-            get.Map(a => { a.Publish.OnCompleted(); return unit; }) 
-          | unitEff;
-        
-        static CatchError logError =>
-            @catch(ex => true, 
+            get.Map(a => { a.Publish.OnCompleted(); return unit; }) | logError;
+
+        /// <summary>
+        /// Catch an error and log it
+        /// </summary>
+        static readonly EffCatch<RT, Unit> logError =
+            @catch(Process<RT>.logErr);
+
+        /// <summary>
+        /// Catch an error and log it
+        /// </summary>
+        static readonly EffCatch<RT, Unit> logSysError =
+            @catch(Process<RT>.logSysErr);
 
         /// <summary>
         /// Create a bounded channel that represents an inbox

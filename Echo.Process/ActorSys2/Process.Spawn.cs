@@ -6,6 +6,7 @@ using LanguageExt.Sys.Traits;
 using LanguageExt.ClassInstances;
 using System.Collections.Generic;
 using LanguageExt.Effects.Traits;
+using LanguageExt.Pipes;
 using static LanguageExt.Prelude;
 
 namespace Echo
@@ -51,15 +52,18 @@ namespace Echo
                 let actor = Actor<RT, EqDefault<S>, S, A>.make(
                                     child,
                                     parent,
-                                    () => Setup,
+                                    Setup,
                                     Inbox,
                                     Shutdown ?? (_ => unitEff),
                                     Terminated ?? ((s, _) => SuccessEff(s)),
+                                    Consumer.awaiting<RT, S>()
+                                            .Map(static _ => unit)
+                                            .ToConsumer(),
                                     MaxMailboxSize,
                                     Strategy ?? Process.DefaultStrategy)
                 
                 // Link it to the current actor
-                from _      in post(parent, new LinkChildSysPost<RT>(actor, parent))
+                from _ in post(parent, new LinkChildSysPost<RT>(actor, parent))
                 select child;
 
         /// <summary>

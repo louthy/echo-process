@@ -84,11 +84,17 @@ namespace Echo
                 static _ => echoState.Bind(
                     static es => es.RemoveFromSystem(es.ActorState.Value.Self)));
 
+        /// <summary>
+        /// Make sure we're running in a process 
+        /// </summary>
         static Eff<RT, Unit> guardInProcess =>
             echoState.Bind(es => es.ActorState.Value.Self.IsValid
                                      ? FailEff<Unit>(ProcessError.MustBeCalledWithinProcessContext(nameof(removeFromSystem)))
                                      : unitEff);
 
+        /// <summary>
+        /// Protect against running in a process 
+        /// </summary>
         static Eff<RT, Unit> guardOutProcess =>
             echoState.Bind(es => es.ActorState.Value.Self.IsValid
                                      ? unitEff

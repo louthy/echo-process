@@ -41,10 +41,10 @@ namespace Echo.Traits
         /// <summary>
         /// Logging 
         /// </summary>
-        Aff<RT, Unit> Log(ProcessLogItem item);
+        Eff<RT, Unit> Log(ProcessLogItem item);
     }
 
-    public interface HasEcho<RT> : HasCancel<RT>
+    public interface HasEcho<RT> : HasCancel<RT>, HasTime<RT>
         where RT : struct, HasEcho<RT>
     {
         /// <summary>

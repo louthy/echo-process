@@ -49,5 +49,31 @@ namespace Echo
         /// <returns>Unit if succeeds</returns>
         public static Aff<RT, Unit> tellChild<A>(ProcessName child, A message, ProcessId sender = default(ProcessId)) =>
             getSelf.Bind(s => tell(s.Child(child), message, sender));
+        
+        /// <summary>
+        /// Tell a system message to a process
+        /// </summary>
+        /// <param name="pid">Process to tell</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>Unit if succeeds</returns>
+        internal static Aff<RT, Unit> tellSystem(ProcessId pid, SysPost message) =>
+            post(pid, message);
+        
+        /// <summary>
+        /// Tell a system message to a process
+        /// </summary>
+        /// <param name="message">Message to send</param>
+        /// <returns>Unit if succeeds</returns>
+        internal static Aff<RT, Unit> tellParentSystem(SysPost message) =>
+            getParent.Bind(pid => post(pid, message));
+        
+        /// <summary>
+        /// Tell a system message to a process
+        /// </summary>
+        /// <param name="child">Name of the child process</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>Unit if succeeds</returns>
+        internal static Aff<RT, Unit> tellChildSystem(ProcessName child, SysPost message) =>
+            getSelf.Bind(p => post(p.Child(child), message));
     }
 }
