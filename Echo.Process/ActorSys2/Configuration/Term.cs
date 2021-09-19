@@ -1,6 +1,7 @@
 using System;
 using System.Reactive.Subjects;
 using LanguageExt;
+using LanguageExt.Common;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
 
@@ -56,6 +57,45 @@ namespace Echo.ActorSys2.Configuration
         public static Term Record (Loc Location, Seq<Field> Fields) => new TmRecord (Location, Fields);
         public static Term Proj (Term Term, string Member) => new TmProj (Term.Location, Term, Member);
         public static Term Inert (Loc Location, Ty Type) => new TmInert (Location, Type);
+        public static Term Named (Loc Location, string Name, Term Expr) => new TmNamed (Location, Name, Expr);
+        public static Term Fail (Loc Location, Error Message) => new TmFail (Location, Message);
+    }
+
+    public record TmFail(Loc Location, Error Message) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            Context.Fail<Term>(Message);
+
+        public override Context<Ty> TypeOf =>
+            Context.Fail<Ty>(Message);
+
+        public override bool IsVal =>
+            false;
+
+        public override bool IsNumeric =>
+            false;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            this;
+    }
+
+    public record TmNamed(Loc Location, string Name, Term Expr) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            from e in Expr.Eval1
+            select Named(Location, Name, e);
+
+        public override Context<Ty> TypeOf =>
+            Expr.TypeOf;
+
+        public override bool IsVal =>
+            Expr.IsVal;
+
+        public override bool IsNumeric =>
+            Expr.IsNumeric;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmNamed(Location, Name, Expr.Subst(onVar, onType, name));
     }
 
     public record TmArray(Loc Location, Seq<Term> Values) : Term(Location)

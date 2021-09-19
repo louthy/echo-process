@@ -38,7 +38,8 @@ namespace Echo.ActorSys2.Configuration
                                     "default", "listen-remote-and-local", "persist-all", "persist-inbox", "persist-state", "remote-publish", "remote-state-publish",
                                     "forward-to-self", "forward-to-parent", "forward-to-dead-letters", "stay-in-queue", "forward-to-process",
                                     "resume", "restart", "escalate", "stop",
-                                    "cluster", "strategy", "router"
+                                    "cluster", "strategy", "router",
+                                    "all-for-one", "one-for-one"
                 ),
                 ReservedOpNames: List("-", "+", "/", "*", "==", "!=", ">", "<", "<=", ">=", "||", "&&", "|", "&", "%", "!", "~", "^")
             );
@@ -50,6 +51,9 @@ namespace Echo.ActorSys2.Configuration
             // This builds the standard token parser from the definition above
             var lexer         = makeTokenParser(def);
             var identifier    = lexer.Identifier;
+            var recordLabel   = token(from x in letter
+                                      from xs in asString(many1(either(alphaNum, oneOf("-_"))))
+                                      select x + xs).label("record-label");
             var stringLiteral = lexer.StringLiteral;
             var integer       = lexer.Integer;
             var floating      = lexer.Float;
@@ -67,6 +71,16 @@ namespace Echo.ActorSys2.Configuration
 
             static Func<Term, Term> PostfixOp(string op) =>
                 (Term lhs) => Term.App(Term.Var(lhs.Location, op), lhs);
+
+            static Func<Term, Term, Term> NamedOp() =>
+                (Term lhs, Term rhs) =>
+                    lhs is TmVar tv 
+                        ? Term.Named(tv.Location, tv.Name, rhs)
+                        : Term.Fail(lhs.Location, "identifier expected");
+
+            // Binary operator parser
+            Operator<Term> NamedTerm() =>
+                Operator.Infix(Assoc.Right, reservedOp("=").Map(static _ => NamedOp()));
 
             // Binary operator parser
             Operator<Term> Binary(string name, Assoc assoc) =>
@@ -109,6 +123,7 @@ namespace Echo.ActorSys2.Configuration
                 new[] {Binary("^", Assoc.Left)},
                 new[] {Binary("|", Assoc.Left)},
                 new[] {Prefix("!")},
+                new[] {NamedTerm()},
             };
 
             Parser<(ProcessId Value, Pos Begin, Pos End, int BeginIndex, int EndIndex)>? processId = null;
@@ -142,11 +157,11 @@ namespace Echo.ActorSys2.Configuration
             var recordFields = 
                 from fs in many1(attempt(
                                      indented2(
-                                         from nam in identifier
+                                         from nam in recordLabel
                                          from col in symbol(":")
                                          from val in expr
                                          select (Name: nam, Value: val))))
-                select Term.Record(mkLoc(fs.Head.Name.BeginPos, fs.Last.Name.EndPos),
+                select Term.Record(mkLoc(fs.Head.Name.Begin, fs.Last.Name.End),
                                    fs.Map(f => new Field(f.Name.Value, f.Value)));
             
             // Record term
@@ -279,34 +294,38 @@ namespace Echo.ActorSys2.Configuration
 
             var clusterDecl = indented2(from k in keyword("cluster")
                                         from n in identifier
-                                        from _ in keyword("in")
+                                        from _ in keyword("as")
                                         from a in identifier
                                         from c in symbol(":")
-                                        from r in recordFields
+                                        from r in indented(recordFields)
                                         select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r));
 
             var processDecl = indented2(from k in keyword("process")
                                         from n in identifier
                                         from c in symbol(":")
-                                        from r in recordFields
+                                        from r in indented(recordFields)
                                         select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
             var routerDecl = indented2(from k in keyword("router")
                                        from n in identifier
                                        from c in symbol(":")
-                                       from r in recordFields
+                                       from r in indented(recordFields)
                                        select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
             var strategyDecl = indented2(from k in keyword("strategy")
                                          from n in identifier
                                          from c in symbol(":")
-                                         from r in recordFields
-                                         select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
+                                         from t in either(
+                                             keyword("one-for-one").Map(static _ => StrategyType.OneForOne),
+                                             keyword("all-for-one").Map(static _ => StrategyType.AllForOne)) 
+                                         from d in symbol(":")
+                                         from r in indented(recordFields)
+                                         select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, t, (TmRecord)r));
 
             var recordDecl = indented2(from k in keyword("record")
                                        from n in identifier
                                        from c in symbol(":")
-                                       from r in recordFields
+                                       from r in indented(recordFields)
                                        select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r));
 
             var decls = many1(choice(attempt(topLevelVarDecl),

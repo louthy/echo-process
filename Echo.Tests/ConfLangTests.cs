@@ -10,7 +10,7 @@ namespace Echo.Tests
     {
         static string general = @"
 cluster root as app:
-    node-name:   ""THE-BEAST""        // Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
+    node-name:   ""THE-BEAST""        -- Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
     role:	     ""owin-web-role""
     connection:  ""localhost""
     database:    ""0""
@@ -27,7 +27,52 @@ process echo:
         [Fact]
         public void Test()
         {
-            var res = SyntaxParser.Parse(general, "general.conf");
+            var fres = SyntaxParser.Parse(general, "general.conf");
+            var res  = fres.ThrowIfFail();
+
+            Assert.True(res.Count == 3);
+            Assert.True(res[0] is DeclCluster);
+            Assert.True(res[1] is DeclStrategy);
+            Assert.True(res[2] is DeclProcess);
+        }
+
+        [Fact]
+        public void TopLevelLet_LabeledTuple()
+        {
+            var fres = SyntaxParser.Parse($"let x: min = 1 seconds, max = 100 seconds, scalar = 2", "test.conf");
+            var res  = fres.ThrowIfFail();
+            
+            Assert.True(res.Count == 1);
+            Assert.True(res.Head is DeclGlobalVar decl &&
+                        decl.Name == "x" &&
+                        decl.Value is TmTuple val &&
+                        val.Values.Count == 3 &&
+                        val.Values[0] is TmNamed n0 && n0.Name == "min" && n0.Expr is TmTime t && t.Value == 1*second &&
+                        val.Values[1] is TmNamed n1 && n1.Name == "max" && n1.Expr is TmTime m && m.Value == 100*seconds &&
+                        val.Values[2] is TmNamed n2 && n2.Name == "scalar" && n2.Expr is TmInt s && s.Value == 2
+                        );
+        }
+        
+
+        [Theory]
+        [InlineData("x")]
+        [InlineData("X")]
+        [InlineData("foo")]
+        [InlineData("Foo")]
+        [InlineData("foo1")]
+        [InlineData("Foo1")]
+        [InlineData("foo_1")]
+        [InlineData("Foo-1")]
+        public void TopLevelLet_Ident(string name)
+        {
+            var fres = SyntaxParser.Parse($"let x: {name}", "test.conf");
+            var res  = fres.ThrowIfFail();
+            
+            Assert.True(res.Count == 1);
+            Assert.True(res.Head is DeclGlobalVar decl &&
+                        decl.Name == "x" &&
+                        decl.Value is TmVar val &&
+                        val.Name == name);
         }
         
         [Theory]
@@ -37,7 +82,7 @@ process echo:
         [InlineData(1)]
         [InlineData(long.MaxValue)]
         [InlineData(long.MinValue)]
-        public void TopLevelLetInt(long value)
+        public void TopLevelLet_Int(long value)
         {
             var fres = SyntaxParser.Parse($"let x: {value}", "test.conf");
             var res = fres.ThrowIfFail();
@@ -55,7 +100,7 @@ process echo:
         [InlineData("Hello\\nWorld", "Hello\nWorld")]
         [InlineData("Hello\\rWorld", "Hello\rWorld")]
         [InlineData("Hello\\\"World", "Hello\"World")]
-        public void TopLevelLetString(string input, string output)
+        public void TopLevelLet_String(string input, string output)
         {
             var fres = SyntaxParser.Parse($"let x: \"{input}\"", "test.conf");
             var res = fres.ThrowIfFail();
@@ -68,7 +113,7 @@ process echo:
         }
         
         [Fact]
-        public void TopLevelLetTrue()
+        public void TopLevelLet_True()
         {
             var fres = SyntaxParser.Parse("let x: true", "test.conf");
             var res = fres.ThrowIfFail();
@@ -80,7 +125,7 @@ process echo:
         }
         
         [Fact]
-        public void TopLevelLetFalse()
+        public void TopLevelLet_False()
         {
             var fres = SyntaxParser.Parse("let x: false", "test.conf");
             var res = fres.ThrowIfFail();
@@ -92,7 +137,7 @@ process echo:
         }
         
         [Fact]
-        public void TopLevelLetUnit()
+        public void TopLevelLet_Unit()
         {
             var fres = SyntaxParser.Parse("let x: unit", "test.conf");
             var res = fres.ThrowIfFail();
@@ -111,7 +156,7 @@ process echo:
         [InlineData("persist-state", ProcessFlags.PersistState)]
         [InlineData("remote-publish", ProcessFlags.RemotePublish)]
         [InlineData("remote-state-publish", ProcessFlags.RemoteStatePublish)]
-        public void TopLevelLetProcessFlag(string input, ProcessFlags expected)
+        public void TopLevelLet_ProcessFlag(string input, ProcessFlags expected)
         {
             var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
             var res = fres.ThrowIfFail();
@@ -131,7 +176,7 @@ process echo:
         [InlineData("/sub/node-value")]
         [InlineData("//sub/node-value")]
         [InlineData("//sub/node-value/child-1023")]
-        public void TopLevelLetProcessId(string input)
+        public void TopLevelLet_ProcessId(string input)
         {
             var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
             var res = fres.ThrowIfFail();
@@ -145,7 +190,7 @@ process echo:
                 
         [Theory]
         [InlineData("[//sub/node-value/child-1023,//sub/node-value,/sub/node-value,/sub/node,/sub,//root/123]")]
-        public void TopLevelLetProcessIdArray(string input)
+        public void TopLevelLet_ProcessIdArray(string input)
         {
             var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
             var res  = fres.ThrowIfFail();
@@ -165,7 +210,7 @@ process echo:
         [InlineData("-123.5")]
         [InlineData("-100.0")]
         [InlineData("1.5")]
-        public void TopLevelLetFloat(string value)
+        public void TopLevelLet_Float(string value)
         {
             var fres = SyntaxParser.Parse($"let x: {value}", "test.conf");
             var res  = fres.ThrowIfFail();
@@ -193,7 +238,7 @@ process echo:
         [InlineData("123 hours", 60000*60)]
         [InlineData("100 hour", 60000*60)]
         [InlineData("100 hr", 60000*60)]
-        public void TopLevelLetTime(string value, int scalar)
+        public void TopLevelLet_Time(string value, int scalar)
         {
             var parts    = value.Split(' ');
             var expected = int.Parse(parts[0]) * scalar;
