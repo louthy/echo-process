@@ -27,6 +27,8 @@ process echo:
         [Fact]
         public void EndToEnd_Test()
         {
+            // PARSE
+            
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
@@ -35,6 +37,8 @@ process echo:
             Assert.True(decls[1] is DeclStrategy);
             Assert.True(decls[2] is DeclProcess);
 
+            // TYPE-CHECK
+            
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 

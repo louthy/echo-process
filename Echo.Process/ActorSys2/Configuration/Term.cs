@@ -16,10 +16,19 @@ namespace Echo.ActorSys2.Configuration
             this;
 
         public Context<Term> Eval =>
-            (from t1 in Eval1 
-             from t in t1.Eval
-             select t) 
-           | @catch(ProcessError.NoRuleApplies, this);
+            new Context<Term>(
+                ctx => {
+
+                    var t = this;
+                    while (true)
+                    {
+                        var fnt = t.Eval1.Run(ctx);
+                        if (fnt == ProcessError.NoRuleApplies) return (t, ctx);
+                        var nt = fnt.ThrowIfFail();
+                        t   = nt.Value;
+                        ctx = nt.Context;
+                    }
+                });
         
         public abstract Context<Term> Eval1 { get; }
 
@@ -107,6 +116,9 @@ namespace Echo.ActorSys2.Configuration
             Values.ForAll(static f => f.IsVal);
 
         public override Context<Term> Eval1 =>
+            from nm in Values.ForAll(v => v.IsVal)
+                           ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
+                           : Context.Pure(unit)
             from xs in Values.Sequence(v => v.IsVal ? Context.Pure(v) : v.Eval1)
             select new TmArray(Location, xs) as Term;
 
@@ -133,6 +145,9 @@ namespace Echo.ActorSys2.Configuration
             Values.ForAll(static f => f.IsVal);
 
         public override Context<Term> Eval1 =>
+            from nm in Values.ForAll(v => v.IsVal)
+                           ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
+                           : Context.Pure(unit)
             from xs in Values.Sequence(v => v.IsVal ? Context.Pure(v) : v.Eval1)
             select new TmTuple(Location, xs) as Term;
 
@@ -548,6 +563,9 @@ namespace Echo.ActorSys2.Configuration
             Fields.ForAll(f => f.Value.IsVal);
 
         public override Context<Term> Eval1 =>
+            from nm in Fields.ForAll(f => f.Value.IsVal)
+                           ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
+                           : Context.Pure(unit)
             from fs in Fields.Sequence(f => f.Value.IsVal ? Context.Pure(f) : f.Value.Eval1.Map(v => new Field(f.Name, v)))
             select new TmRecord(Location, fs) as Term;
 
