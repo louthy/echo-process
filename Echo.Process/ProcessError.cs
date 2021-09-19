@@ -36,11 +36,11 @@ namespace Echo
         public static Error StateNotSet =
             Error.New(80010001, "State not set");
         
-        public static Error MustBeCalledWithinProcessContext(string what) =>
-            Error.New(80010002, $"'{what}' should be used from within a process' message or setup function");
+        public static readonly Error MustBeCalledWithinProcessContext =
+            Error.New(80010002, $"should be used from within a process' message or setup function");
         
-        public static Error MustBeCalledOutsideProcessContext(string what) =>
-            Error.New(80010003, $"'{what}' should only be used outside of a a process' message or setup function");
+        public static readonly Error MustBeCalledOutsideProcessContext =
+            Error.New(80010003, $"should only be used outside of a a process' message or setup function");
         
         public static Error TopLevelBindingAlreadyExists(Loc loc, string what) =>
             Error.New(90010004, $"{loc}: top-level binding already exists: '{what}'");

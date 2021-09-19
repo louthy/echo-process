@@ -50,7 +50,7 @@ namespace Echo.ActorSys2.Configuration
         public static Term ProcessFlag(Loc Location, ProcessFlags Value) => new TmProcessFlag(Location, Value);
         public static Term Time(Loc Location, Time Value) => new TmTime(Location, Value);
         public static Term MessageDirective(Loc Location, MessageDirective Value) => new TmMessageDirective(Location, Value);
-        public static Term InboxDirective(Loc Location, Directive Value) => new TmDirective(Location, Value);
+        public static Term Directive(Loc Location, Directive Value) => new TmDirective(Location, Value);
         public static Term Unit(Loc Location) => new TmUnit(Location);
         public static Term Ascribe (Term Term, Ty Type) => new TmAscribe (Term.Location, Term, Type);
         public static Term Record (Loc Location, Seq<Field> Fields) => new TmRecord (Location, Fields);

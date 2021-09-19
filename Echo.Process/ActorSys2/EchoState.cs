@@ -1,3 +1,4 @@
+using System;
 using Echo.ActorSys2.BuiltIn;
 using Echo.Config;
 using Echo.Traits;
@@ -14,16 +15,36 @@ namespace Echo.ActorSys2
     public class EchoState<RT>
         where RT : struct, HasEcho<RT>, HasTime<RT>
     {
+        public static EchoState<RT> Default = new(Atom<HashMap<SystemName, Actor<RT>>>(Empty), SystemName.None, SystemName.None, Atom(ActorState<RT>.None));
+
         readonly Atom<HashMap<SystemName, Actor<RT>>> Systems;
         readonly SystemName DefaultSystem;
+        readonly Atom<ActorState<RT>> ActorState;
+        readonly SystemName CurrentSystem;
 
-        public static EchoState<RT> Default = new(Atom<HashMap<SystemName, Actor<RT>>>(Empty), SystemName.None);
+        /// <summary>
+        /// True if we're in the user's inbox or setup function
+        /// </summary>
+        internal bool InProcess =>
+            ActorState.Value.Self.IsValid;
 
         /// <summary>
         /// Ctor
         /// </summary>
-        EchoState(Atom<HashMap<SystemName, Actor<RT>>> systems, SystemName defaultSystem) =>
-            (Systems, DefaultSystem) = (systems, defaultSystem);
+        EchoState(Atom<HashMap<SystemName, Actor<RT>>> systems, SystemName defaultSystem, SystemName currentSystem, Atom<ActorState<RT>> actorState) =>
+            (Systems, DefaultSystem, CurrentSystem, ActorState) = (systems, defaultSystem, currentSystem, actorState);
+
+        /// <summary>
+        /// Create a local context
+        /// </summary>
+        internal EchoState<RT> LocalEcho(Atom<ActorState<RT>> state) =>
+            new EchoState<RT>(Systems, DefaultSystem, state.Value.Self.System, state);
+
+        /// <summary>
+        /// Create a local context
+        /// </summary>
+        internal EchoState<RT> LocalEcho(SystemName system) =>
+            new EchoState<RT>(Systems, DefaultSystem, system, ActorState);
         
         /// <summary>
         /// Start a new actor system
@@ -88,43 +109,7 @@ namespace Echo.ActorSys2
                         .ToEff(ProcessError.ProcessDoesNotExist(pid))
                         .Bind(nctx => Tell(nctx, pid.Tail(), post))
             };
-
-
-
-
-        /*public static EchoState<RT> Default = new(
-            Atom(0L),
-            Atom(new ActorState<RT>(ProcessId.NoSender, ProcessId.None, Empty, Strategy.Identity)),
-            ActorSystems<RT>.Default,
-            SystemName.None,
-            SystemName.None);
-
-        /// Actor request ID 
-        readonly Atom<long> ActorRequestId;
-
-        /// Actor state
-        internal readonly Atom<ActorState<RT>> ActorState;
-
-        /// Actor systems
-        readonly ActorSystems<RT> Systems;
-
-        /// Current system context
-        readonly SystemName CurrentSystem;
-
-        EchoState(Atom<long> actorRequestId, Atom<ActorState<RT>> actorState, ActorSystems<RT> systems, SystemName currentSystem, SystemName defaultSystem)
-        {
-            ActorRequestId = actorRequestId;
-            ActorState     = actorState;
-            Systems        = systems;
-            CurrentSystem  = currentSystem;
-            DefaultSystem  = defaultSystem;
-        }
-
-        internal EchoState<RT> LocalEcho(Atom<ActorState<RT>> state) =>
-            new EchoState<RT>(ActorRequestId, state, Systems, CurrentSystem, DefaultSystem);
-
-        internal EchoState<RT> LocalEcho(SystemName system) =>
-            new EchoState<RT>(ActorRequestId, ActorState, Systems, system, DefaultSystem);
+        
 
         /// <summary>
         /// Finds the current actor.  If there isn't one, we find the User actor
@@ -138,8 +123,38 @@ namespace Echo.ActorSys2
                       _                   => ProcessError.NoSystemsRunning
                   };
 
-        internal Fin<ActorSystem<RT>> GetCurrentSystem() =>
-            Systems.FindSystem(CurrentSystem) || Systems.FindSystem(DefaultSystem) || Systems.HeadOrFail;
+        internal Unit ModifyCurrentActorState(Func<ActorState<RT>, ActorState<RT>> f) =>
+            ignore(ActorState.Swap(f));
+        
+        internal Fin<Actor<RT>> GetCurrentSystem() =>
+            (Systems.Value.Find(CurrentSystem) || 
+             Systems.Value.Find(DefaultSystem) || 
+             Systems.Value.Values.HeadOrNone())
+           .ToFin(ProcessError.NoSystemsRunning);
+
+
+
+        /*public static EchoState<RT> Default = new(
+            Atom(0L),
+            Atom(new ActorState<RT>(ProcessId.NoSender, ProcessId.None, Empty, Strategy.Identity)),
+            ActorSystems<RT>.Default,
+            SystemName.None,
+            SystemName.None);
+
+        /// Actor request ID 
+        readonly Atom<long> ActorRequestId;
+
+        /// Actor systems
+        readonly ActorSystems<RT> Systems;
+
+        EchoState(Atom<long> actorRequestId, Atom<ActorState<RT>> actorState, ActorSystems<RT> systems, SystemName currentSystem, SystemName defaultSystem)
+        {
+            ActorRequestId = actorRequestId;
+            ActorState     = actorState;
+            Systems        = systems;
+            CurrentSystem  = currentSystem;
+            DefaultSystem  = defaultSystem;
+        }
 
         internal Fin<ProcessId> Root =>
             GetCurrentSystem().Map(static sys => sys.Root);

@@ -50,9 +50,9 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.5.54-beta" />
-    <PackageReference Include="LanguageExt.Sys" Version="3.5.53-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.54-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="3.5.57-beta" />
+    <PackageReference Include="LanguageExt.Sys" Version="3.5.57-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.5.57-beta" />
     <PackageReference Include="Newtonsoft.Json" Version="[10.0.2,)" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
     <PackageReference Include="System.Threading.Channels" Version="6.0.0-preview.7.21377.19" />

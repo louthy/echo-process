@@ -21,19 +21,17 @@ namespace Echo.ActorSys2.Configuration
             Parser<Term>? term = null;
             Parser<Term>? expr = null;
             
-            var opChars = ":!%&*+.<=>\\^|-~";
-
             var builtTypeNames = HashSet("int", "float", "bool", "process-id", "process-name", "process-flags", "time", 
                                          "directive", "message-directive", "disp", "cluster", "strategy", "router", "unit", "array");
  
             // Process config definition
             var def = GenLanguageDef.Empty.With(
-                CommentStart: "/*",
-                CommentEnd: "*/",
-                CommentLine: "//",
+                CommentStart: "{-",
+                CommentEnd: "-}",
+                CommentLine: "--",
                 NestedComments: true,
                 OpStart: oneOf("-+/*=!><|&%!~^"),
-                OpLetter: oneOf(opChars),
+                OpLetter: oneOf("=|&"),
                 IdentStart: letter,
                 IdentLetter: either(alphaNum, oneOf("-_")),
                 ReservedNames: List("if", "then", "else", "match", "as", "let", "redirect", "when", "true", "false", "unit",
@@ -110,32 +108,27 @@ namespace Echo.ActorSys2.Configuration
                 new[] {Binary("&", Assoc.Left)},
                 new[] {Binary("^", Assoc.Left)},
                 new[] {Binary("|", Assoc.Left)},
-                new[] {Prefix("-"), Prefix("+"), Prefix("!")},
+                new[] {Prefix("!")},
             };
 
-            // ProcessId parser
-            var processId =
-                token(
-                    from xs in many1(choice(lower, digit, oneOf("@/[,-_]{}:")))
-                    let r = (new string(xs.ToArray())).Trim()
-                    let pid = ProcessId.TryParse(r)
-                    from res in pid.Match(
-                        Right: result,
-                        Left: ex => failure<ProcessId>($"{ex.Message} '({r})'"))
-                    select res);
+            Parser<(ProcessId Value, Pos Begin, Pos End, int BeginIndex, int EndIndex)>? processId = null;
 
-            // ProcessName parser
-            var processName =
-                token(
-                    from o in symbol("\"")
-                    from xs in many1(choice(lower, digit, oneOf("@/[,-_]{.}:")))
-                    from c in symbol("\"")
-                    let r = (new string(xs.ToArray())).Trim()
-                    let n = ProcessName.TryParse(r)
-                    from res in n.Match(
-                        Right: result,
-                        Left: ex => failure<ProcessName>(ex.Message))
-                    select res);
+            var processName = either(from open in ch('[')
+                                     from pids in sepBy1(processId, ch(','))
+                                     from clos in ch(']')
+                                     select new ProcessName($"[{string.Join(",", pids)}]"),
+                                     from chs in asString(many1(satisfy(ch => !ProcessName.InvalidNameChars.Contains(ch))))
+                                     select new ProcessName(chs));
+
+            processId = token(from head in choice(attempt(str($"{ProcessId.Sep}{ProcessId.Sep}")), str($"{ProcessId.Sep}"), str("@"))
+                              from names in sepBy1(processName, ch('/'))
+                              from pid in ProcessId.TryParse($"{head}{string.Join("/", names)}").Case switch
+                                          {
+                                              ProcessId pid => result(pid),
+                                              Exception ex  => failure<ProcessId>(ex.Message),
+                                              _             => failure<ProcessId>("shouldn't get here")
+                                          }
+                              select pid);
 
             // Let term
             var letTerm = from k in keyword("let")
@@ -146,29 +139,59 @@ namespace Echo.ActorSys2.Configuration
                           from r in expr
                           select Term.Let(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Value, r);
 
+            var recordFields = 
+                from fs in many1(attempt(
+                                     indented2(
+                                         from nam in identifier
+                                         from col in symbol(":")
+                                         from val in expr
+                                         select (Name: nam, Value: val))))
+                select Term.Record(mkLoc(fs.Head.Name.BeginPos, fs.Last.Name.EndPos),
+                                   fs.Map(f => new Field(f.Name.Value, f.Value)));
+            
             // Record term
-            var recordTerm = from fs in many1(attempt(
-                                                  indented2(
-                                                      from nam in identifier
-                                                      from col in symbol(":")
-                                                      from val in expr
-                                                      select (Name: nam, Value: val))))
-                             select Term.Record(mkLoc(fs.Head.Name.BeginPos, fs.Last.Name.EndPos),
-                                                fs.Map(f => new Field(f.Name.Value, f.Value)));
+            var recordTerm = indented2(
+                from kw in keyword("record")
+                from rc in recordFields
+                select rc);
 
             // Array 
             var arrayTerm = from _  in result(unit) // expr is null if this isn't used
-                            from xs in lexer.BracesCommaSep(expr.Expand())
-                            select Term.Array(mkLoc(xs.BeginPos, xs.EndPos), xs.Value);
+                            from xs in lexer.BracketsCommaSep(expr.Expand())
+                            select Term.Array(mkLoc(xs.BeginPos, xs.EndPos),
+                                              xs.Value.Count == 1
+                                                ? xs.Value.Head switch
+                                                  {
+                                                      TmTuple tup => tup.Values,
+                                                      _           => xs.Value
+                                                  }
+                                                : xs.Value);
 
-            var intTerm         = lexer.Integer.Map(x => Term.Int(mkLoc(x.BeginPos, x.EndPos), x.Value));
-            var floatTerm       = lexer.Float.Map(x => Term.Float(mkLoc(x.BeginPos, x.EndPos), x.Value));
+            // Number (int or float)
+            var numberTerm = token(
+                    from beg in getPos
+                    from sgn in optional(ch('-'))
+                    from num in asString(many1(digit))
+                    from den in optional(from dot in ch('.')
+                                         from den in asString(many1(digit))
+                                         select den)
+                    from end in getPos
+                    select (sgn.Case, den.Case) switch
+                           {
+                               ('-', string d) => Term.Float(mkLoc(beg, end), double.Parse($"-{num}.{d}")),
+                               (_, string d)   => Term.Float(mkLoc(beg, end), double.Parse($"{num}.{d}")),
+                               ('-', _)        => Term.Int(mkLoc(beg, end), long.Parse($"-{num}")),
+                               (_, _)          => Term.Int(mkLoc(beg, end), long.Parse(num))
+                           })
+               .Map(static t => t.Value);
+            
             var trueTerm        = lexer.Reserved("true").Map(x => Term.True(mkLoc(x.BeginPos, x.EndPos)));
             var falseTerm       = lexer.Reserved("false").Map(x => Term.False(mkLoc(x.BeginPos, x.EndPos)));
             var unitTerm        = lexer.Reserved("unit").Map(x => Term.Unit(mkLoc(x.BeginPos, x.EndPos)));
             var stringTerm      = lexer.StringLiteral.Map(x => Term.String(mkLoc(x.BeginPos, x.EndPos), x.Value));
             var processIdTerm   = processId.Map(pid => Term.ProcessId(mkLoc(pid.Begin, pid.End), pid.Value));
-            var processNameTerm = processName.Map(pname => Term.ProcessName(mkLoc(pname.Begin, pname.End), pname.Value));
+            //var processNameTerm = processName.Map(pname => Term.ProcessName(mkLoc(pname.Begin, pname.End), pname.Value));
+            
             var processFlagTerm = from f in choice(attempt(keyword("default")),
                                                    attempt(keyword("listen-remote-and-local")),
                                                    attempt(keyword("persist-all")),
@@ -214,22 +237,20 @@ namespace Echo.ActorSys2.Configuration
                                               from p in processId
                                               select Term.MessageDirective(mkLoc(tm.BeginPos, tm.EndPos), MessageDirective.ForwardTo(p.Value)));
 
-            var directiveTerm = choice(attempt(keyword("resume").Map(tm => Term.InboxDirective(mkLoc(tm.BeginPos, tm.EndPos), Directive.Resume))),
-                                       attempt(keyword("restart").Map(tm => Term.InboxDirective(mkLoc(tm.BeginPos, tm.EndPos), Directive.Restart))),
-                                       attempt(keyword("stop").Map(tm => Term.InboxDirective(mkLoc(tm.BeginPos, tm.EndPos), Directive.Stop))),
-                                       keyword("escalate").Map(tm => Term.InboxDirective(mkLoc(tm.BeginPos, tm.EndPos), Directive.Escalate)));
+            var directiveTerm = choice(attempt(keyword("resume").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Resume))),
+                                       attempt(keyword("restart").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Restart))),
+                                       attempt(keyword("stop").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Stop))),
+                                       keyword("escalate").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Escalate)));
             
             var valueTerm = choice(
                                 attempt(arrayTerm),
                                 attempt(timeTerm),
-                                attempt(floatTerm),
-                                attempt(intTerm),
+                                attempt(numberTerm),
                                 attempt(trueTerm),
                                 attempt(falseTerm),
                                 attempt(unitTerm),
                                 attempt(processFlagTerm),
                                 attempt(processIdTerm),
-                                attempt(processNameTerm),
                                 attempt(stringTerm),
                                 attempt(messageDirectiveTerm),
                                 attempt(directiveTerm),
@@ -256,44 +277,44 @@ namespace Echo.ActorSys2.Configuration
                                                      select (Name: n.Value, Value: v))
                                   select Decl.GlobalVar(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Value);
 
-            var clusterDecl = from k in keyword("cluster")
-                              from n in identifier
-                              from _ in keyword("in")
-                              from a in identifier
-                              from c in symbol(":")
-                              from r in recordTerm
-                              select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r);
+            var clusterDecl = indented2(from k in keyword("cluster")
+                                        from n in identifier
+                                        from _ in keyword("in")
+                                        from a in identifier
+                                        from c in symbol(":")
+                                        from r in recordFields
+                                        select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r));
 
-            var processDecl = from k in keyword("process")
-                              from n in identifier
-                              from c in symbol(":")
-                              from r in recordTerm
-                              select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
+            var processDecl = indented2(from k in keyword("process")
+                                        from n in identifier
+                                        from c in symbol(":")
+                                        from r in recordFields
+                                        select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
-            var routerDecl = from k in keyword("router")
-                             from n in identifier
-                             from c in symbol(":")
-                             from r in recordTerm
-                             select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
+            var routerDecl = indented2(from k in keyword("router")
+                                       from n in identifier
+                                       from c in symbol(":")
+                                       from r in recordFields
+                                       select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
-            var strategyDecl = from k in keyword("strategy")
-                               from n in identifier
-                               from c in symbol(":")
-                               from r in recordTerm
-                               select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
-            
-            var recordDecl = from k in keyword("record")
-                             from n in identifier
-                             from c in symbol(":")
-                             from r in recordTerm
-                             select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
+            var strategyDecl = indented2(from k in keyword("strategy")
+                                         from n in identifier
+                                         from c in symbol(":")
+                                         from r in recordFields
+                                         select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
-            var decls = many1(choice(topLevelVarDecl,
-                                     clusterDecl,
-                                     processDecl,
-                                     routerDecl,
-                                     strategyDecl,
-                                     recordDecl));
+            var recordDecl = indented2(from k in keyword("record")
+                                       from n in identifier
+                                       from c in symbol(":")
+                                       from r in recordFields
+                                       select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r));
+
+            var decls = many1(choice(attempt(topLevelVarDecl),
+                                     attempt(clusterDecl),
+                                     attempt(processDecl),
+                                     attempt(routerDecl),
+                                     attempt(recordDecl),
+                                     strategyDecl));
 
             var sourceP = from _1 in lexer.WhiteSpace
                           from ds in decls
@@ -306,39 +327,10 @@ namespace Echo.ActorSys2.Configuration
                            Left: e => FinFail<Seq<Decl>>(Error.New(e)));
         }
 
+        static Parser<A> bp<A>(Func<PString, A> f) =>
+            new Parser<A>(inp => ParserResult.EmptyOK(f(inp), inp));
+
         static Parser<(Term Value, Pos BeginPos, Pos EndPos, int BeginIndex, int EndIndex)> Expand(this Parser<Term> p) =>
             p.Map(t => (t, t.Location.Begin, t.Location.End, 0, 0));
-
-        /*
-        static (Pos Begin, string Text) SplitDeclarations(string source)
-        {
-            var ranges    = new System.Collections.Generic.List<(Pos Begin, string Text)>();
-            var column    = 0;
-            var line      = 0;
-            var start     = 0;
-            var startLine = 0;
-            var current   = 0;
-            
-            foreach (var ch in source)
-            {
-                if (column == 0 && current > start && !char.IsWhiteSpace(ch))
-                {
-                    ranges.Add((new Pos(startLine, 0), source.Substring(start, current - start)));
-                    startLine = line;
-                    start     = current;
-                }
-
-                if (ch == '\n')
-                {
-                    line++;
-                    column = 0;
-                }
-                else
-                {
-                    column++;
-                }
-                current++;
-            }
-        }*/
     }
 }

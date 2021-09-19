@@ -31,7 +31,7 @@ namespace Echo
         [JsonConstructor]
         public ProcessName(string value)
         {
-            var res = TryParse(value).IfLeft(ex => Prelude.raise<ProcessName>(ex));
+            var res = TryParse(value).IfLeft(Prelude.raise<ProcessName>);
             Value = res.Value;
         }
 

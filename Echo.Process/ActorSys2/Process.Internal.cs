@@ -34,70 +34,56 @@ namespace Echo
         /// <summary>
         /// Get the actor's state
         /// </summary>
-        static Eff<RT, ActorState<RT>> get =>
+        internal static Eff<RT, ActorState<RT>> get =>
             echoState.Bind(static es => es.GetCurrentActorState().ToEff());
 
         /// <summary>
         /// Get the strategy computation
         /// </summary>
-        static Eff<RT, State<StrategyContext, Unit>> getStrategy =>
+        internal static Eff<RT, State<StrategyContext, Unit>> getStrategy =>
             get.Map(static a => a.Strategy);
 
         /// <summary>
         /// Get the ProcessId of this Actor
         /// </summary>
-        static Eff<RT, ProcessId> getSelf =>
+        internal static Eff<RT, ProcessId> getSelf =>
             get.Map(static a => a.Self);
 
         /// <summary>
         /// Get the ProcessId of this Actor
         /// </summary>
-        static Eff<RT, ProcessId> getParent =>
+        internal static Eff<RT, ProcessId> getParent =>
             get.Map(static a => a.Parent);
 
         /// <summary>
         /// Children of this Actor
         /// </summary>
-        static Eff<RT, HashMap<ProcessName, Actor<RT>>> getChildren =>
+        internal static Eff<RT, HashMap<ProcessName, Actor<RT>>> getChildren =>
             get.Map(static a => a.Children);
-
-        static Eff<RT, EchoState<RT>> echoState =>
-            Eff<RT, EchoState<RT>>(rt => rt.EchoState);
 
         /// <summary>
         /// Get the current system
         /// </summary>
-        static Eff<RT, ActorSystem<RT>> getCurrentSystem =>
+        internal static Eff<RT, Actor<RT>> getCurrentSystem =>
             echoState.Bind(static es => es.GetCurrentSystem().ToEff());
-
-        /// <summary>
-        /// Get the next request ID
-        /// </summary>
-        static Eff<RT, long> nextActorRequestId =>
-            echoState.Map(static es => es.NextRequestId);
-        
-        /// <summary>
-        /// Remove the current actor from the system
-        /// </summary>
-        static Eff<RT, Unit> removeFromSystem =>
-            guardInProcess.Bind(
-                static _ => echoState.Bind(
-                    static es => es.RemoveFromSystem(es.ActorState.Value.Self)));
 
         /// <summary>
         /// Make sure we're running in a process 
         /// </summary>
         static Eff<RT, Unit> guardInProcess =>
-            echoState.Bind(es => es.ActorState.Value.Self.IsValid
-                                     ? FailEff<Unit>(ProcessError.MustBeCalledWithinProcessContext(nameof(removeFromSystem)))
+            echoState.Bind(es => es.InProcess
+                                     ? FailEff<Unit>(ProcessError.MustBeCalledWithinProcessContext)
                                      : unitEff);
 
         /// <summary>
         /// Protect against running in a process 
         /// </summary>
         static Eff<RT, Unit> guardOutProcess =>
-            echoState.Bind(es => es.ActorState.Value.Self.IsValid
+            echoState.Bind(es => es.InProcess
                                      ? unitEff
-                                     : FailEff<Unit>(ProcessError.MustBeCalledOutsideProcessContext(nameof(removeFromSystem))));
+                                     : FailEff<Unit>(ProcessError.MustBeCalledOutsideProcessContext));
+
+        static Eff<RT, EchoState<RT>> echoState =>
+            Eff<RT, EchoState<RT>>(rt => rt.EchoState);
     }
 }

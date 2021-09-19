@@ -3,6 +3,7 @@ using Echo.Config;
 using Echo.Traits;
 using LanguageExt;
 using LanguageExt.ClassInstances;
+using LanguageExt.Pipes;
 using LanguageExt.Sys.Traits;
 using static LanguageExt.Prelude;
 
@@ -23,6 +24,7 @@ namespace Echo.ActorSys2.BuiltIn
                                             inbox,
                                             shutdown,
                                             terminated,
+                                            Consumer.awaiting<RT, RootProcessState>().Map(_ => unit).ToConsumer(),
                                             100,
                                             Strategy.Identity))
             from canc in fork(root.Effect)
@@ -32,8 +34,8 @@ namespace Echo.ActorSys2.BuiltIn
         /// <summary>
         /// Root process setup
         /// </summary>
-        static Func<Aff<RT, RootProcessState>> setup(SystemName system, ProcessSystemConfig config) =>
-            () => SuccessEff(new RootProcessNotStarted(system, config) as RootProcessState);
+        static Aff<RT, RootProcessState> setup(SystemName system, ProcessSystemConfig config) =>
+            SuccessEff(new RootProcessNotStarted(system, config) as RootProcessState);
 
         /// <summary>
         /// Root process inbox

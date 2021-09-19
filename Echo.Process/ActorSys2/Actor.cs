@@ -403,7 +403,9 @@ namespace Echo.ActorSys2
         /// Get the actor's state
         /// </summary>
         static Eff<RT, ActorState> get =>
-            runtime<RT>().Map(static rt => (ActorState)rt.EchoState.ActorState.Value);
+            #nullable disable
+            runtime<RT>().Map(static rt => (ActorState)rt.EchoState.GetCurrentActorState());
+            #nullable enable
 
         /// <summary>
         /// Get the user's state
@@ -488,7 +490,7 @@ namespace Echo.ActorSys2
         /// Write state
         /// </summary>
         static Eff<RT, Unit> put(ActorState state) =>
-            runtime<RT>().Map(rt => ignore(rt.EchoState.ActorState.Swap(_ => state)));
+            runtime<RT>().Map(rt => ignore(rt.EchoState.ModifyCurrentActorState(_ => state)));
 
         /// <summary>
         /// Write user state
@@ -504,7 +506,7 @@ namespace Echo.ActorSys2
         /// <param name="f"></param>
         /// <returns></returns>
         static Eff<RT, Unit> modify(Func<ActorState, ActorState> f) =>
-            runtime<RT>().Map(rt => ignore(rt.EchoState.ActorState.Swap(s => f((ActorState) s))));
+            runtime<RT>().Map(rt => ignore(rt.EchoState.ModifyCurrentActorState(s => f((ActorState) s))));
 
         /// <summary>
         /// Atomically modify the actor's children

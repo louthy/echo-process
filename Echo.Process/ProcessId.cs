@@ -60,14 +60,14 @@ namespace Echo
         public ProcessId(string path)
         {
             if (path == null) throw new ArgumentNullException(nameof(path));
-            var res = TryParse(path).IfLeft(ex => raise<ProcessId>(ex));
+            var res = TryParse(path).IfLeft(raise<ProcessId>);
             value = new ProcessIdInternal(res.value.Parts, res.value.Name, res.System, res.value.Path);
         }
 
         ProcessId(string path, SystemName system)
         {
             if (path == null) throw new ArgumentNullException(nameof(path));
-            var res = TryParse(path).IfLeft(ex => raise<ProcessId>(ex));
+            var res = TryParse(path).IfLeft(raise<ProcessId>);
             value = new ProcessIdInternal(res.value.Parts, res.value.Name, res.System, res.value.Path);
         }
 
@@ -158,7 +158,7 @@ namespace Echo
 
         static Either<Exception, ProcessId> TryParseRegisteredProcess(string name)
         {
-            if (name.Length == 0) return new InvalidProcessNameException("Registerd process name has nothing following the '@'");
+            if (name.Length == 0) return new InvalidProcessNameException("Registered process name has nothing following the '@'");
 
             var parts = name.Split(':');
             switch (parts.Length)

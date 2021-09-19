@@ -14,13 +14,15 @@ namespace Echo.ActorSys2.BuiltIn
     internal static class ClusterMonitorProcess<RT>
         where RT : struct, HasEcho<RT>, HasTime<RT>
     {
+        public record State(HashMap<ProcessName, ClusterNode> Members);
+
         public static Aff<RT, ProcessId> startup =>
-            Process<RT>.spawn<ClusterMonitor.State, ClusterMonitor.Msg>(ActorSystemConfig.Default.MonitorProcessName, setup, inbox);
+            Process<RT>.spawn<State, ClusterMonitor.Msg>(ActorSystemConfig.Default.MonitorProcessName, setup, inbox);
 
-        static Aff<RT, ClusterMonitor.State> setup =>
-            unitEff;
+        static Aff<RT, State> setup =>
+            SuccessEff(new State(Empty));
 
-        static Aff<RT, ClusterMonitor.State> inbox(ClusterMonitor.State state, ClusterMonitor.Msg msg) =>
-            unitEff;
+        static Aff<RT, State> inbox(State state, ClusterMonitor.Msg msg) =>
+            SuccessEff(state);
     }
 }
