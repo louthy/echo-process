@@ -6,6 +6,7 @@ namespace Echo.ActorSys2.Configuration
     public abstract record Ty
     {
         public abstract Context<bool> Equiv(Ty rhs);
+        public abstract string Show();
     }
 
     public record TyNil : Ty
@@ -14,6 +15,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyNil || rhs is TyArr);
+
+        public override string Show() =>
+            "[]";
     }
 
     public record TyArray(Ty Type) : Ty
@@ -25,12 +29,18 @@ namespace Echo.ActorSys2.Configuration
                 TyArray r => Type.Equiv(r.Type),
                 _         => Context.Pure(false)
             };
+
+        public override string Show() =>
+            $"[{Type.Show()}]";
     }
 
     public record TyVar(string Name) : Ty
     {
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyVar (var n) && Name == n);
+
+        public override string Show() =>
+            $"{Name}";
     }
 
     public record TyArr(Ty X, Ty Y) : Ty
@@ -41,9 +51,73 @@ namespace Echo.ActorSys2.Configuration
                   from r in mr.X.Equiv(mr.Y)
                   select l && r
                 : Context.Pure(false);
+
+        public override string Show() =>
+            $"{X} → {Y}";
     }
 
-    public record FieldTy(string Name, Ty Type);
+    public record FieldTy(string Name, Ty Type)
+    {
+        public string Show() =>
+            $"{Name} : {Type}";
+    }
+
+    public record TyProcess(TyRecord Value) : Ty
+    {
+        public override Context<bool> Equiv(Ty rhs) =>
+            rhs switch
+            {
+                TyProcess rp => Value.Equiv(rp.Value),
+                TyRecord rr  => Value.Equiv(rr),
+                _            => Context.Pure(false)
+            };
+
+        public override string Show() =>
+            "process";
+    }
+
+    public record TyRouter(TyRecord Value) : Ty
+    {
+        public override Context<bool> Equiv(Ty rhs) =>
+            rhs switch
+            {
+                TyRouter rp => Value.Equiv(rp.Value),
+                TyRecord rr => Value.Equiv(rr),
+                _           => Context.Pure(false)
+            };
+
+        public override string Show() =>
+            "router";
+    }
+
+    public record TyCluster(TyRecord Value) : Ty
+    {
+        public override Context<bool> Equiv(Ty rhs) =>
+            rhs switch
+            {
+                TyCluster rp => Value.Equiv(rp.Value),
+                TyRecord rr  => Value.Equiv(rr),
+                _            => Context.Pure(false)
+            };
+
+        public override string Show() =>
+            "cluster";
+    }
+
+    public record TyStrategy(StrategyType Type, TyRecord Value) : Ty
+    {
+        public override Context<bool> Equiv(Ty rhs) =>
+            rhs switch
+            {
+                TyStrategy rp => Type == rp.Type
+                                    ? Value.Equiv(rp.Value)
+                                    : Context.Pure(false),
+                _             => Context.Pure(false)
+            };
+
+        public override string Show() =>
+            "cluster";
+    }
 
     public record TyRecord(Seq<FieldTy> Fields) : Ty
     {
@@ -58,6 +132,9 @@ namespace Echo.ActorSys2.Configuration
                         select xs.ForAll(Prelude.identity)
                       : Context.Pure(false)
                 : Context.Pure(false);
+
+        public override string Show() =>
+            $"record ({string.Join(", ", Fields.Map(f => f.Show()))})";
     }
 
     public record TyVariant(Seq<FieldTy> Fields) : Ty
@@ -72,6 +149,9 @@ namespace Echo.ActorSys2.Configuration
                         select xs.ForAll(Prelude.identity)
                       : Context.Pure(false)
                 : Context.Pure(false);        
+
+        public override string Show() =>
+            $"variant ({string.Join(", ", Fields.Map(f => f.Show()))})";
     }
 
     public record TyUnit : Ty
@@ -80,6 +160,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyUnit);
+    
+        public override string Show() =>
+            $"unit";
     }
 
     public record TyBool : Ty
@@ -88,6 +171,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyBool);
+    
+        public override string Show() =>
+            $"bool";
     }
 
     public record TyInt : Ty
@@ -96,6 +182,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyInt);
+    
+        public override string Show() =>
+            $"int";
     }
 
     public record TyFloat : Ty
@@ -104,6 +193,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyFloat);
+    
+        public override string Show() =>
+            $"float";
     }
 
     public record TyString : Ty
@@ -112,6 +204,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyString);
+    
+        public override string Show() =>
+            $"string";
     }
 
     public record TyProcessId : Ty
@@ -120,6 +215,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyProcessId);
+    
+        public override string Show() =>
+            $"process-id";
     }
 
     public record TyProcessName : Ty
@@ -128,6 +226,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyProcessName);
+    
+        public override string Show() =>
+            $"process-name";
     }
 
     public record TyProcessFlag : Ty
@@ -136,6 +237,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyProcessFlag);
+    
+        public override string Show() =>
+            $"process-flag";
     }
 
     public record TyTime : Ty    
@@ -144,6 +248,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyTime);
+    
+        public override string Show() =>
+            $"time";
     }
 
     public record TyMessageDirective : Ty
@@ -152,14 +259,20 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<bool> Equiv(Ty rhs) =>
             Context.Pure(rhs is TyMessageDirective);
+    
+        public override string Show() =>
+            $"message-directive";
     }
 
-    public record TyInboxDirective : Ty
+    public record TyDirective : Ty
     {
-        public static readonly Ty Default = new TyInboxDirective(); 
+        public static readonly Ty Default = new TyDirective(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyInboxDirective);
+            Context.Pure(rhs is TyDirective);
+    
+        public override string Show() =>
+            $"directive";
     }
 
     public record TyTuple(Seq<Ty> Types) : Ty
@@ -170,5 +283,8 @@ namespace Echo.ActorSys2.Configuration
                        .Sequence(p => p.Left.Equiv(p.Right))
                        .Map(xs => xs.ForAll(Prelude.identity))
                 : Context.Pure(false);
+ 
+        public override string Show() =>
+            $"tuple ({string.Join(", ", Types.Map(f => f.Show()))})";
     }
 }

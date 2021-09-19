@@ -25,15 +25,36 @@ process echo:
 "; 
         
         [Fact]
-        public void Test()
+        public void EndToEnd_Test()
         {
-            var fres = SyntaxParser.Parse(general, "general.conf");
-            var res  = fres.ThrowIfFail();
+            var fres  = SyntaxParser.Parse(general, "general.conf");
+            var decls = fres.ThrowIfFail();
 
-            Assert.True(res.Count == 3);
-            Assert.True(res[0] is DeclCluster);
-            Assert.True(res[1] is DeclStrategy);
-            Assert.True(res[2] is DeclProcess);
+            Assert.True(decls.Count == 3);
+            Assert.True(decls[0] is DeclCluster);
+            Assert.True(decls[1] is DeclStrategy);
+            Assert.True(decls[2] is DeclProcess);
+
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("app").Case is VarBind vb1 && vb1.Type is TyCluster cluster &&
+                        cluster.Value.Fields.Find(f => f.Name == "node-name").Case is FieldTy fty1 && fty1.Type is TyString &&
+                        cluster.Value.Fields.Find(f => f.Name == "role").Case is FieldTy fty2 && fty2.Type is TyString &&
+                        cluster.Value.Fields.Find(f => f.Name == "connection").Case is FieldTy fty3 && fty3.Type is TyString &&
+                        cluster.Value.Fields.Find(f => f.Name == "database").Case is FieldTy fty4 && fty4.Type is TyString);
+
+            Assert.True(ctx.Context.TopBindings.Find("strat").Case is VarBind vb2 && vb2.Type is TyStrategy strategy &&
+                        strategy.Type == StrategyType.OneForOne &&
+                        strategy.Value.Fields.Find(f => f.Name == "backoff").Case is FieldTy fty5 && fty5.Type is TyTuple tuple &&
+                        tuple.Types.Count == 3 &&
+                        tuple.Types[0] is TyTime &&
+                        tuple.Types[1] is TyTime &&
+                        tuple.Types[2] is TyInt);
+
+            Assert.True(ctx.Context.TopBindings.Find("echo").Case is VarBind vb3 && vb3.Type is TyProcess process &&
+                        process.Value.Fields.Find(f => f.Name == "pid").Case is FieldTy fty6 && fty6.Type is TyProcessId &&
+                        process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyStrategy);
         }
 
         [Fact]

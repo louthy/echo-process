@@ -7,17 +7,19 @@ namespace Echo.ActorSys2.Configuration
 {
     public record Context(HashMap<string, Binding> TopBindings, HashMap<string, Binding> Bindings)
     {
+        public static readonly Context Empty = new(default, default);
+        
         /// <summary>
         /// Context success
         /// </summary>
         public static Context<A> Pure<A>(A value) =>
-            new Context<A>(_ => FinSucc(value));
+            new Context<A>(ctx => FinSucc((value, ctx)));
         
         /// <summary>
         /// Context fail
         /// </summary>
         public static Context<A> Fail<A>(Error error) =>
-            new Context<A>(_ => FinFail<A>(error));
+            new Context<A>(_ => FinFail<(A, Context)>(error));
         
         /// <summary>
         /// Create a local context and run `ma` in it
@@ -29,13 +31,31 @@ namespace Echo.ActorSys2.Configuration
         /// Get the context
         /// </summary>
         public static Context<Context> get =>
-            new Context<Context>(FinSucc);
+            new Context<Context>(static ctx => FinSucc((ctx, ctx)));
+
+        /// <summary>
+        /// Get the context
+        /// </summary>
+        public static Context<Unit> modify(Func<Context, Fin<Context>> f) =>
+            new Context<Unit>(ctx => f(ctx).Map(nctx => (unit, nctx)));
+
+        /// <summary>
+        /// Get the context
+        /// </summary>
+        public static Context<Unit> modify(Func<Context, Context> f) =>
+            new Context<Unit>(ctx => (unit, f(ctx)));
 
         /// <summary>
         /// Get binding
         /// </summary>
         public static Context<Binding> getBinding(Loc loc, string name) =>
-            get.Bind(ctx => ctx.GetBinding(loc, name));
+            get.Bind(ctx => ctx.GetBinding(loc, name).ToContext());
+
+        /// <summary>
+        /// Add a top level binding
+        /// </summary>
+        public static Context<Unit> addTop(Loc loc, string name, Binding b) =>
+            modify(ctx => ctx.AddTop(loc, name, b));
 
         /// <summary>
         /// Get type
@@ -87,8 +107,8 @@ namespace Echo.ActorSys2.Configuration
         /// </summary>
         public Fin<Context> AddTop(Loc loc, string name, Binding b) =>
             TopBindings.ContainsKey(name)
-                ? this with {TopBindings = TopBindings.Add(name, b)}
-                : ProcessError.TopLevelBindingAlreadyExists(loc, name);
+                ? ProcessError.TopLevelBindingAlreadyExists(loc, name)
+                : this with {TopBindings = TopBindings.Add(name, b)};
 
         /// <summary>
         /// Add a local binding
@@ -113,28 +133,28 @@ namespace Echo.ActorSys2.Configuration
 
     public class Context<A>
     {
-        internal readonly Func<Context, Fin<A>> Op;
+        internal readonly Func<Context, Fin<(A Value, Context Context)>> Op;
 
-        internal Context(Func<Context, Fin<A>> op) =>
+        internal Context(Func<Context, Fin<(A Value, Context Context)>> op) =>
             Op = op;
 
+        public Fin<(A Value, Context Context)> Run(Context context) =>
+            Op(context);
+
         public Context<B> Select<B>(Func<A, B> f) =>
-            new Context<B>(ctx => Op(ctx).Map(f));
+            new Context<B>(ctx => Op(ctx).Map(p => (f(p.Value), p.Context)));
 
         public Context<B> Map<B>(Func<A, B> f) =>
-            new Context<B>(ctx => Op(ctx).Map(f));
+            new Context<B>(ctx => Op(ctx).Map(p => (f(p.Value), p.Context)));
 
         public Context<B> SelectMany<B>(Func<A, Context<B>> f) =>
-            new Context<B>(ctx => Op(ctx).Bind<B>(a => f(a).Op(ctx)));
+            new Context<B>(ctx => Op(ctx).Bind(a => f(a.Value).Op(a.Context)));
 
         public Context<B> Bind<B>(Func<A, Context<B>> f) =>
-            new Context<B>(ctx => Op(ctx).Bind<B>(a => f(a).Op(ctx)));
-
-        public Context<B> Bind<B>(Func<A, Fin<B>> f) =>
-            new Context<B>(ctx => Op(ctx).Bind<B>(f));
+            new Context<B>(ctx => Op(ctx).Bind(a => f(a.Value).Op(a.Context)));
 
         public Context<C> SelectMany<B, C>(Func<A, Context<B>> bind, Func<A, B, C> project) =>
-            new Context<C>(ctx => Op(ctx).Bind(a => bind(a).Op(ctx).Map(b => project(a, b))));
+            new Context<C>(ctx => Op(ctx).Bind(a => bind(a.Value).Op(a.Context).Map(b => (project(a.Value, b.Value), b.Context))));
 
         public static Context<A> operator |(Context<A> left, CatchValue<A> right) =>
             new Context<A>(ctx => {
@@ -142,7 +162,7 @@ namespace Echo.ActorSys2.Configuration
                                return res.IsSucc
                                           ? res
                                           : right.Match((Error) res)
-                                              ? right.Value((Error) res)
+                                              ? (right.Value((Error) res), ctx)
                                               : res;
                            });
 
@@ -150,6 +170,14 @@ namespace Echo.ActorSys2.Configuration
 
     public static class ContextExtensions
     {
+        public static Context<A> ToContext<A>(this Fin<A> ma) =>
+            ma.Case switch
+            {
+                A val     => Context.Pure(val),
+                Error err => Context.Fail<A>(err),
+                _         => throw new NotSupportedException()
+            };
+        
         public static Context<Seq<A>> Sequence<A>(this Seq<A> ms) =>
             ms.Sequence(Context.Pure);
  
@@ -163,11 +191,12 @@ namespace Echo.ActorSys2.Configuration
                                     foreach (var m in ms)
                                     {
                                         var fx = f(m).Op(ctx);
-                                        if (fx.IsFail) return FinFail<Seq<B>>((Error) fx);
-                                        result = result.Add((B) fx);
+                                        if (fx.IsFail) return FinFail<(Seq<B>, Context)>((Error) fx);
+                                        result = result.Add(fx.ThrowIfFail().Value);
+                                        ctx    = fx.ThrowIfFail().Context;
                                     }
 
-                                    return result;
+                                    return (result, ctx);
                                 });
     }
 }

@@ -502,7 +502,7 @@ namespace Echo.ActorSys2.Configuration
             Context.Fail<Term>(ProcessError.NoRuleApplies);
 
         public override Context<Ty> TypeOf =>
-            Context.Pure(TyInboxDirective.Default);
+            Context.Pure(TyDirective.Default);
     }
 
     public record TmUnit(Loc Location) : Term(Location)

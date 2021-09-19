@@ -100,6 +100,27 @@ namespace Echo
             Error.New(90010021, $"{loc}: annotation is not a variant type");
          
         public static Error ElementsOfArrayHaveNoCommonType(Loc loc) =>
-            Error.New(90010012, $"{loc}: branches of array have no common type");
+            Error.New(90010022, $"{loc}: branches of array have no common type");
+        
+        public static Error ProcessTypeInvalid(Loc loc, Ty got) =>
+            Error.New(90010023, $"{loc}: expected process type, got: {got}");
+        
+        public static Error RecordTypeInvalid(Loc loc, Ty got) =>
+            Error.New(90010024, $"{loc}: expected record type, got: {got}");
+        
+        public static Error ClusterTypeInvalid(Loc loc, Ty got) =>
+            Error.New(90010025, $"{loc}: expected cluster type, got: {got}");
+        
+        public static Error StrategyTypeInvalid(Loc loc, Ty got) =>
+            Error.New(90010026, $"{loc}: expected strategy type, got: {got}");
+        
+        public static Error RouterTypeInvalid(Loc loc, Ty got) =>
+            Error.New(90010027, $"{loc}: expected router type, got: {got}");
+        
+        public static Error RequiredAttributeMissing(Loc loc, string name) =>
+            Error.New(90010028, $"{loc}: required attribute missing: {name}");
+        
+        public static Error IncorrectTypeForAttribute(Loc loc, string name, Ty got, Ty expected) =>
+            Error.New(90010029, $"{loc}: incorrect type for attribute `{name}`, expected: {expected}, got: {got}");
     }
 }
