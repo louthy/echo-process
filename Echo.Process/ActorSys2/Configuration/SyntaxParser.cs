@@ -63,15 +63,6 @@ namespace Echo.ActorSys2.Configuration
             var keyword       = lexer.Reserved;
             var reservedOp    = lexer.ReservedOp;
 
-            static Func<Term, Term, Term> BinaryOp(string op) =>
-                (Term lhs, Term rhs) => Term.App(Term.App(Term.Var(lhs.Location, op), lhs), rhs);
-
-            static Func<Term, Term> PrefixOp(string op) =>
-                (Term rhs) => Term.App(Term.Var(rhs.Location, op), rhs);
-
-            static Func<Term, Term> PostfixOp(string op) =>
-                (Term lhs) => Term.App(Term.Var(lhs.Location, op), lhs);
-
             static Func<Term, Term, Term> NamedOp() =>
                 (Term lhs, Term rhs) =>
                     lhs is TmVar tv 
@@ -79,20 +70,13 @@ namespace Echo.ActorSys2.Configuration
                         : Term.Fail(lhs.Location, "identifier expected");
 
             // Binary operator parser
-            Operator<Term> NamedTerm() =>
-                Operator.Infix(Assoc.Right, reservedOp("=").Map(static _ => NamedOp()));
-
-            // Binary operator parser
-            Operator<Term> Binary(string name, Assoc assoc) =>
-                Operator.Infix(assoc, reservedOp(name).Map(_ => BinaryOp(name)));
+            Operator<Term> BinaryTerm(string name, Assoc assoc, Func<Term, Term, Term> f) =>
+                Operator.Infix(assoc, reservedOp(name).Map(_ => f));
 
             // Prefix operator parser
-            Operator<Term> Prefix(string name) =>
-                Operator.Prefix(reservedOp(name).Map(_ => PrefixOp(name)));
+            Operator<Term> PrefixTerm(string name, Func<Term, Term> f) =>
+                Operator.Prefix(reservedOp(name).Map(_ => f));
 
-            // Postfix operator parser
-            Operator<Term> Postfix(string name) =>
-                Operator.Postfix(reservedOp(name).Map(_ => PostfixOp(name)));
             
             Parser<(A Value, Pos Begin, Pos End, int BeginIndex, int EndIndex)> token<A>(Parser<A> p) =>
                 lexer.Lexeme(p);
@@ -113,17 +97,17 @@ namespace Echo.ActorSys2.Configuration
             // Operator table
             Operator<Term>[][] operators =
             {
-                new[] {Binary("||", Assoc.Left)},
-                new[] {Binary("&&", Assoc.Left)},
-                new[] {Binary("==", Assoc.None), Binary("!=", Assoc.None)},
-                new[] {Binary("<", Assoc.None), Binary(">", Assoc.None), Binary(">=", Assoc.None), Binary("<=", Assoc.None)},
-                new[] {Binary("+", Assoc.Left), Binary("-", Assoc.Left)},
-                new[] {Binary("*", Assoc.Left), Binary("/", Assoc.Left), Binary("%", Assoc.Left)},
-                new[] {Binary("&", Assoc.Left)},
-                new[] {Binary("^", Assoc.Left)},
-                new[] {Binary("|", Assoc.Left)},
-                new[] {Prefix("!")},
-                new[] {NamedTerm()},
+                new[] {BinaryTerm("=", Assoc.Right, NamedOp())},
+                new[] {BinaryTerm("||", Assoc.Left, Term.Or)},
+                new[] {BinaryTerm("&&", Assoc.Left, Term.And)},
+                new[] {BinaryTerm("==", Assoc.None, Term.Eq), BinaryTerm("!=", Assoc.None, Term.Neq)},
+                new[] {BinaryTerm("<", Assoc.None, Term.Lt), BinaryTerm(">", Assoc.None, Term.Gt), BinaryTerm(">=", Assoc.None, Term.Gte), BinaryTerm("<=", Assoc.None, Term.Lte)},
+                new[] {BinaryTerm("+", Assoc.Left, Term.Add), BinaryTerm("-", Assoc.Left, Term.Sub)},
+                new[] {BinaryTerm("*", Assoc.Left, Term.Mul), BinaryTerm("/", Assoc.Left, Term.Div), BinaryTerm("%", Assoc.Left, Term.Mod)},
+                new[] {BinaryTerm("&", Assoc.Left, Term.BitwiseAnd)},
+                new[] {BinaryTerm("^", Assoc.Left, Term.BitwiseXor)},
+                new[] {BinaryTerm("|", Assoc.Left, Term.BitwiseOr)},
+                new[] {PrefixTerm("!", Term.Not)},
             };
 
             Parser<(ProcessId Value, Pos Begin, Pos End, int BeginIndex, int EndIndex)>? processId = null;

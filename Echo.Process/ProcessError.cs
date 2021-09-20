@@ -122,5 +122,17 @@ namespace Echo
         
         public static Error IncorrectTypeForAttribute(Loc loc, string name, Ty got, Ty expected) =>
             Error.New(90010029, $"{loc}: incorrect type for attribute `{name}`, expected: {expected}, got: {got}");
+        
+        public static Error InvalidTypeInferred(Loc loc, string name, Ty got, Ty expected) =>
+            Error.New(90010030, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got}");
+        
+        public static Error InvalidTypesInferred(Loc loc, string name, Ty got1, Ty got2, Ty expected) =>
+            Error.New(90010031, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got1} and {got2}");
+        
+        public static Error InvalidTypesInferred(Loc loc, string name, Ty got1, Ty got2, string expected) =>
+            Error.New(90010032, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got1} and {got2}");
+        
+        public static Error InvalidComparisonType(Loc loc, string name, Ty got1, Ty got2) =>
+            Error.New(90010032, $"{loc}: `{name}` operands have incompatible types: {got1} and {got2}");
     }
 }

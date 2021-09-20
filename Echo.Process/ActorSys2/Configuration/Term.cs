@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Reactive.Subjects;
 using LanguageExt;
+using LanguageExt.ClassInstances.Const;
 using LanguageExt.Common;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
@@ -68,8 +70,422 @@ namespace Echo.ActorSys2.Configuration
         public static Term Inert (Loc Location, Ty Type) => new TmInert (Location, Type);
         public static Term Named (Loc Location, string Name, Term Expr) => new TmNamed (Location, Name, Expr);
         public static Term Fail (Loc Location, Error Message) => new TmFail (Location, Message);
+        public static Term Mul(Term Left, Term Right) => new TmMul(Left, Right);
+        public static Term Div(Term Left, Term Right) => new TmDiv(Left, Right);
+        public static Term Mod(Term Left, Term Right) => new TmMod(Left, Right);
+        public static Term Sub(Term Left, Term Right) => new TmSub(Left, Right);
+        public static Term Add(Term Left, Term Right) => new TmAdd(Left, Right);
+        public static Term BitwiseAnd(Term Left, Term Right) => new TmBitwiseAnd(Left, Right);
+        public static Term BitwiseOr(Term Left, Term Right) => new TmBitwiseOr(Left, Right);
+        public static Term BitwiseXor(Term Left, Term Right) => new TmBitwiseXor(Left, Right);
+        public static Term And(Term Left, Term Right) => new TmAnd(Left, Right);
+        public static Term Or(Term Left, Term Right) => new TmOr(Left, Right);
+        public static Term Eq(Term Left, Term Right) => new TmEq(Left, Right);
+        public static Term Neq(Term Left, Term Right) => new TmNeq(Left, Right);
+        public static Term Lt(Term Left, Term Right) => new TmLt(Left, Right);
+        public static Term Lte(Term Left, Term Right) => new TmLte(Left, Right);
+        public static Term Gt(Term Left, Term Right) => new TmGt(Left, Right);
+        public static Term Gte(Term Left, Term Right) => new TmGte(Left, Right);
+        public static Term Not(Term Expr) => new TmNot(Expr);
     }
 
+    public record TmNot(Term Expr) : Term(Expr.Location)
+    {
+        public override Context<Term> Eval1 =>
+            Expr switch
+            {
+                TmTrue  => Context.Pure(False(Location)),
+                TmFalse => Context.Pure(True(Location)),
+                var t   => t.Eval1.Map(Not)
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t in Expr.TypeOf
+            from b in t.Equiv(TyBool.Default)
+            from ty in b 
+                           ? Context.Pure(TyBool.Default) 
+                           : Context.Fail<Ty>(ProcessError.InvalidTypeInferred(Location, "!", t, TyBool.Default)) 
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Not(Expr.Subst(onVar, onType, name));
+    } 
+    
+    public abstract record TmNumberOp(
+        Term Left, 
+        Term Right, 
+        string Op,
+        Func<Term, Term, Term> Construct, 
+        Func<double, double, double> OpFloat, 
+        Func<long, long, long> OpInt) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)     => Context.Pure(Int(Location, OpInt(t1.Value, t2.Value))),    
+                (TmFloat t1, TmFloat t2) => Context.Pure(Float(Location, OpFloat(t1.Value, t2.Value))),    
+                (TmFloat t1, TmInt t2)   => Context.Pure(Float(Location, OpFloat(t1.Value, t2.Value))),    
+                (TmInt t1, TmFloat t2)   => Context.Pure(Float(Location, OpFloat(t1.Value, t2.Value))),
+                (TmInt t1, var t2) => from nt2 in t2.Eval1
+                                      select Construct(t1, nt2),
+                (TmFloat t1, var t2) => from nt2 in t2.Eval1
+                                        select Construct(t1, nt2),
+                var (t1, t2) => from nt1 in t1.Eval1
+                                select Construct(nt1, t2),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from i1 in t1.Equiv(TyInt.Default)
+            from f1 in t1.Equiv(TyFloat.Default)
+            from i2 in t2.Equiv(TyInt.Default)
+            from f2 in t2.Equiv(TyFloat.Default)
+            from ty in (i1, f1, i2, f2) switch
+                       {
+                           (_, true, _, true) => Context.Pure(TyFloat.Default),
+                           (true, _, true, _) => Context.Pure(TyInt.Default),
+                           (_, true, true, _) => Context.Pure(TyFloat.Default),
+                           (true, _, _, true) => Context.Pure(TyFloat.Default),
+                           _                  => Context.Fail<Ty>(ProcessError.InvalidTypesInferred(Location, Op, t1, t2, "int or float")) 
+                       }
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }
+
+    public record TmMul(Term Left, Term Right) : TmNumberOp(Left, Right, "*", Mul, (x, y) => x * y, (x, y) => x * y);
+    public record TmDiv(Term Left, Term Right) : TmNumberOp(Left, Right, "/", Div, (x, y) => x / y, (x, y) => x / y);
+    public record TmMod(Term Left, Term Right) : TmNumberOp(Left, Right, "%", Mod, (x, y) => x % y, (x, y) => x % y);
+    public record TmSub(Term Left, Term Right) : TmNumberOp(Left, Right, "-", Sub, (x, y) => x - y, (x, y) => x - y);
+    public record TmAdd(Term Left, Term Right) : TmNumberOp(Left, Right, "+", Add, (x, y) => x + y, (x, y) => x + y);
+    
+    public abstract record TmBooleanOp(
+        Term Left, 
+        Term Right, 
+        string Op, 
+        Func<Term, Term, Term> Construct,
+        Func<bool, bool, bool> Map) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmTrue t1, TmTrue t2)   => Context.Pure(Map(true, true) ? True(Location) : False(Location)),    
+                (TmFalse t1, TmTrue t2)  => Context.Pure(Map(false, true) ? True(Location) : False(Location)),
+                (TmTrue t1, TmFalse t2)  => Context.Pure(Map(true, false) ? True(Location) : False(Location)),
+                (TmFalse t1, TmFalse t2) => Context.Pure(Map(false, false) ? True(Location) : False(Location)),    
+                (TmTrue t1, var t2)      => from nt2 in t2.Eval1
+                                            select Construct(t1, nt2),
+                (TmFalse t1, var t2)     => from nt2 in t2.Eval1
+                                            select Construct(t1, nt2),
+                var (t1, t2)             => from nt1 in t1.Eval1
+                                            select Construct(nt1, t2),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from b1 in t1.Equiv(TyBool.Default)
+            from b2 in t2.Equiv(TyBool.Default)
+            from ty in (b1, b2) switch
+                       {
+                           (true, true) => Context.Pure(TyBool.Default),
+                           _            => Context.Fail<Ty>(ProcessError.InvalidTypesInferred(Location, Op, t1, t2, TyBool.Default)) 
+                       }
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }    
+
+    public record TmAnd(Term Left, Term Right) : TmBooleanOp(Left, Right, "&&", And, (x, y) => x && y);
+    public record TmOr(Term Left, Term Right) : TmBooleanOp(Left, Right, "||", Or, (x, y) => x || y);
+
+    public record TmEq(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                           => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)                       => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmString t1, TmString t2)                     => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmDirective t1, TmDirective t2)               => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmMessageDirective t1, TmMessageDirective t2) => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2)           => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmProcessId t1, TmProcessId t2)               => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmProcessName t1, TmProcessName t2)           => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmArray t1, TmArray t2) => t1.Values.Count == t2.Values.Count
+                                                ? Context.Pure(t1.Values
+                                                                 .Zip(t2.Values)
+                                                                 .Map(p => Eq(p.Left, p.Right))
+                                                                 .Reduce(And))
+                                                : Context.Pure(False(Location)),
+                (TmTuple t1, TmTuple t2) => t1.Values.Count == t2.Values.Count
+                                                ? Context.Pure(t1.Values
+                                                                 .Zip(t2.Values)
+                                                                 .Map(p => Eq(p.Left, p.Right))
+                                                                 .Reduce(And))
+                                                : Context.Pure(False(Location)),
+                (TmTime t1, TmTime t2)   => Context.Pure(t1.Value == t2.Value ? True(Location) : False(Location)),
+                (TmUnit t1, TmUnit t2)   => Context.Pure(True(Location)),
+                (TmTrue t1, TmTrue t2)   => Context.Pure(True(Location)),
+                (TmTrue t1, TmFalse t2)  => Context.Pure(False(Location)),
+                (TmFalse t1, TmFalse t2) => Context.Pure(True(Location)),
+                (TmFalse t1, TmTrue t2)  => Context.Pure(False(Location)),
+                (TmRecord t1, TmRecord t2)     => t1.Fields.Count == t2.Fields.Count && 
+                                                  t1.Fields.OrderBy(f => f.Name).ToSeq().Zip(t2.Fields.OrderBy(f => f.Name).ToSeq()).ForAll(p => p.Left.Name == p.Right.Name)
+                                                      ? Context.Pure(t1.Fields.OrderBy(f => f.Name).ToSeq().Zip(t2.Fields.OrderBy(f => f.Name).ToSeq())
+                                                                       .Map(p => Eq(p.Left.Value, p.Right.Value))
+                                                                       .Reduce(And))
+                                                      : Context.Pure(False(Location)),
+                (TmTag t1, TmTag t2)           => Context.Pure(Eq(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)       => t1.Name == t2.Name
+                                                      ? Context.Pure(Eq(t1.Expr, t2.Expr))
+                                                      : Context.Pure(False(Location)),
+                var (t1, t2) when t1.IsVal     => t2.Eval1.Map(nt2 => Eq(t1, nt2)),
+                var (t1, t2)                   => t1.Eval1.Map(nt1 => Eq(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "==", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Eq(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }      
+
+    public record TmNeq(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                           => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)                       => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmString t1, TmString t2)                     => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmDirective t1, TmDirective t2)               => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmMessageDirective t1, TmMessageDirective t2) => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2)           => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmProcessId t1, TmProcessId t2)               => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmProcessName t1, TmProcessName t2)           => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmArray t1, TmArray t2) => t1.Values.Count == t2.Values.Count
+                                                ? Context.Pure(t1.Values
+                                                                 .Zip(t2.Values)
+                                                                 .Map(p => Neq(p.Left, p.Right))
+                                                                 .Reduce(Or))
+                                                : Context.Pure(True(Location)),
+                (TmTuple t1, TmTuple t2) => t1.Values.Count == t2.Values.Count
+                                                ? Context.Pure(t1.Values
+                                                                 .Zip(t2.Values)
+                                                                 .Map(p => Neq(p.Left, p.Right))
+                                                                 .Reduce(Or))
+                                                : Context.Pure(True(Location)),
+                (TmTime t1, TmTime t2)         => Context.Pure(t1.Value != t2.Value ? True(Location) : False(Location)),
+                (TmUnit t1, TmUnit t2)         => Context.Pure(False(Location)),
+                (TmTrue t1, TmTrue t2)         => Context.Pure(False(Location)),
+                (TmTrue t1, TmFalse t2)        => Context.Pure(True(Location)),
+                (TmFalse t1, TmFalse t2)       => Context.Pure(False(Location)),
+                (TmFalse t1, TmTrue t2)        => Context.Pure(True(Location)),
+                (TmRecord t1, TmRecord t2)     => t1.Fields.Count == t2.Fields.Count && 
+                                                  t1.Fields.OrderBy(f => f.Name).ToSeq().Zip(t2.Fields.OrderBy(f => f.Name).ToSeq()).ForAll(p => p.Left.Name == p.Right.Name)
+                                                      ? Context.Pure(t1.Fields.OrderBy(f => f.Name).ToSeq().Zip(t2.Fields.OrderBy(f => f.Name).ToSeq())
+                                                                       .Map(p => Neq(p.Left.Value, p.Right.Value))
+                                                                       .Reduce(Or))
+                                                      : Context.Pure(True(Location)),
+                (TmTag t1, TmTag t2)           => Context.Pure(Neq(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)       => t1.Name == t2.Name
+                                                      ? Context.Pure(Neq(t1.Expr, t2.Expr))
+                                                      : Context.Pure(True(Location)),
+                var (t1, t2) when t1.IsVal     => t2.Eval1.Map(nt2 => Neq(t1, nt2)),
+                var (t1, t2)                   => t1.Eval1.Map(nt1 => Neq(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "!=", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Neq(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }  
+    
+    public record TmLt(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                 => Context.Pure(t1.Value < t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)             => Context.Pure(t1.Value < t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2) => Context.Pure(t1.Value < t2.Value ? True(Location) : False(Location)),
+                (TmTime t1, TmTime t2)               => Context.Pure(t1.Value < t2.Value ? True(Location) : False(Location)),
+                (TmTag t1, TmTag t2)                 => Context.Pure(Lt(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)             => t1.Name == t2.Name
+                                                            ? Context.Pure(Lt(t1.Expr, t2.Expr))
+                                                            : Context.Pure(False(Location)),
+                var (t1, t2) when t1.IsVal           => t2.Eval1.Map(nt2 => Lt(t1, nt2)),
+                var (t1, t2)                         => t1.Eval1.Map(nt1 => Lt(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "<", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Lt(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }      
+    
+    public record TmLte(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                 => Context.Pure(t1.Value <= t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)             => Context.Pure(t1.Value <= t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2) => Context.Pure(t1.Value <= t2.Value ? True(Location) : False(Location)),
+                (TmTime t1, TmTime t2)               => Context.Pure(t1.Value <= t2.Value ? True(Location) : False(Location)),
+                (TmTag t1, TmTag t2)                 => Context.Pure(Lte(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)             => t1.Name == t2.Name
+                                                            ? Context.Pure(Lte(t1.Expr, t2.Expr))
+                                                            : Context.Pure(False(Location)),
+                var (t1, t2) when t1.IsVal           => t2.Eval1.Map(nt2 => Lte(t1, nt2)),
+                var (t1, t2)                         => t1.Eval1.Map(nt1 => Lte(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "<=", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Lte(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }
+    
+    public record TmGt(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                 => Context.Pure(t1.Value > t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)             => Context.Pure(t1.Value > t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2) => Context.Pure(t1.Value > t2.Value ? True(Location) : False(Location)),
+                (TmTime t1, TmTime t2)               => Context.Pure(t1.Value > t2.Value ? True(Location) : False(Location)),
+                (TmTag t1, TmTag t2)                 => Context.Pure(Gt(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)             => t1.Name == t2.Name
+                                                            ? Context.Pure(Gt(t1.Expr, t2.Expr))
+                                                            : Context.Pure(False(Location)),
+                var (t1, t2) when t1.IsVal           => t2.Eval1.Map(nt2 => Gt(t1, nt2)),
+                var (t1, t2)                         => t1.Eval1.Map(nt1 => Gt(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, ">", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Gt(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }      
+    
+    public record TmGte(Term Left, Term Right) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                 => Context.Pure(t1.Value >= t2.Value ? True(Location) : False(Location)),
+                (TmFloat t1, TmFloat t2)             => Context.Pure(t1.Value >= t2.Value ? True(Location) : False(Location)),
+                (TmProcessFlag t1, TmProcessFlag t2) => Context.Pure(t1.Value >= t2.Value ? True(Location) : False(Location)),
+                (TmTime t1, TmTime t2)               => Context.Pure(t1.Value >= t2.Value ? True(Location) : False(Location)),
+                (TmTag t1, TmTag t2)                 => Context.Pure(Gte(t1.Term, t2.Term)),
+                (TmNamed t1, TmNamed t2)             => t1.Name == t2.Name
+                                                            ? Context.Pure(Gte(t1.Expr, t2.Expr))
+                                                            : Context.Pure(False(Location)),
+                var (t1, t2) when t1.IsVal           => t2.Eval1.Map(nt2 => Gte(t1, nt2)),
+                var (t1, t2)                         => t1.Eval1.Map(nt1 => Gte(nt1, t2)),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from eq in t1.Equiv(t2)
+            from ty in eq 
+                           ? Context.Pure(TyBool.Default)
+                           : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, ">=", t1, t2))
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Gte(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }      
+    
+    public abstract record TmBitwiseOp(
+        Term Left, 
+        Term Right, 
+        string Op,
+        Func<Term, Term, Term> Construct, 
+        Func<ProcessFlags, ProcessFlags, ProcessFlags> OpFlags, 
+        Func<long, long, long> OpInt) : Term(Left.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (Left, Right) switch
+            {
+                (TmInt t1, TmInt t2)                 => Context.Pure(Int(Location, OpInt(t1.Value, t2.Value))),
+                (TmProcessFlag t1, TmProcessFlag t2) => Context.Pure(ProcessFlag(Location, OpFlags(t1.Value, t2.Value))),
+                (TmProcessFlag t1, TmInt t2)         => Context.Pure(ProcessFlag(Location, OpFlags(t1.Value, (ProcessFlags)t2.Value))),
+                (TmInt t1, TmProcessFlag t2)         => Context.Pure(ProcessFlag(Location, OpFlags((ProcessFlags)t1.Value, t2.Value))),
+                (TmInt t1, var t2)                   => from nt2 in t2.Eval1
+                                                        select Construct(t1, nt2),
+                (TmProcessFlag t1, var t2)           => from nt2 in t2.Eval1
+                                                        select Construct(t1, nt2),
+                var (t1, t2)                         => from nt1 in t1.Eval1
+                                                        select Construct(nt1, t2),
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t1 in Left.TypeOf
+            from t2 in Right.TypeOf
+            from i1 in t1.Equiv(TyInt.Default)
+            from f1 in t1.Equiv(TyProcessFlag.Default)
+            from i2 in t2.Equiv(TyInt.Default)
+            from f2 in t2.Equiv(TyProcessFlag.Default)
+            from ty in (i1, f1, i2, f2) switch
+                       {
+                           (_, true, _, true) => Context.Pure(TyProcessFlag.Default),
+                           (true, _, true, _) => Context.Pure(TyInt.Default),
+                           (_, true, true, _) => Context.Pure(TyProcessFlag.Default),
+                           (true, _, _, true) => Context.Pure(TyProcessFlag.Default),
+                           _                  => Context.Fail<Ty>(ProcessError.InvalidTypesInferred(Location, Op, t1, t2, "int or float")) 
+                       }
+            select ty;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
+    }
+
+    public record TmBitwiseAnd(Term Left, Term Right) : TmBitwiseOp(Left, Right, "&", BitwiseAnd, (x, y) => x & y, (x, y) => x & y);
+    public record TmBitwiseOr(Term Left, Term Right) : TmBitwiseOp(Left, Right, "|", BitwiseOr, (x, y) => x | y, (x, y) => x | y);
+    public record TmBitwiseXor(Term Left, Term Right) : TmBitwiseOp(Left, Right, "^", BitwiseXor, (x, y) => x ^ y, (x, y) => x ^ y);
+    
     public record TmFail(Loc Location, Error Message) : Term(Location)
     {
         public override Context<Term> Eval1 =>

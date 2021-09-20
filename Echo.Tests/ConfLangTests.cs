@@ -9,6 +9,15 @@ namespace Echo.Tests
     public class ConfLangTests
     {
         static string general = @"
+-- type Person: 
+--     name    : string
+--     surname : string
+--     age     : int 
+-- 
+-- type State s a : s → { value: a, state: s, faulted: bool }
+
+let example: 10
+
 cluster root as app:
     node-name:   ""THE-BEAST""        -- Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
     role:	     ""owin-web-role""
@@ -17,7 +26,7 @@ cluster root as app:
 
 strategy strat: 
     one-for-one:
-        backoff: min = 1 seconds, max = 100 seconds, scalar = 2
+        backoff: min = 1 seconds, max = 100 seconds, scalar = 2 * example
 
 process echo:
     pid: /root/user/echo
@@ -32,23 +41,24 @@ process echo:
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
-            Assert.True(decls.Count == 3);
-            Assert.True(decls[0] is DeclCluster);
-            Assert.True(decls[1] is DeclStrategy);
-            Assert.True(decls[2] is DeclProcess);
+            Assert.True(decls.Count == 4);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclCluster);
+            Assert.True(decls[2] is DeclStrategy);
+            Assert.True(decls[3] is DeclProcess);
 
             // TYPE-CHECK
             
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("app").Case is VarBind vb1 && vb1.Type is TyCluster cluster &&
+            Assert.True(ctx.Context.TopBindings.Find("app").Case is TmAbbBind vb1 && vb1.Type.Case is TyCluster cluster &&
                         cluster.Value.Fields.Find(f => f.Name == "node-name").Case is FieldTy fty1 && fty1.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "role").Case is FieldTy fty2 && fty2.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "connection").Case is FieldTy fty3 && fty3.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "database").Case is FieldTy fty4 && fty4.Type is TyString);
 
-            Assert.True(ctx.Context.TopBindings.Find("strat").Case is VarBind vb2 && vb2.Type is TyStrategy strategy &&
+            Assert.True(ctx.Context.TopBindings.Find("strat").Case is TmAbbBind vb2 && vb2.Type.Case is TyStrategy strategy &&
                         strategy.Type == StrategyType.OneForOne &&
                         strategy.Value.Fields.Find(f => f.Name == "backoff").Case is FieldTy fty5 && fty5.Type is TyTuple tuple &&
                         tuple.Types.Count == 3 &&
@@ -56,7 +66,7 @@ process echo:
                         tuple.Types[1] is TyTime &&
                         tuple.Types[2] is TyInt);
 
-            Assert.True(ctx.Context.TopBindings.Find("echo").Case is VarBind vb3 && vb3.Type is TyProcess process &&
+            Assert.True(ctx.Context.TopBindings.Find("echo").Case is TmAbbBind vb3 && vb3.Type.Case is TyProcess process &&
                         process.Value.Fields.Find(f => f.Name == "pid").Case is FieldTy fty6 && fty6.Type is TyProcessId &&
                         process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyStrategy);
         }

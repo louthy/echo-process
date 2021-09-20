@@ -56,6 +56,11 @@ namespace Echo.ActorSys2.Configuration
             $"{X} → {Y}";
     }
 
+    // public record TyRef(Ty Type) : Ty
+    // {
+    //     
+    // }
+
     public record FieldTy(string Name, Ty Type)
     {
         public string Show() =>
