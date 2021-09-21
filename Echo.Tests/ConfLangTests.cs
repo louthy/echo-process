@@ -68,7 +68,7 @@ process echo:
 
             Assert.True(ctx.Context.TopBindings.Find("echo").Case is TmAbbBind vb3 && vb3.Type.Case is TyProcess process &&
                         process.Value.Fields.Find(f => f.Name == "pid").Case is FieldTy fty6 && fty6.Type is TyProcessId &&
-                        process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyStrategy);
+                        process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyRecord);
         }
 
         [Fact]

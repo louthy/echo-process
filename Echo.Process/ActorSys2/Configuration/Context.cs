@@ -5,15 +5,42 @@ using static LanguageExt.Prelude;
 
 namespace Echo.ActorSys2.Configuration
 {
-    public record Context(HashMap<string, Binding> TopBindings, HashMap<string, Binding> Bindings)
+    public record Context(HashMap<string, Binding> TopBindings, HashMap<string, Binding> Bindings, Lst<Term> Store)
     {
-        public static readonly Context Empty = new(default, default);
+        public static readonly Context Empty = new(default, default, default);
         
         /// <summary>
         /// Context success
         /// </summary>
         public static Context<A> Pure<A>(A value) =>
             new Context<A>(ctx => FinSucc((value, ctx)));
+
+        /// <summary>
+        /// Context true
+        /// </summary>
+        public static readonly Context<bool> False =
+            Pure(false);
+
+        /// <summary>
+        /// Context false
+        /// </summary>
+        public static readonly Context<bool> True =
+            Pure(true);
+
+        /// <summary>
+        /// Context unit
+        /// </summary>
+        public static readonly Context<Unit> Unit =
+            Pure(unit);
+
+        public static readonly Context<Term> NoRuleAppliesTerm =
+            Fail<Term>(ProcessError.NoRuleApplies);
+
+        public static readonly Context<Ty> NoRuleAppliesTy =
+            Fail<Ty>(ProcessError.NoRuleApplies);
+
+        public static readonly Context<Kind> StarKind =
+            Pure<Kind>(Kind.Star);
         
         /// <summary>
         /// Context fail
@@ -58,7 +85,29 @@ namespace Echo.ActorSys2.Configuration
             modify(ctx => ctx.AddTop(loc, name, b));
 
         /// <summary>
-        /// Get type
+        /// Add a term to the store
+        /// </summary>
+        public static Context<int> extendStore(Term term) =>
+            from _ in modify(ctx => ctx.ExtendStore(term))
+            from ix in get.Map(ctx => ctx.Store.Count - 1)
+            select ix;
+
+        /// <summary>
+        /// Update store
+        /// </summary>
+        public static Context<Unit> updateStore(int ix, Term term) =>
+            modify(ctx => ctx.UpdateStore(ix, term));
+
+        /// <summary>
+        /// Get item from store
+        /// </summary>
+        public static Context<Term> lookupLoc(int ix) =>
+            get.Bind(ctx => ix < ctx.Store.Count
+                            ? Context.Pure(ctx.Store[ix])
+                            : Context.Fail<Term>(Error.New("store: out-of-range")));
+
+        /// <summary>
+        /// Get type of the binding
         /// </summary>
         public static Context<Ty> getType(Loc loc, string name) =>
             from b in getBinding(loc, name)
@@ -72,16 +121,29 @@ namespace Echo.ActorSys2.Configuration
             select t;
 
         /// <summary>
+        /// Get kind of the binding 
+        /// </summary>
+        public static Context<Kind> getKind(Loc loc, string name) =>
+            from b in getBinding(loc, name)
+            from k in b.GetKind(loc, name).ToContext()
+            select k;
+
+        public static Context<Unit> checkKindStar(Loc loc, Ty ty) =>
+            from k in ty.KindOf(loc)
+            from r in k == Kind.Star ? Unit : Fail<Unit>(ProcessError.StarKindExpected(loc))
+            select r;
+
+        /// <summary>
         /// Is the binding a type-lambda
         /// </summary>
         public static Context<bool> isTyAbb(string name) =>
-            getBinding(Loc.None, name).Map(b => b is TyAbbBind);
+            getBinding(Loc.None, name).Map(b => b is TyLamBind);
 
         /// <summary>
         /// Get the binding if it's a type-lambda
         /// </summary>
         public static Context<Ty> getTyAbb(string name) =>
-            getBinding(Loc.None, name).Bind(b => b is TyAbbBind ab ? Context.Pure(ab.Type) :  Context.Fail<Ty>(ProcessError.NoRuleApplies));
+            getBinding(Loc.None, name).Bind(b => b is TyLamBind ab ? Context.Pure(ab.Type) :  Context.NoRuleAppliesTy);
 
         public static Context<Ty> computeTy(Ty ty) =>
             ty switch
@@ -129,6 +191,18 @@ namespace Echo.ActorSys2.Configuration
             IsNameBound(name)
                 ? PickFreshName($"{name}'")
                 : name;
+
+        /// <summary>
+        /// Add a term to the store
+        /// </summary>
+        public Context ExtendStore(Term term) =>
+            this with {Store = Store.Add(term)};
+
+        /// <summary>
+        /// Update the store
+        /// </summary>
+        public Context UpdateStore(int ix, Term term) =>
+            this with {Store = Store.SetItem(ix, term)};
     }
 
     public class Context<A>
@@ -176,6 +250,13 @@ namespace Echo.ActorSys2.Configuration
                 A val     => Context.Pure(val),
                 Error err => Context.Fail<A>(err),
                 _         => throw new NotSupportedException()
+            };
+
+        public static Context<A> ToContext<A>(this Option<A> ma, Error error) =>
+            ma.Case switch
+            {
+                A val => Context.Pure(val),
+                _     => Context.Fail<A>(error)
             };
         
         public static Context<Seq<A>> Sequence<A>(this Seq<A> ms) =>

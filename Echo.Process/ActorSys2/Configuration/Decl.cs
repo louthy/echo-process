@@ -24,7 +24,7 @@ namespace Echo.ActorSys2.Configuration
             rec.Fields.Find(f => f.Name == fieldName).Case switch
             {
                 FieldTy fty => from eq in fty.Type.Equiv(expected)
-                               from rs in eq ? Context.Pure(unit) : Context.Fail<Unit>(ProcessError.IncorrectTypeForAttribute(location, fty.Name, fty.Type, expected))
+                               from rs in eq ? Context.Unit : Context.Fail<Unit>(ProcessError.IncorrectTypeForAttribute(location, fty.Name, fty.Type, expected))
                                select rs,
                 _ => Context.Fail<Unit>(ProcessError.RequiredAttributeMissing(location, fieldName))
             };
@@ -33,7 +33,7 @@ namespace Echo.ActorSys2.Configuration
             rec.Fields.Find(f => f.Name == fieldName).Case switch
             {
                 FieldTy fty => from eq in fty.Type.Equiv(expected)
-                               from rs in eq ? Context.Pure(unit) : Context.Fail<Unit>(ProcessError.IncorrectTypeForAttribute(location, fty.Name, fty.Type, expected))
+                               from rs in eq ? Context.Unit : Context.Fail<Unit>(ProcessError.IncorrectTypeForAttribute(location, fty.Name, fty.Type, expected))
                                select rs,
                 _ => Context.Pure<Unit>(unit)
             };

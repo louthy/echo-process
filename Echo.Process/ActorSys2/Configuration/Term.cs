@@ -4,6 +4,7 @@ using System.Reactive.Subjects;
 using LanguageExt;
 using LanguageExt.ClassInstances.Const;
 using LanguageExt.Common;
+using LanguageExt.Parsec;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
 
@@ -13,6 +14,9 @@ namespace Echo.ActorSys2.Configuration
     {
         public virtual Term Subst(string name, Term term) =>
             Subst((loc, n1, n2) => n1 == n2 ? term : this, (n, ty) => ty, name);
+
+        public virtual Term Subst(string name, Ty type) =>
+            Subst((loc, n1, n2) => this, (n, ty) => ty.Subst(n, ty), name);
 
         public virtual Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
             this;
@@ -42,6 +46,14 @@ namespace Echo.ActorSys2.Configuration
 
         public abstract Context<Ty> TypeOf { get; }
 
+        public static Term Assign(Term X, Term Y) => new TmAssign(X, Y);
+        public static Term Loc(Loc Location, int StoreIndex) => new TmLoc(Location, StoreIndex);
+        public static Term Ref(Term Expr) => new TmRef(Expr);
+        public static Term Deref(Term Expr) => new TmDeref(Expr); 
+        public static Term TLam(Loc Location, string Subject, Kind Kind, Term Expr) => new TmTLam(Location,  Subject, Kind, Expr); 
+        public static Term TApp(Term Expr, Ty Type) => new TmTApp(Expr, Type); 
+        public static Term Pack(Loc Location, Ty X, Term Expr, Ty Y) => new TmPack(Location, X, Expr, Y); 
+        public static Term Unpack(Loc Location, string TyX, string X, Term Term1, Term Term2) => new TmUnpack(Location, TyX, X, Term1, Term2); 
         public static Term Array(Loc loc, Seq<Term> values) => new TmArray(loc, values);
         public static Term Tuple(Seq<Term> values) => new TmTuple(values.Head.Location, values);
         public static Term True(Loc loc) => new TmTrue(loc);
@@ -87,6 +99,183 @@ namespace Echo.ActorSys2.Configuration
         public static Term Gt(Term Left, Term Right) => new TmGt(Left, Right);
         public static Term Gte(Term Left, Term Right) => new TmGte(Left, Right);
         public static Term Not(Term Expr) => new TmNot(Expr);
+    }
+
+    public record TmLoc(Loc Location, int StoreIndex) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            Context.NoRuleAppliesTerm;
+
+        public override Context<Ty> TypeOf =>
+            Context.Fail<Ty>(Error.New("locations are not supposed to occur in source programs"));
+
+        public override bool IsVal =>
+            true;
+    } 
+
+    public record TmRef(Term Expr) : Term(Expr.Location)
+    {
+        public override Context<Term> Eval1 =>
+            Expr.IsVal
+                ? from ix in Context.extendStore(Expr)
+                  select Loc(Location, ix)
+                : Expr.Eval1.Map(Ref);
+
+        public override Context<Ty> TypeOf =>
+            Expr.TypeOf.Map(t => (Ty)new TyRef(t));
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmRef(Expr.Subst(onVar, onType, name));
+    } 
+
+    public record TmDeref(Term Expr) : Term(Expr.Location)
+    {
+        public override Context<Term> Eval1 =>
+            Expr.IsVal
+                ? Expr switch
+                  {
+                      TmLoc loc => Context.lookupLoc(loc.StoreIndex),
+                      _         => Context.NoRuleAppliesTerm
+                  }
+                : Expr.Eval1.Map(Deref);
+
+        public override Context<Ty> TypeOf =>
+            from t in Expr.TypeOf.Bind(t => t.Simplify())
+            from r in t switch
+                      {
+                          TyRef tr => Context.Pure(tr.Type),
+                          _        => Context.Fail<Ty>(ProcessError.ArgumentNotRef(Location))
+                      }
+            select r;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmDeref(Expr.Subst(onVar, onType, name));
+    }
+        
+    public record TmAssign(Term X, Term Y) : Term(X.Location)
+    {
+        public override Context<Term> Eval1 =>
+            (X, Y) switch
+            {
+                (TmLoc x, var y) when x.IsVal && y.IsVal => Context.updateStore(x.StoreIndex, y).Map(_ => Unit(Location)),
+                var (x, y) when x.IsVal && y.IsVal       => Context.NoRuleAppliesTerm,
+                var (x, y) when x.IsVal                  => y.Eval1.Map(ny => Assign(x, ny)),
+                var (x, y)                               => x.Eval1.Map(nx => Assign(nx, y))
+            };
+
+
+        public override Context<Ty> TypeOf =>
+            from t in X.TypeOf.Bind(t => t.Simplify())
+            from r in t switch
+                      {
+                          TyRef tr => Y.TypeOf.Bind(yt => 
+                                                        yt.Equiv(tr.Type)
+                                                          .Bind(b => b 
+                                                                  ? Context.Pure(TyUnit.Default) 
+                                                                  : Context.Fail<Ty>(ProcessError.AssignmentOperatorArgumentsIncompatible(X.Location)))),
+                          _        => Context.Fail<Ty>(ProcessError.ArgumentNotRef(Location))
+                      }
+            select r;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmAssign(X.Subst(onVar, onType, name), Y.Subst(onVar, onType, name));
+    }
+
+    public record TmTLam(Loc Location, string Subject, Kind Kind, Term Expr) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            Context.NoRuleAppliesTerm;
+
+        public override Context<Ty> TypeOf =>
+            Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
+                          Expr.TypeOf.Map(t => (Ty)new TyAll(Subject, Kind, t)));
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
+    }
+
+    public record TmTApp(Term Expr, Ty Type) : Term(Expr.Location)
+    {
+        public override Context<Term> Eval1 =>
+            Expr switch
+            {
+                TmTLam (_, var x, _, var term) => Context.Pure(term.Subst(x, Type)),
+                _                              => Expr.Eval1.Map(t => TApp(t, Type))
+            };
+
+        public override Context<Ty> TypeOf =>
+            from k2 in Type.KindOf(Location)
+            from t1 in Expr.TypeOf.Bind(t => t.Simplify())
+            from rt in t1 switch 
+                       {
+                           TyAll (var name, var k1, var tyt) => k1 == k2 
+                                                            ? Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(Location, k1, k2))
+                                                            : Context.Pure(tyt.Subst(name, Type)),
+                           _ => Context.Fail<Ty>(ProcessError.UniversalTypeExpected(Location))
+                       }
+            select rt;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmTApp(Expr.Subst(onVar, onType, name), onType(name, Type));
+
+        public override bool IsVal =>
+            true;
+    }
+
+    public record TmPack(Loc Location, Ty X, Term Expr, Ty Y) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            Expr.Eval1.Map(t => Pack(Location, X, Expr, Y));
+
+        public override Context<Ty> TypeOf =>
+            from _ in Context.checkKindStar(Location, Y)
+            from y in Y.Simplify()
+            from r in y switch
+                      {
+                          TySome (var tyY, var ky, var tyT2) =>
+                              from kx in X.KindOf(Location)
+                              from __ in kx == ky ? Context.Unit : Context.Fail<Unit>(ProcessError.TypeComponentHasWrongKind(Location, kx, ky))
+                              from tyU in Expr.TypeOf
+                              let tyU1 = tyT2.Subst(tyY, X)
+                              from eq in tyU.Equiv(tyU1)
+                              from rt in eq ? Context.Pure(Y) : Context.Fail<Ty>(ProcessError.DoesNotMatchDeclaredType(Location))
+                              select rt,
+                          _ => Context.Fail<Ty>(ProcessError.ExistentialTypeExpected(Location))
+                      }
+            select r;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmPack(Location, onType(name, X), Expr.Subst(onVar, onType, name), onType(name, Y));
+        
+        public override bool IsVal =>
+            Expr.IsVal;
+    }
+    
+    public record TmUnpack(Loc Location, string TyX, string X, Term Term1, Term Term2) : Term(Location)
+    {
+        public override Context<Term> Eval1 =>
+            Term1 switch
+            {
+                TmPack (_, var ty, var v, _) when v.IsVal => 
+                    Context.Pure(Term2.Subst(X, v).Subst(TyX, ty)),
+                
+                _ => Term1.Eval1.Map(t => Unpack(Location, TyX, X, t, Term2)) 
+            };
+
+        public override Context<Ty> TypeOf =>
+            from t in Term1.TypeOf.Bind(t => t.Simplify())
+            from r in t switch
+                      {
+                          TySome (var tyT, var k, var tyT11) =>
+                              Context.local(ctx => ctx.AddLocal(TyX, new TyVarBind(k)),
+                              Context.local(ctx => ctx.AddLocal(X, new VarBind(tyT11)),
+                                            Term2.TypeOf)),
+                          _ => Context.Fail<Ty>(ProcessError.ExistentialTypeExpected(Location))
+                      }
+            select r;
+
+        public override Term Subst(Func<Loc, string, string, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmUnpack(Location, TyX, X, Term1.Subst(onVar, onType, name), Term2.Subst(onVar, onType, name));
     }
 
     public record TmNot(Term Expr) : Term(Expr.Location)
@@ -534,7 +723,7 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Term> Eval1 =>
             from nm in Values.ForAll(v => v.IsVal)
                            ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
-                           : Context.Pure(unit)
+                           : Context.Unit
             from xs in Values.Sequence(v => v.IsVal ? Context.Pure(v) : v.Eval1)
             select new TmArray(Location, xs) as Term;
 
@@ -563,7 +752,7 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Term> Eval1 =>
             from nm in Values.ForAll(v => v.IsVal)
                            ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
-                           : Context.Pure(unit)
+                           : Context.Unit
             from xs in Values.Sequence(v => v.IsVal ? Context.Pure(v) : v.Eval1)
             select new TmTuple(Location, xs) as Term;
 
@@ -580,7 +769,7 @@ namespace Echo.ActorSys2.Configuration
             true;
 
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyBool.Default);
@@ -592,7 +781,7 @@ namespace Echo.ActorSys2.Configuration
             true;
 
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyBool.Default);
@@ -640,7 +829,7 @@ namespace Echo.ActorSys2.Configuration
                     Cases.Find(c => c.Tag == tag).Case switch
                     {
                         Case c => Context.Pure(c.Body),
-                        _      => Context.Fail<Term>(ProcessError.NoRuleApplies)
+                        _      => Context.NoRuleAppliesTerm
                     },
 
                 _ => from t1 in Subject.Eval1
@@ -718,7 +907,7 @@ namespace Echo.ActorSys2.Configuration
             from r in b switch
                       {
                           TmAbbBind(var t, _) => Context.Pure(t),
-                          _                   => Context.Fail<Term>(ProcessError.NoRuleApplies)
+                          _                   => Context.NoRuleAppliesTerm
                       }
             select r;
 
@@ -735,12 +924,14 @@ namespace Echo.ActorSys2.Configuration
             true;
 
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
-            Context.local(ctx => ctx.AddLocal(Name, new VarBind(Type)), 
-                          from bty in Body.TypeOf
-                          select new TyArr(Type,bty) as Ty);
+            from _ in Context.checkKindStar(Location, Type)
+            from r in Context.local(ctx => ctx.AddLocal(Name, new VarBind(Type)),
+                                    from bty in Body.TypeOf
+                                    select new TyArr(Type, bty) as Ty)
+            select r;
     }
 
     public record TmApp(Loc Location, Term X, Term Y) : Term(Location)
@@ -809,7 +1000,7 @@ namespace Echo.ActorSys2.Configuration
             Term switch
             {
                 TmLam              => Context.Pure(Term),
-                var t when t.IsVal => Context.Fail<Term>(ProcessError.NoRuleApplies),
+                var t when t.IsVal => Context.NoRuleAppliesTerm,
                 _                  => from t in Term.Eval1
                                       select new TmFix(Location, t) as Term
             };
@@ -834,7 +1025,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyString.Default);
@@ -846,7 +1037,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyInt.Default);
@@ -858,7 +1049,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyFloat.Default);
@@ -870,7 +1061,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyProcessId.Default);
@@ -882,7 +1073,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyProcessName.Default);
@@ -894,7 +1085,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyProcessFlag.Default);
@@ -906,7 +1097,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyTime.Default);
@@ -918,7 +1109,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyMessageDirective.Default);
@@ -930,7 +1121,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyDirective.Default);
@@ -942,7 +1133,7 @@ namespace Echo.ActorSys2.Configuration
             true;
     
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(TyUnit.Default);
@@ -962,6 +1153,7 @@ namespace Echo.ActorSys2.Configuration
             };
         
         public override Context<Ty> TypeOf =>
+            from __ in Context.checkKindStar(Location, Type)
             from t1 in Term.TypeOf
             from eq in t1.Equiv(Type)
             from rt in eq ? Context.Pure(Type) :  Context.Fail<Ty>(ProcessError.AscribeMismatch(Location))
@@ -981,7 +1173,7 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Term> Eval1 =>
             from nm in Fields.ForAll(f => f.Value.IsVal)
                            ? Context.Fail<Unit>(ProcessError.NoRuleApplies)
-                           : Context.Pure(unit)
+                           : Context.Unit
             from fs in Fields.Sequence(f => f.Value.IsVal ? Context.Pure(f) : f.Value.Eval1.Map(v => new Field(f.Name, v)))
             select new TmRecord(Location, fs) as Term;
 
@@ -1002,7 +1194,7 @@ namespace Echo.ActorSys2.Configuration
                     fields.Find(f => f.Name == Member).Case switch
                     {
                         Field f => Context.Pure(f.Value),
-                        _       => Context.Fail<Term>(ProcessError.NoRuleApplies)
+                        _       => Context.NoRuleAppliesTerm
                     },
 
                 _ => from t in Term.Eval1
@@ -1031,7 +1223,7 @@ namespace Echo.ActorSys2.Configuration
             new TmInert(Location, onType(name, Type));
      
         public override Context<Term> Eval1 =>
-            Context.Fail<Term>(ProcessError.NoRuleApplies);
+            Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
             Context.Pure(Type);
