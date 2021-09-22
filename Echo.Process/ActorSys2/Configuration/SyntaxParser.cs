@@ -139,21 +139,23 @@ namespace Echo.ActorSys2.Configuration
                           from r in expr
                           select Term.Let(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Value, r);
 
-            var recordFields = 
-                from fs in many1(attempt(
-                                     indented2(
-                                         from nam in recordLabel
-                                         from col in symbol(":")
-                                         from val in expr
-                                         select (Name: nam, Value: val))))
-                select Term.Record(mkLoc(fs.Head.Name.Begin, fs.Last.Name.End),
+            var recordFields =
+                from fs in sepBy(attempt(
+                                     from nam in recordLabel
+                                     from col in symbol("=")
+                                     from val in expr
+                                     select (Name: nam, Value: val)),
+                                     lexer.Comma)
+                from begin in fs.IsEmpty ? getPos : result(fs.Head.Name.Begin)
+                from end   in fs.IsEmpty ? getPos : result(fs.Head.Name.End)
+                select Term.Record(mkLoc(begin, end),
                                    fs.Map(f => new Field(f.Name.Value, f.Value)));
             
             // Record term
-            var recordTerm = indented2(
-                from kw in keyword("record")
-                from rc in recordFields
-                select rc);
+            var recordTerm = from op in symbol("{")
+                             from rc in recordFields
+                             from cl in symbol("}")
+                             select rc;
 
             // Array 
             var arrayTerm = from _  in result(unit) // expr is null if this isn't used
@@ -241,6 +243,12 @@ namespace Echo.ActorSys2.Configuration
                                        attempt(keyword("restart").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Restart))),
                                        attempt(keyword("stop").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Stop))),
                                        keyword("escalate").Map(tm => Term.Directive(mkLoc(tm.BeginPos, tm.EndPos), Directive.Escalate)));
+
+            var tupleTerm = lazyp(() =>
+                                      lexer.ParensCommaSep1(attempt(expr.Expand()))
+                                           .Map(xs => xs.Value.Count == 1
+                                                          ? xs.Value.Head
+                                                          : Term.Tuple(xs.Value)));
             
             var valueTerm = choice(
                                 attempt(arrayTerm),
@@ -261,19 +269,21 @@ namespace Echo.ActorSys2.Configuration
             term = choice(attempt(letTerm),
                           attempt(valueTerm),
                           attempt(identTerm),
-                          lazyp(() => lexer.Parens(expr.Expand()).Map(t => t.Value)));
+                          tupleTerm);
 
             var expr1 = from ts in many1(term)
                         select ts.Count == 1
                                    ? ts.Head
                                    : ts.Tail.Fold(ts.Head, Term.App); 
             
-            var expr2 = buildExpressionParser(operators, expr1);
+            expr = buildExpressionParser(operators, expr1);
 
+            /*
             expr = lexer.CommaSep1(attempt(expr2.Expand()))
                         .Map(xs => xs.Value.Count == 1
                                        ? xs.Value.Head
                                        : Term.Tuple(xs.Value));
+                                       */
 
             // Single identifier atomic type
             var typeRefAtom = from id in identifier
@@ -337,41 +347,41 @@ namespace Echo.ActorSys2.Configuration
                                                      select (Name: n.Value, Prototype: f.IfNone(Empty), Value: v))
                                   select Decl.GlobalVar(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, new Prototype(v.Prototype), v.Value);
 
-            var clusterDecl = indented2(from k in keyword("cluster")
-                                        from n in identifier
-                                        from _ in keyword("as")
-                                        from a in identifier
-                                        from c in symbol("=")
-                                        from r in indented(recordFields)
-                                        select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r));
+            var clusterDecl = from k in keyword("cluster")
+                              from n in identifier
+                              from _ in keyword("as")
+                              from a in identifier
+                              from c in symbol("=")
+                              from r in recordTerm
+                              select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r);
 
-            var processDecl = indented2(from k in keyword("process")
-                                        from n in identifier
-                                        from c in symbol("=")
-                                        from r in indented(recordFields)
-                                        select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
+            var processDecl = from k in keyword("process")
+                              from n in identifier
+                              from c in symbol("=")
+                              from r in recordTerm
+                              select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
 
-            var routerDecl = indented2(from k in keyword("router")
-                                       from n in identifier
-                                       from c in symbol("=")
-                                       from r in indented(recordFields)
-                                       select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
+            var routerDecl = from k in keyword("router")
+                             from n in identifier
+                             from c in symbol("=")
+                             from r in recordTerm
+                             select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r);
 
-            var strategyDecl = indented2(from k in keyword("strategy")
-                                         from n in identifier
-                                         from c in symbol("=")
-                                         from t in either(
-                                             keyword("one-for-one").Map(static _ => StrategyType.OneForOne),
-                                             keyword("all-for-one").Map(static _ => StrategyType.AllForOne)) 
-                                         from d in symbol(":")
-                                         from r in indented(recordFields)
-                                         select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, t, (TmRecord)r));
+            var strategyDecl = from k in keyword("strategy")
+                               from n in identifier
+                               from c in symbol("=")
+                               from t in either(
+                                   keyword("one-for-one").Map(static _ => StrategyType.OneForOne),
+                                   keyword("all-for-one").Map(static _ => StrategyType.AllForOne)) 
+                               from d in symbol("=>")
+                               from r in recordTerm
+                               select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, t, (TmRecord)r);
 
-            var recordDecl = indented2(from k in keyword("record")
-                                       from n in identifier
-                                       from c in symbol("=")
-                                       from r in indented(recordFields)
-                                       select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r));
+            var recordDecl = from k in keyword("record")
+                             from n in identifier
+                             from c in symbol("=")
+                             from r in recordFields
+                             select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r);
 
             var decls = many1(choice(attempt(topLevelVarDecl),
                                      attempt(clusterDecl),

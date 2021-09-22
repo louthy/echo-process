@@ -9,10 +9,9 @@ namespace Echo.Tests
     public class ConfLangTests
     {
         static string general = @"
--- type Person =
---     name    : string
---     surname : string
---     age     : int 
+-- type Person = { name    : string
+--               , surname : string
+--               , age     : int } 
 -- 
 -- type State s a : s → { value: a, state: s, faulted: bool }
 
@@ -23,19 +22,16 @@ let test = identity 100
 
 let example = 10
 
-cluster root as app =
-    node-name:   ""THE-BEAST""        -- Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
-    role:	     ""owin-web-role""
-    connection:  ""localhost""
-    database:    ""0""
+cluster root as app = { node-name  = ""THE-BEAST""        -- Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
+                      , role       =  ""owin-web-role""
+                      , connection = ""localhost""
+                      , database   = ""0"" }
 
-strategy strat =
-    one-for-one:
-        backoff: min = 1 seconds, max = 100 seconds, scalar = 2 * example
+strategy strat = 
+    one-for-one => { backoff = (min = 1 seconds, max = 100 seconds, scalar = 2 * example) }
 
-process echo =
-    pid: /root/user/echo
-    strategy: strat
+process echo = { pid = /root/user/echo
+               , strategy = strat }
 "; 
         
         [Fact]
@@ -85,7 +81,7 @@ process echo =
         [Fact]
         public void TopLevelLet_LabeledTuple()
         {
-            var fres = SyntaxParser.Parse($"let x = min = 1 seconds, max = 100 seconds, scalar = 2", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = (min = 1 seconds, max = 100 seconds, scalar = 2)", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -412,14 +408,13 @@ process echo =
         [Fact]
         public void TopLevelLet_Record()
         {
-            var fres = SyntaxParser.Parse($@"
-let x = record
-         id:      //root/user/test/123
-         name:    ""Paul""
-         surname: ""Louth""
-         score:   1000
-         dir:     resume
-         mdir:    forward-to-dead-letters", 
+            var fres = SyntaxParser.Parse(@"
+let x = { id        = //root/user/test/123
+        , name      = ""Paul""
+        , surname   = ""Louth""
+        , score     = 1000
+        , dir       = resume
+        , mdir      = forward-to-dead-letters }", 
                                           "test.conf");
             
             var res  = fres.ThrowIfFail();
