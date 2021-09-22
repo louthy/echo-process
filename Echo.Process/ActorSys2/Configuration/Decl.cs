@@ -9,9 +9,19 @@ namespace Echo.ActorSys2.Configuration
         AllForOne
     }
 
+    public record Parameter(Loc Location, string Name, Ty Type);
+
+    public record Prototype(Seq<Parameter> Parameters)
+    {
+        public static readonly Prototype Default = new(Empty);
+
+        public Seq<TyVar> GetVars() =>
+            Parameters.Bind(static p => p.Type.GetVars()).Distinct();
+    }
+
     public abstract record Decl(Loc Location, string Name)
     {
-        public static Decl GlobalVar(Loc Location, string Name, Term Value) => new DeclGlobalVar(Location, Name, Value);
+        public static Decl GlobalVar(Loc Location, string Name, Prototype Prototype, Term Value) => new DeclGlobalVar(Location, Name, Prototype, Value);
         public static Decl Strategy(Loc Location, string Name, StrategyType Type, TmRecord Value) => new DeclStrategy(Location, Name, Type, Value);
         public static Decl Cluster(Loc Location, string Name, string Alias, TmRecord Value) => new DeclCluster(Location, Name, Alias, Value);
         public static Decl Router(Loc Location, string Name, TmRecord Value) => new DeclRouter(Location, Name, Value);
@@ -39,13 +49,31 @@ namespace Echo.ActorSys2.Configuration
             };
     }
 
-    public record DeclGlobalVar(Loc Location, string Name, Term Value) : Decl(Location, Name)
+    public record DeclGlobalVar(Loc Location, string Name, Prototype Prototype, Term Value) : Decl(Location, Name)
     {
         public override Context<Unit> TypeCheck() =>
-            from tm in Value.Eval
+            from tm in AddParameters(Prototype.Parameters)
             from ty in tm.TypeOf
             from __ in Context.addTop(Location, Name, new TmAbbBind(tm, ty))
             select unit;
+
+        Context<Term> AddParameters(Seq<Parameter> ps) =>
+            ps.IsEmpty
+                ? Value.Eval
+                : ps.Head.Type is TyVar tvar
+                    ? from x in Context.get.Map(x => x.Bindings.ContainsKey(tvar.Name))
+                      from r in x
+                                    ? AddParameter(ps)
+                                    : Context.local(ctx => ctx.AddLocal(tvar.Name, NameBind.Default),
+                                                    AddParameter(ps).Map(body => Term.TLam(ps.Head.Location, tvar.Name, Kind.Star, body)))
+                      select r
+                    : AddParameter(ps);
+                        
+        Context<Term> AddParameter(Seq<Parameter> ps) =>
+            Context.local(ctx => ctx.AddLocal(ps.Head.Name, NameBind.Default),
+                          AddParameters(ps.Tail).Map(
+                              body =>
+                                Term.Lam(ps.Head.Location, ps.Head.Name, ps.Head.Type, body)));
     }
 
     public record DeclStrategy(Loc Location, string Name, StrategyType Type, TmRecord Value) : Decl(Location, Name)

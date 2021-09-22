@@ -28,6 +28,73 @@ namespace Echo.ActorSys2.Configuration
 
         public override string ToString() =>
             Show();
+
+        public Seq<TyVar> GetVars() =>
+            GetVarsSeq().Strict().Distinct();
+        
+        internal virtual Seq<TyVar> GetVarsSeq() =>
+            Empty;
+
+        public Ty Ref(Ty Type) =>
+            new TyRef(Type);
+
+        public static Ty All(string Subject, Kind Kind, Ty Type) =>
+            new TyAll(Subject, Kind, Type);
+
+        public static Ty Some(string Subject, Kind Kind, Ty Type) =>
+            new TySome(Subject, Kind, Type);
+
+        public static Ty Lam(string Subject, Kind Kind, Ty Type) =>
+            new TyLam(Subject, Kind, Type);
+
+        public static Ty App(Ty X, Ty Y) =>
+            new TyApp(X, Y);
+
+        public static Ty Var(string Name) =>
+            new TyVar(Name);
+
+        public static Ty Id(string Name) =>
+            new TyId(Name);
+
+        public static Ty Arr(Ty X, Ty Y) =>
+            new TyArr(X, Y);
+
+        public static Ty Array(Ty Type) =>
+            new TyArray(Type);
+
+        public static Ty Record(Seq<FieldTy> Fields) =>
+            new TyRecord(Fields);
+
+        public static Ty Tuple(Seq<Ty> Types) =>
+            new TyTuple(Types);
+
+        public static Ty Process(TyRecord Value) =>
+            new TyProcess(Value);
+
+        public static Ty Cluster(TyRecord Value) =>
+            new TyCluster(Value);
+
+        public static Ty Router(TyRecord Value) =>
+            new TyRouter(Value);
+
+        public static Ty Strategy(StrategyType Type, TyRecord Value) =>
+            new TyStrategy(Type, Value);
+
+        public static Ty Variant(Seq<FieldTy> Fields) =>
+            new TyVariant(Fields);
+
+        public static readonly Ty Nil = new TyNil();
+        public static readonly Ty Unit = new TyUnit();
+        public static readonly Ty Bool = new TyBool();
+        public static readonly Ty Int = new TyInt();
+        public static readonly Ty Float = new TyFloat();
+        public static readonly Ty String = new TyString();
+        public static readonly Ty MessageDirective = new TyMessageDirective();
+        public static readonly Ty Directive = new TyDirective();
+        public static readonly Ty Time = new TyTime();
+        public static readonly Ty ProcessName = new TyProcessName();
+        public static readonly Ty ProcessId = new TyProcessId();
+        public static readonly Ty ProcessFlag = new TyProcessFlag();
     }
 
     /// <summary>
@@ -39,13 +106,17 @@ namespace Echo.ActorSys2.Configuration
             new TyRef(Type.Subst(onVar, c));
 
         public override Context<bool> Equiv(Ty rhs) =>
-            rhs is TyRef tref
-                ? Type.Equiv(tref.Type)
-                : Context.False;
+            rhs switch
+            {
+                TyRef tref => Type.Equiv(tref.Type),
+                _          => Context.False
+            };
 
         public override string Show() =>
             $"ref {Type.Show()}";
        
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Type.GetVarsSeq();
     }
 
     /// <summary>
@@ -75,6 +146,9 @@ namespace Echo.ActorSys2.Configuration
                               k => k == Kind.Star
                                        ? Context.StarKind 
                                        : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
+       
+        internal override Seq<TyVar> GetVarsSeq() =>
+            new TyVar(Subject).Cons(Type.GetVarsSeq());
     }
 
     /// <summary>
@@ -104,6 +178,9 @@ namespace Echo.ActorSys2.Configuration
                               k => k == Kind.Star
                                        ? Context.StarKind 
                                        : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
+       
+        internal override Seq<TyVar> GetVarsSeq() =>
+            new TyVar(Subject).Cons(Type.GetVarsSeq());
     }
 
     /// <summary>
@@ -116,12 +193,17 @@ namespace Echo.ActorSys2.Configuration
     {
         public override Ty Subst(Func<string, string, Ty> onVar, string c) =>
             new TyLam(Subject, Kind, Type.Subst(onVar, c));
-        
+
         public override Context<bool> Equiv(Ty rhs) =>
-            rhs is TyLam rlam && Kind == rlam.Kind
-                ? Context.local(ctx => ctx.AddLocal(Subject, NameBind.Default),
-                                Type.Equiv(rlam.Type))
-                : Context.False;
+            rhs switch
+            {
+                TyLam rlam when Kind == rlam.Kind =>
+                    Context.local(ctx => ctx.AddLocal(Subject, NameBind.Default),
+                                  Type.Equiv(rlam.Type)),
+
+                TyVar tvar => Context.getTyLam(tvar.Name).Bind(this.Equiv) | @catch(ProcessError.NoRuleApplies, false),
+                _          => Context.False
+            };
         
         public override string Show() =>
             $"{Subject} :: {Kind.Show()} => {Type.Show()}";
@@ -129,6 +211,9 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Kind> KindOf(Loc location) =>
             Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
                           Type.KindOf(location).Map(k2 => Kind.Arr(Kind, k2)));
+       
+        internal override Seq<TyVar> GetVarsSeq() =>
+            new TyVar(Subject).Cons(Type.GetVarsSeq());
     }
 
     /// <summary>
@@ -174,6 +259,9 @@ namespace Echo.ActorSys2.Configuration
                            _ => Context.Fail<Kind>(ProcessError.ArrowKindExpected(location)), 
                        }
             select kn;
+       
+        internal override Seq<TyVar> GetVarsSeq() =>
+            X.GetVarsSeq() + Y.GetVarsSeq();
     }
     
     /// <summary>
@@ -182,10 +270,14 @@ namespace Echo.ActorSys2.Configuration
     public record TyVar(string Name) : Ty
     {
         public override Context<Ty> Compute() =>
-            Context.getTyAbb(Name);
+            Context.getTyLam(Name);
  
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyVar (var n) && Name == n);
+            from isTyAbb in Context.isTyLam(Name)
+            from result in isTyAbb
+                               ? Context.getTyLam(Name).Bind(t => t.Equiv(rhs))
+                               : Context.Pure(rhs is TyVar (var n) && Name == n)
+            select result;
 
         public override string Show() =>
             $"{Name}";
@@ -195,6 +287,21 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<Kind> KindOf(Loc location) =>
             Context.getKind(location, Name);
+       
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Seq1(this);
+    }
+        
+    /// <summary>
+    /// Type identifier
+    /// </summary>
+    public record TyId(string Name) : Ty
+    {
+        public override Context<bool> Equiv(Ty rhs) =>
+            Context.Pure(rhs is TyId (var n) && Name == n);
+
+        public override string Show() =>
+            $"{Name}";
     }
 
     /// <summary>
@@ -222,6 +329,9 @@ namespace Echo.ActorSys2.Configuration
                           ? Context.StarKind
                           : Context.Fail<Kind>(ProcessError.StarKindExpected(location))
             select r;
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            X.GetVarsSeq() + Y.GetVarsSeq();
     }
 
     /// <summary>
@@ -232,7 +342,12 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyNil(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyNil || rhs is TyArr);
+            rhs switch
+            {
+                TyNil => Context.True,
+                TyArr => Context.True,
+                _     => Context.False
+            };
 
         public override string Show() =>
             "[]";
@@ -259,6 +374,9 @@ namespace Echo.ActorSys2.Configuration
         
         public override Context<Kind> KindOf(Loc location) =>
             Type.KindOf(location);
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Type.GetVarsSeq();
     }
 
     /// <summary>
@@ -271,6 +389,9 @@ namespace Echo.ActorSys2.Configuration
         
         public Context<Kind> KindOf(Loc location) =>
             Type.KindOf(location);
+
+        internal Seq<TyVar> GetVarsSeq() =>
+            Type.GetVarsSeq();
     }
 
     /// <summary>
@@ -300,6 +421,9 @@ namespace Echo.ActorSys2.Configuration
             from star in Fields.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))
             from kind in star ? Context.StarKind : Context.Fail<Kind>(ProcessError.StarKindExpected(location))
             select kind;
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Fields.Bind(static f => f.GetVarsSeq());
     }
     
     /// <summary>
@@ -324,6 +448,9 @@ namespace Echo.ActorSys2.Configuration
             from star in Types.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))
             from kind in star ? Context.StarKind : Context.Fail<Kind>(ProcessError.StarKindExpected(location))
             select kind;
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Types.Bind(t => t.GetVarsSeq());
     }
 
     /// <summary>
@@ -347,6 +474,9 @@ namespace Echo.ActorSys2.Configuration
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Value.GetVarsSeq();
     }
 
     /// <summary>
@@ -370,6 +500,9 @@ namespace Echo.ActorSys2.Configuration
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Value.GetVarsSeq();
     }
 
     /// <summary>
@@ -393,6 +526,9 @@ namespace Echo.ActorSys2.Configuration
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Value.GetVarsSeq();
     }
 
     /// <summary>
@@ -417,12 +553,15 @@ namespace Echo.ActorSys2.Configuration
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Value.GetVarsSeq();
     }
 
     public record TyVariant(Seq<FieldTy> Fields) : Ty
     {
         public override Context<bool> Equiv(Ty rhs) =>
-            rhs is TyRecord mr
+            rhs is TyVariant mr
                 ? Fields.Count == mr.Fields.Count
                       ? from xs in Fields.Zip(mr.Fields)
                                          .Sequence(p => p.Left.Name == p.Right.Name
@@ -442,6 +581,9 @@ namespace Echo.ActorSys2.Configuration
             from star in Fields.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))
             from kind in star ? Context.StarKind : Context.Fail<Kind>(ProcessError.StarKindExpected(location))
             select kind;
+
+        internal override Seq<TyVar> GetVarsSeq() =>
+            Fields.Bind(f => f.GetVarsSeq());
     }
 
     /// <summary>
@@ -449,10 +591,14 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyUnit : Ty
     {
-        public static readonly Ty Default = new TyUnit(); 
-        
+        public static readonly Ty Default = new TyUnit();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyUnit);
+            rhs switch
+            {
+                TyUnit => Context.True,
+                _      => Context.False
+            };
     
         public override string Show() =>
             $"unit";
@@ -466,7 +612,11 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyBool(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyBool);
+            rhs switch
+            {
+                TyBool => Context.True,
+                _      => Context.False
+            };
     
         public override string Show() =>
             $"bool";
@@ -480,7 +630,11 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyInt(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyInt);
+            rhs switch
+            {
+                TyInt => Context.True,
+                _      => Context.False
+            };
     
         public override string Show() =>
             $"int";
@@ -494,7 +648,11 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyFloat(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyFloat);
+            rhs switch
+            {
+                TyFloat => Context.True,
+                _     => Context.False
+            };
     
         public override string Show() =>
             $"float";
@@ -508,7 +666,11 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyString(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyString);
+            rhs switch
+            {
+                TyString => Context.True,
+                _        => Context.False
+            };
     
         public override string Show() =>
             $"string";
@@ -519,10 +681,14 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyProcessId : Ty
     {
-        public static readonly Ty Default = new TyProcessId(); 
-        
+        public static readonly Ty Default = new TyProcessId();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyProcessId);
+            rhs switch
+            {
+                TyProcessId => Context.True,
+                _           => Context.False
+            };
     
         public override string Show() =>
             $"process-id";
@@ -533,10 +699,14 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyProcessName : Ty
     {
-        public static readonly Ty Default = new TyProcessName(); 
-        
+        public static readonly Ty Default = new TyProcessName();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyProcessName);
+            rhs switch
+            {
+                TyProcessName => Context.True,
+                _             => Context.False
+            };
     
         public override string Show() =>
             $"process-name";
@@ -550,7 +720,11 @@ namespace Echo.ActorSys2.Configuration
         public static readonly Ty Default = new TyProcessFlag(); 
         
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyProcessFlag);
+            rhs switch
+            {
+                TyProcessFlag => Context.True,
+                _             => Context.False
+            };
     
         public override string Show() =>
             $"process-flag";
@@ -561,10 +735,14 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyTime : Ty    
     {
-        public static readonly Ty Default = new TyTime(); 
-        
+        public static readonly Ty Default = new TyTime();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyTime);
+            rhs switch
+            {
+                TyTime => Context.True,
+                _      => Context.False
+            };
     
         public override string Show() =>
             $"time";
@@ -575,10 +753,14 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyMessageDirective : Ty
     {
-        public static readonly Ty Default = new TyMessageDirective(); 
-        
+        public static readonly Ty Default = new TyMessageDirective();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyMessageDirective);
+            rhs switch
+            {
+                TyMessageDirective => Context.True,
+                _                  => Context.False
+            };
     
         public override string Show() =>
             $"message-directive";
@@ -589,11 +771,15 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyDirective : Ty
     {
-        public static readonly Ty Default = new TyDirective(); 
-        
+        public static readonly Ty Default = new TyDirective();
+
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyDirective);
-    
+            rhs switch
+            {
+                TyDirective => Context.True,
+                _           => Context.False
+            };
+        
         public override string Show() =>
             $"directive";
     }

@@ -20,6 +20,7 @@ namespace Echo.ActorSys2.Configuration
         {
             Parser<Term>? term = null;
             Parser<Term>? expr = null;
+            Parser<Ty>?   type = null;
             
             var builtTypeNames = HashSet("int", "float", "bool", "process-id", "process-name", "process-flags", "time", 
                                          "directive", "message-directive", "disp", "cluster", "strategy", "router", "unit", "array");
@@ -261,44 +262,104 @@ namespace Echo.ActorSys2.Configuration
                           attempt(valueTerm),
                           attempt(identTerm),
                           lazyp(() => lexer.Parens(expr.Expand()).Map(t => t.Value)));
-            
-            var expr1 = buildExpressionParser(operators, term);
 
-            expr = lexer.CommaSep1(attempt(expr1.Expand()))
+            var expr1 = from ts in many1(term)
+                        select ts.Count == 1
+                                   ? ts.Head
+                                   : ts.Tail.Fold(ts.Head, Term.App); 
+            
+            var expr2 = buildExpressionParser(operators, expr1);
+
+            expr = lexer.CommaSep1(attempt(expr2.Expand()))
                         .Map(xs => xs.Value.Count == 1
                                        ? xs.Value.Head
                                        : Term.Tuple(xs.Value));
 
+            // Single identifier atomic type
+            var typeRefAtom = from id in identifier
+                              select id.Value switch
+                                     {
+                                         "Bool"                        => Ty.Bool,
+                                         "Unit"                        => Ty.Unit,
+                                         "Int"                         => Ty.Int,
+                                         "Float"                       => Ty.Float,
+                                         "String"                      => Ty.String,
+                                         "MessageDirective"            => Ty.MessageDirective,
+                                         "Directive"                   => Ty.Directive,
+                                         "Time"                        => Ty.Time,
+                                         "ProcessName"                 => Ty.ProcessName,
+                                         "ProcessId"                   => Ty.ProcessId,
+                                         "ProcessFlag"                 => Ty.ProcessFlag,
+                                         var x when char.IsUpper(x[0]) => new TyId(id.Value),
+                                         _                             => new TyVar(id.Value),
+                                     };
+
+            // Type application
+            var typeApply = from atoms in many1(typeRefAtom)
+                            select atoms.Count == 1
+                                       ? atoms.Head
+                                       : atoms.Tail.Fold(atoms.Head, Ty.App);
+                               
+            var typeOuter = choice(
+                                attempt(symbol("[]")).Map(static p => Ty.Nil),
+                                attempt(symbol("()")).Map(static p => Ty.Unit),
+                                attempt(from o in symbol("[")
+                                        from t in type
+                                        from c in symbol("]")
+                                        select t),
+                                attempt(from o  in symbol("(")
+                                        from ts in sepBy1(type, lexer.Comma)
+                                        from c  in symbol(")")
+                                        select Ty.Tuple(ts)),
+                                typeApply);
+
+            var typeArrow = from ts in sepBy1(typeOuter, either(symbol("->"), symbol("→")))
+                            select ts.Count == 1
+                                      ? ts.Head
+                                      : ts.Init.FoldBack(ts.Last, (s, t) => Ty.Arr(t, s));
+
+            type = typeArrow;  // TODO: Existential and Universal types 
+
+            var prototype = from open in symbol("(")
+                            from args in sepBy(from nm in identifier
+                                               from co in symbol(":")
+                                               from ty in type
+                                               select (Name: nm, Type: ty),
+                                               lexer.Comma)
+                            from clos in symbol(")")
+                            select  args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type));
+            
             var topLevelVarDecl = from k in keyword("let")
                                   from v in indented(from n in identifier
-                                                     from e in symbol(":")
+                                                     from f in optional(prototype)
+                                                     from e in symbol("=")
                                                      from v in expr
-                                                     select (Name: n.Value, Value: v))
-                                  select Decl.GlobalVar(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Value);
+                                                     select (Name: n.Value, Prototype: f.IfNone(Empty), Value: v))
+                                  select Decl.GlobalVar(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, new Prototype(v.Prototype), v.Value);
 
             var clusterDecl = indented2(from k in keyword("cluster")
                                         from n in identifier
                                         from _ in keyword("as")
                                         from a in identifier
-                                        from c in symbol(":")
+                                        from c in symbol("=")
                                         from r in indented(recordFields)
                                         select Decl.Cluster(mkLoc(k.BeginPos, r.Location.End), n.Value, a.Value, (TmRecord)r));
 
             var processDecl = indented2(from k in keyword("process")
                                         from n in identifier
-                                        from c in symbol(":")
+                                        from c in symbol("=")
                                         from r in indented(recordFields)
                                         select Decl.Process(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
             var routerDecl = indented2(from k in keyword("router")
                                        from n in identifier
-                                       from c in symbol(":")
+                                       from c in symbol("=")
                                        from r in indented(recordFields)
                                        select Decl.Router(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord)r));
 
             var strategyDecl = indented2(from k in keyword("strategy")
                                          from n in identifier
-                                         from c in symbol(":")
+                                         from c in symbol("=")
                                          from t in either(
                                              keyword("one-for-one").Map(static _ => StrategyType.OneForOne),
                                              keyword("all-for-one").Map(static _ => StrategyType.AllForOne)) 
@@ -308,7 +369,7 @@ namespace Echo.ActorSys2.Configuration
 
             var recordDecl = indented2(from k in keyword("record")
                                        from n in identifier
-                                       from c in symbol(":")
+                                       from c in symbol("=")
                                        from r in indented(recordFields)
                                        select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r));
 

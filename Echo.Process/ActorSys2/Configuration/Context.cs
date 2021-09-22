@@ -136,19 +136,19 @@ namespace Echo.ActorSys2.Configuration
         /// <summary>
         /// Is the binding a type-lambda
         /// </summary>
-        public static Context<bool> isTyAbb(string name) =>
+        public static Context<bool> isTyLam(string name) =>
             getBinding(Loc.None, name).Map(b => b is TyLamBind);
 
         /// <summary>
         /// Get the binding if it's a type-lambda
         /// </summary>
-        public static Context<Ty> getTyAbb(string name) =>
+        public static Context<Ty> getTyLam(string name) =>
             getBinding(Loc.None, name).Bind(b => b is TyLamBind ab ? Context.Pure(ab.Type) :  Context.NoRuleAppliesTy);
 
         public static Context<Ty> computeTy(Ty ty) =>
             ty switch
             {
-                TyVar (var n) => getTyAbb(n),
+                TyVar (var n) => getTyLam(n),
                 _             => Context.Fail<Ty>(ProcessError.NoRuleApplies)
             };
 
@@ -176,7 +176,7 @@ namespace Echo.ActorSys2.Configuration
         /// Add a local binding
         /// </summary>
         public Context AddLocal(string name, Binding b) =>
-            this with {Bindings = Bindings.Add(name, b)};
+            this with {Bindings = Bindings.AddOrUpdate(name, b)};
 
         /// <summary>
         /// Check if a name is bound

@@ -9,26 +9,31 @@ namespace Echo.Tests
     public class ConfLangTests
     {
         static string general = @"
--- type Person: 
+-- type Person =
 --     name    : string
 --     surname : string
 --     age     : int 
 -- 
 -- type State s a : s → { value: a, state: s, faulted: bool }
 
-let example: 10
+let identity (x : a) =
+    x
 
-cluster root as app:
+let test = identity 100      
+
+let example = 10
+
+cluster root as app =
     node-name:   ""THE-BEAST""        -- Should match the web-site host-name unless the host-name is localhost, then it uses System.Environment.MachineName
     role:	     ""owin-web-role""
     connection:  ""localhost""
     database:    ""0""
 
-strategy strat: 
+strategy strat =
     one-for-one:
         backoff: min = 1 seconds, max = 100 seconds, scalar = 2 * example
 
-process echo:
+process echo =
     pid: /root/user/echo
     strategy: strat
 "; 
@@ -41,16 +46,22 @@ process echo:
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
-            Assert.True(decls.Count == 4);
+            Assert.True(decls.Count == 6);
             Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclCluster);
-            Assert.True(decls[2] is DeclStrategy);
-            Assert.True(decls[3] is DeclProcess);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[3] is DeclCluster);
+            Assert.True(decls[4] is DeclStrategy);
+            Assert.True(decls[5] is DeclProcess);
 
             // TYPE-CHECK
             
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("test").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
+                        vb0.Term is TmInt tmInt && tmInt.Value == 100
+                        ); 
 
             Assert.True(ctx.Context.TopBindings.Find("app").Case is TmAbbBind vb1 && vb1.Type.Case is TyCluster cluster &&
                         cluster.Value.Fields.Find(f => f.Name == "node-name").Case is FieldTy fty1 && fty1.Type is TyString &&
@@ -74,7 +85,7 @@ process echo:
         [Fact]
         public void TopLevelLet_LabeledTuple()
         {
-            var fres = SyntaxParser.Parse($"let x: min = 1 seconds, max = 100 seconds, scalar = 2", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = min = 1 seconds, max = 100 seconds, scalar = 2", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -100,7 +111,7 @@ process echo:
         [InlineData("Foo-1")]
         public void TopLevelLet_Ident(string name)
         {
-            var fres = SyntaxParser.Parse($"let x: {name}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {name}", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -119,7 +130,7 @@ process echo:
         [InlineData(long.MinValue)]
         public void TopLevelLet_Int(long value)
         {
-            var fres = SyntaxParser.Parse($"let x: {value}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {value}", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -137,7 +148,7 @@ process echo:
         [InlineData("Hello\\\"World", "Hello\"World")]
         public void TopLevelLet_String(string input, string output)
         {
-            var fres = SyntaxParser.Parse($"let x: \"{input}\"", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = \"{input}\"", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -150,7 +161,7 @@ process echo:
         [Fact]
         public void TopLevelLet_True()
         {
-            var fres = SyntaxParser.Parse("let x: true", "test.conf");
+            var fres = SyntaxParser.Parse("let x = true", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -162,7 +173,7 @@ process echo:
         [Fact]
         public void TopLevelLet_False()
         {
-            var fres = SyntaxParser.Parse("let x: false", "test.conf");
+            var fres = SyntaxParser.Parse("let x = false", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -174,7 +185,7 @@ process echo:
         [Fact]
         public void TopLevelLet_Unit()
         {
-            var fres = SyntaxParser.Parse("let x: unit", "test.conf");
+            var fres = SyntaxParser.Parse("let x = unit", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -193,7 +204,7 @@ process echo:
         [InlineData("remote-state-publish", ProcessFlags.RemoteStatePublish)]
         public void TopLevelLet_ProcessFlag(string input, ProcessFlags expected)
         {
-            var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {input}", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -213,7 +224,7 @@ process echo:
         [InlineData("//sub/node-value/child-1023")]
         public void TopLevelLet_ProcessId(string input)
         {
-            var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {input}", "test.conf");
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -227,7 +238,7 @@ process echo:
         [InlineData("[//sub/node-value/child-1023,//sub/node-value,/sub/node-value,/sub/node,/sub,//root/123]")]
         public void TopLevelLet_ProcessIdArray(string input)
         {
-            var fres = SyntaxParser.Parse($"let x: {input}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {input}", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -247,7 +258,7 @@ process echo:
         [InlineData("1.5")]
         public void TopLevelLet_Float(string value)
         {
-            var fres = SyntaxParser.Parse($"let x: {value}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {value}", "test.conf");
             var res  = fres.ThrowIfFail();
 
             Assert.True(res.Count == 1);
@@ -278,7 +289,7 @@ process echo:
             var parts    = value.Split(' ');
             var expected = int.Parse(parts[0]) * scalar;
             
-            var fres = SyntaxParser.Parse($"let x: {value}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = {value}", "test.conf");
             var res  = fres.ThrowIfFail();
 
             Assert.True(res.Count == 1);
@@ -291,7 +302,7 @@ process echo:
         [Fact]
         public void TopLevelLet_MessageDirective_ForwardToSelf()
         {
-            var fres = SyntaxParser.Parse($"let x: forward-to-self", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = forward-to-self", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -304,7 +315,7 @@ process echo:
         [Fact]
         public void TopLevelLet_MessageDirective_ForwardToDeadLetters()
         {
-            var fres = SyntaxParser.Parse($"let x: forward-to-dead-letters", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = forward-to-dead-letters", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -317,7 +328,7 @@ process echo:
         [Fact]
         public void TopLevelLet_MessageDirective_StayInQueue()
         {
-            var fres = SyntaxParser.Parse($"let x: stay-in-queue", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = stay-in-queue", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -336,7 +347,7 @@ process echo:
         [InlineData("//sub/node-value/child-1023")]
         public void TopLevelLet_MessageDirective_ForwardToProcess(string input)
         {
-            var fres = SyntaxParser.Parse($"let x: forward-to-process {input}", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = forward-to-process {input}", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -349,7 +360,7 @@ process echo:
         [Fact]
         public void TopLevelLet_Directive_Resume()
         {
-            var fres = SyntaxParser.Parse($"let x: resume", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = resume", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -362,7 +373,7 @@ process echo:
         [Fact]
         public void TopLevelLet_Directive_Restart()
         {
-            var fres = SyntaxParser.Parse($"let x: restart", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = restart", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -375,7 +386,7 @@ process echo:
         [Fact]
         public void TopLevelLet_Directive_Escalate()
         {
-            var fres = SyntaxParser.Parse($"let x: escalate", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = escalate", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -388,7 +399,7 @@ process echo:
         [Fact]
         public void TopLevelLet_Directive_Stop()
         {
-            var fres = SyntaxParser.Parse($"let x: stop", "test.conf");
+            var fres = SyntaxParser.Parse($"let x = stop", "test.conf");
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
@@ -402,7 +413,7 @@ process echo:
         public void TopLevelLet_Record()
         {
             var fres = SyntaxParser.Parse($@"
-let x: record
+let x = record
          id:      //root/user/test/123
          name:    ""Paul""
          surname: ""Louth""
