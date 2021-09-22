@@ -13,7 +13,14 @@ namespace Echo.Tests
 --               , surname : string
 --               , age     : int } 
 -- 
--- type State s a : s → { value: a, state: s, faulted: bool }
+-- type State s a : s → { value: a, state: s, faulted: Bool }
+
+let applBool (f : Bool → Bool, x : Bool) = 
+    if f x
+    then true
+    else false
+
+let result = applBool ((x : Bool) => !x) true
 
 let identity (x : a) =
     x
@@ -42,13 +49,15 @@ process echo = { pid = /root/user/echo
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
-            Assert.True(decls.Count == 6);
+            Assert.True(decls.Count == 8);
             Assert.True(decls[0] is DeclGlobalVar);
             Assert.True(decls[1] is DeclGlobalVar);
             Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclCluster);
-            Assert.True(decls[4] is DeclStrategy);
-            Assert.True(decls[5] is DeclProcess);
+            Assert.True(decls[3] is DeclGlobalVar);
+            Assert.True(decls[4] is DeclGlobalVar);
+            Assert.True(decls[5] is DeclCluster);
+            Assert.True(decls[6] is DeclStrategy);
+            Assert.True(decls[7] is DeclProcess);
 
             // TYPE-CHECK
             
@@ -56,8 +65,10 @@ process echo = { pid = /root/user/echo
             var ctx  = fctx.ThrowIfFail();
 
             Assert.True(ctx.Context.TopBindings.Find("test").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
-                        vb0.Term is TmInt tmInt && tmInt.Value == 100
-                        ); 
+                        vb0.Term is TmInt tmInt && tmInt.Value == 100); 
+
+            Assert.True(ctx.Context.TopBindings.Find("result").Case is TmAbbBind vbr && vbr.Type.Case is TyBool && 
+                        vbr.Term is TmFalse); 
 
             Assert.True(ctx.Context.TopBindings.Find("app").Case is TmAbbBind vb1 && vb1.Type.Case is TyCluster cluster &&
                         cluster.Value.Fields.Find(f => f.Name == "node-name").Case is FieldTy fty1 && fty1.Type is TyString &&

@@ -266,9 +266,40 @@ namespace Echo.ActorSys2.Configuration
 
             var identTerm = identifier.Map(id => Term.Var(mkLoc(id.BeginPos, id.EndPos), id.Value));
 
+            var ternary = indented(from ifkw in keyword("if")
+                                   from pred in expr
+                                   from then in keyword("then")
+                                   from tru in expr
+                                   from els in keyword("else")
+                                   from fal in expr
+                                   select Term.If(pred, tru, fal));
+           
+            var prototype = from open in symbol("(")
+                            from args in sepBy(from nm in identifier
+                                               from co in symbol(":")
+                                               from ty in type
+                                               select (Name: nm, Type: ty),
+                                               lexer.Comma)
+                            from clos in symbol(")")
+                            select  args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type));
+ 
+            var lambda = from begi in getPos
+                         from vars in prototype
+                         from arrw in symbol("=>")
+                         from body in expr
+                         let loc = mkLoc(begi, arrw.EndPos)
+                         select vars.Count switch
+                                {
+                                    0 => Term.Lam(loc, "_", Ty.Unit, body),
+                                    1 => Term.Lam(loc, vars.Head.Name, vars.Head.Type, body),
+                                    _ => vars.FoldBack(body, (b, v) => Term.Lam(loc, v.Name, v.Type, b))
+                                };
+            
             term = choice(attempt(letTerm),
+                          attempt(ternary),
                           attempt(valueTerm),
                           attempt(identTerm),
+                          attempt(lambda),
                           tupleTerm);
 
             var expr1 = from ts in many1(term)
@@ -329,15 +360,6 @@ namespace Echo.ActorSys2.Configuration
                                       : ts.Init.FoldBack(ts.Last, (s, t) => Ty.Arr(t, s));
 
             type = typeArrow;  // TODO: Existential and Universal types 
-
-            var prototype = from open in symbol("(")
-                            from args in sepBy(from nm in identifier
-                                               from co in symbol(":")
-                                               from ty in type
-                                               select (Name: nm, Type: ty),
-                                               lexer.Comma)
-                            from clos in symbol(")")
-                            select  args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type));
             
             var topLevelVarDecl = from k in keyword("let")
                                   from v in indented(from n in identifier
