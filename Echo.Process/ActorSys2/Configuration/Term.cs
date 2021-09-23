@@ -1005,7 +1005,9 @@ namespace Echo.ActorSys2.Configuration
     public record TmLiftLam(Loc Location, string VarName, Kind Kind, Term Body) : Term(Location)
     {
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmLiftLam(Location, VarName, Kind, Body.Subst(onVar, onType, name));
+            name == VarName
+                ? Body.Subst(onVar, onType, name)
+                : new TmLiftLam(Location, VarName, Kind, Body.Subst(onVar, onType, name));
 
         public override bool IsVal =>
             false;
