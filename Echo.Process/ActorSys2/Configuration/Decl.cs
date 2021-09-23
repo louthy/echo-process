@@ -62,7 +62,7 @@ namespace Echo.ActorSys2.Configuration
             ps.IsEmpty
                 ? Value.Eval
                 : ps.Head.Type is TyVar tvar
-                    ? from x in Context.get.Map(x => x.Bindings.ContainsKey(tvar.Name))
+                    ? from x in Context.isNameBound(tvar.Name)
                       from r in x
                                     ? AddParameter(ps)
                                     : Context.local(ctx => ctx.AddLocal(tvar.Name, NameBind.Default),

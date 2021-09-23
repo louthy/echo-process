@@ -141,6 +141,9 @@ namespace Echo.ActorSys2.Configuration
             from r in k == Kind.Star ? Unit : Fail<Unit>(ProcessError.StarKindExpected(loc))
             select r;
 
+        public static Context<bool> isNameBound(string name) =>
+            get.Map(c => c.Bindings.ContainsKey(name) || c.TopBindings.ContainsKey(name));
+
         /// <summary>
         /// Is the binding a type-lambda
         /// </summary>

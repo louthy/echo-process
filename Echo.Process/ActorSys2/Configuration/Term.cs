@@ -1013,12 +1013,16 @@ namespace Echo.ActorSys2.Configuration
             false;
 
         public override Context<Term> Eval1 =>
-            Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
-                          TLam(Location, VarName, Kind, Body).Eval1);
+            from bd in Context.isNameBound(VarName)
+            from tm in bd
+                            ? Body.Eval1
+                            : Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
+                                            TLam(Location, VarName, Kind, Body).Eval1)
+            select tm;
 
         public override Context<Ty> TypeOf =>
             Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
-                          Body.TypeOf);
+                          Body.TypeOf.Map(t => (Ty)new TyAll(VarName, Kind, t)));
         
         public override string Show() =>
             Kind == Kind.Star
@@ -1060,8 +1064,9 @@ namespace Echo.ActorSys2.Configuration
                     from aty in Y.TypeOf
                     from akd in aty.KindOf(loc)
                     from _ in akd == kind ? Context.Unit : Context.Fail<Unit>(ProcessError.TypeComponentHasWrongKind(loc, kind, akd))
-                    let ntm = lam.Subst(x, aty)
-                    select App(ntm, Y),
+                    select App(TLam(loc, x, kind, lam), Y),
+                    //let ntm = lam.Subst(x, aty)
+                    //select App(ntm, Y),
                 
                 TmTLam(_, var x, _, var term) =>
                     from aty in Y.TypeOf
