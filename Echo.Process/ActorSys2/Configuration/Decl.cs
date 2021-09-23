@@ -53,6 +53,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public override Context<Unit> TypeCheck() =>
             from tm in AddParameters(Prototype.Parameters)
+            //from _2 in Context.log(tm)
             from ty in tm.TypeOf
             from __ in Context.addTop(Location, Name, new TmAbbBind(tm, ty))
             select unit;

@@ -9,9 +9,11 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Context Empty = new(default, default, default);
 
-        public Context<Unit> log<A>(A value) =>
+        public static Context<Unit> log<A>(A value) =>
             new Context<Unit>(ctx => {
-                                  Console.WriteLine(value);
+                                  if(value is Term tm) Console.WriteLine(tm.Show());
+                                  else if(value is Ty tt) Console.WriteLine(tt.Show());
+                                  else Console.WriteLine(value);
                                   return FinSucc((unit, ctx));
                               });
         
