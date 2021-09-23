@@ -350,6 +350,65 @@ let yr = f2 """"
             Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }   
+                             
+        [Fact]
+        public void Lambda_PartialApplyAbstract4()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let f = (x : a) => 
+            (y : b) => 
+                x
+
+let f1 = f 1
+let xr = f1 true
+
+let f2 = f ""Hello, World""
+let yr = f2 false
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 5);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[3] is DeclGlobalVar);
+            Assert.True(decls[4] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb2 &&
+                        vb2.Type.Case is TyAll all && all.Type is TyArr arr &&
+                        arr.X is TyVar tv1 && tv1.Name == "b" &&
+                        arr.Y is TyInt && 
+                        vb2.Term is TmLiftLam tmLiftLam &&
+                        tmLiftLam.Body is TmLam tmLam &&
+                        tmLam.Name == "y" &&
+                        tmLam.Type is TyVar tvr && tvr.Name == "b" &&
+                        tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
+
+            Assert.True(ctx.Context.TopBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+                        vbX.Term is TmInt tmIntX && tmIntX.Value == 1); 
+
+            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb3 &&
+                        vb3.Type.Case is TyAll all1 && all1.Type is TyArr arr1 &&
+                        arr1.X is TyVar tv2 && tv2.Name == "b" &&
+                        arr1.Y is TyString && 
+                        vb3.Term is TmLiftLam tmLiftLam2 &&
+                        tmLiftLam2.Body is TmLam tmLam2 &&
+                        tmLam2.Name == "y" &&
+                        tmLam2.Type is TyVar tvr1 && tvr1.Name == "b" &&
+                        tmLam2.Body is TmString tmStr && tmStr.Value == "Hello, World");
+
+            Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
+                        vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
+        }   
         
         [Fact]
         public void TopLevelLet_LabeledTuple()

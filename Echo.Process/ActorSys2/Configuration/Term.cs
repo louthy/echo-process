@@ -17,7 +17,7 @@ namespace Echo.ActorSys2.Configuration
             Subst((loc, n1, n2, self) => n1 == n2 ? term : self, (n, ty) => ty, name);
 
         public virtual Term Subst(string name, Ty type) =>
-            Subst((loc, n1, n2, self) => self, (n, ty) => n == name ? type : ty.Subst(n, type), name);
+            Subst((loc, n1, n2, self) => self, (n, ty) => ty is TyVar tv && tv.Name == name ? type : ty, name);
 
         public virtual Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
             this;
@@ -1029,7 +1029,7 @@ namespace Echo.ActorSys2.Configuration
     public record TmLam(Loc Location, string Name, Ty Type, Term Body) : Term(Location)
     {
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmLam(Location, Name, onType(name, Type), Body.Subst(onVar, onType, name));
+            Lam(Location, Name, onType(name, Type), Body.Subst(onVar, onType, name));
 
         public override bool IsVal =>
             true;
