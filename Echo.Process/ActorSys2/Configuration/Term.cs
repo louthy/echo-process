@@ -1018,7 +1018,7 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
-                          TLam(Location, VarName, Kind, Body).TypeOf);
+                          Body.TypeOf);
         
         public override string Show() =>
             Kind == Kind.Star
@@ -1086,23 +1086,29 @@ namespace Echo.ActorSys2.Configuration
             from fun in X.TypeOf
             from arg in Y.TypeOf
             from sty in Context.simplifyTy(fun)
-            from res in sty switch
-                        {
-                            TyArr (var param, var resTy) =>
-                                from eq in arg.Equiv(param)
-                                from rt in eq ? Context.Pure(resTy) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(Location, fun, arg))
-                                select rt,
-                            
-                            TyAll (var name, var k1, var tyt) =>
-                                from k2 in arg.KindOf(Location)
-                                from rt in k1 == k2 
-                                               ? Context.Pure(tyt.Subst(name, arg))
-                                               : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(Location, k1, k2))
-                                select rt,
-
-                            _ => Context.Fail<Ty>(ProcessError.FunctionTypeExpected(Location))
-                        }
+            from __1 in Context.log($"fun simplified: {fun.Show()}  ==>  {sty.Show()}")
+            from res in Go(Location, sty, arg)
             select res;
+
+        static Context<Ty> Go(Loc loc, Ty simpleFun, Ty arg) =>
+            simpleFun switch
+            {
+                TyArr (var param, var resTy) =>
+                    from eq in arg.Equiv(param)
+                    from rt in eq ? Context.Pure(resTy) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(loc, simpleFun, arg))
+                    select rt,
+
+                TyAll (var name, var k1, var tyt) =>
+                    from k2 in arg.KindOf(loc)
+                    from rt in k1 == k2
+                                   ? Context.local(ctx => ctx.AddLocal(name, new TyVarBind(k1)),
+                                                   Context.simplifyTy(tyt)
+                                                          .Bind(t => Go(loc, t, arg)))
+                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, k1, k2))
+                    select rt,
+
+                _ => Context.Fail<Ty>(ProcessError.FunctionTypeExpected(loc))
+            };
         
         public override string Show() =>
             $"{X.Show()} {Y.Show()}";

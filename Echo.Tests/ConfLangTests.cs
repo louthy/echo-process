@@ -14,6 +14,7 @@ namespace Echo.Tests
 --               , age     : int } 
 -- 
 -- type State s a : s → { value: a, state: s, faulted: Bool }    let State = ∀ s. s → ∀ a. a → Bool → { value : a, state : s, faulted : Bool  }
+
 let State (value : a, faulted: Bool, state : s) =
     { state = state
     , value = value
@@ -409,6 +410,54 @@ let yr = f2 false
             Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }   
+        
+                                     
+        [Fact]
+        public void ApplyGenericToGeneric()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let f1 (x : a) = x
+let f2 (x : a) = f1 x
+let x  = f2 100
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 3);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb1 && 
+                        vb1.Type.Case is TyAll all && all.Type is TyArr tyarr && 
+                        tyarr.X is TyVar tvarA && tvarA.Name == "a" &&
+                        tyarr.Y is TyVar tvarB && tvarB.Name == "a" &&
+                        vb1.Term is TmTLam ttlam &&  
+                        ttlam.Subject == "a" && ttlam.Expr is TmLam tlam &&
+                        tlam.Name == "x" && tlam.Body is TmVar tmvar && 
+                        tmvar.Name == "x");
+
+
+            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb2 && 
+                        vb2.Type.Case is TyAll all2 && all2.Type is TyArr tyarr2 && 
+                        tyarr2.X is TyVar tvarA2 && tvarA2.Name == "a" &&
+                        tyarr2.Y is TyVar tvarB2 && tvarB2.Name == "a" &&
+                        vb2.Term is TmTLam ttlam2 &&  
+                        ttlam2.Subject == "a" && ttlam2.Expr is TmLam tlam2 &&
+                        tlam2.Name == "x" && tlam2.Body is TmVar tmvar2 && 
+                        tmvar2.Name == "x");
+
+            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb3 &&
+                        vb3.Term is TmInt v && v.Value == 100);
+        }
         
         [Fact]
         public void TopLevelLet_LabeledTuple()

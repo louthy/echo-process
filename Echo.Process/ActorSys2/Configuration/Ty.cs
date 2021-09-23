@@ -138,7 +138,7 @@ namespace Echo.ActorSys2.Configuration
                 : Context.False;
 
         public override string Show() =>
-            $"∀ {Subject} :: {Kind.Show()} . {Type.Show()}";
+            $"forall {Subject} :: {Kind.Show()}. {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
             Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
@@ -170,7 +170,7 @@ namespace Echo.ActorSys2.Configuration
                 : Context.False;
 
         public override string Show() =>
-            $"∃ {Subject} :: {Kind.Show()} . {Type.Show()}";
+            $"exists {Subject} :: {Kind.Show()} . {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
             Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
@@ -317,7 +317,7 @@ namespace Echo.ActorSys2.Configuration
                 : Context.False;
 
         public override string Show() =>
-            $"{X.Show()} → {Y.Show()}";
+            $"{X.Show()} -> {Y.Show()}";
         
         public override Ty Subst(Func<string, string, Ty> onVar, string c) =>
             new TyArr(X.Subst(onVar, c), Y.Subst(onVar, c));
