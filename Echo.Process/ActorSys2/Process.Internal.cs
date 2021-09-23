@@ -44,6 +44,18 @@ namespace Echo
             get.Map(static a => a.Strategy);
 
         /// <summary>
+        /// Get the User process
+        /// </summary>
+        internal static Eff<RT, Actor<RT>> getUser =>
+            echoState.Bind(static es => es.GetCurrentSystem().Map(s => s.State.Children["User"]).ToEff());
+
+        /// <summary>
+        /// Get the System process
+        /// </summary>
+        internal static Eff<RT, Actor<RT>> getSystem =>
+            echoState.Bind(static es => es.GetCurrentSystem().Map(s => s.State.Children["System"]).ToEff());
+        
+        /// <summary>
         /// Get the ProcessId of this Actor
         /// </summary>
         internal static Eff<RT, ProcessId> getSelf =>

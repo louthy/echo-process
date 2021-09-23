@@ -291,8 +291,10 @@ namespace Echo.ActorSys2.Configuration
                          select vars.Count switch
                                 {
                                     0 => Term.Lam(loc, "_", Ty.Unit, body),
-                                    1 => Term.Lam(loc, vars.Head.Name, vars.Head.Type, body),
-                                    _ => vars.FoldBack(body, (b, v) => Term.Lam(loc, v.Name, v.Type, b))
+                                    _ => vars.FoldBack(body, (b, v) =>
+                                                                 v.Type is TyVar tv
+                                                                    ? Term.LiftLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
+                                                                    : Term.Lam(loc, v.Name, v.Type, b))
                                 };
             
             term = choice(attempt(letTerm),
@@ -391,11 +393,10 @@ namespace Echo.ActorSys2.Configuration
 
             var strategyDecl = from k in keyword("strategy")
                                from n in identifier
-                               from c in symbol("=")
                                from t in either(
                                    keyword("one-for-one").Map(static _ => StrategyType.OneForOne),
                                    keyword("all-for-one").Map(static _ => StrategyType.AllForOne)) 
-                               from d in symbol("=>")
+                               from c in symbol("=")
                                from r in recordTerm
                                select Decl.Strategy(mkLoc(k.BeginPos, r.Location.End), n.Value, t, (TmRecord)r);
 

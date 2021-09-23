@@ -117,11 +117,7 @@ namespace Echo.ActorSys2
         internal Fin<ActorState<RT>> GetCurrentActorState() =>
             ActorState.Value.Self.IsValid
                 ? ActorState.Value
-                : GetCurrentSystem().Case switch
-                  {
-                      ActorSystem<RT> sys => sys.FindActor(sys.Root[ActorSystemConfig.Default.UserProcessName]).Map(a => a.State),
-                      _                   => ProcessError.NoSystemsRunning
-                  };
+                : FinFail<ActorState<RT>>(ProcessError.MustBeCalledWithinProcessContext);
 
         internal Unit ModifyCurrentActorState(Func<ActorState<RT>, ActorState<RT>> f) =>
             ignore(ActorState.Swap(f));
@@ -131,52 +127,5 @@ namespace Echo.ActorSys2
              Systems.Value.Find(DefaultSystem) || 
              Systems.Value.Values.HeadOrNone())
            .ToFin(ProcessError.NoSystemsRunning);
-
-
-
-        /*public static EchoState<RT> Default = new(
-            Atom(0L),
-            Atom(new ActorState<RT>(ProcessId.NoSender, ProcessId.None, Empty, Strategy.Identity)),
-            ActorSystems<RT>.Default,
-            SystemName.None,
-            SystemName.None);
-
-        /// Actor request ID 
-        readonly Atom<long> ActorRequestId;
-
-        /// Actor systems
-        readonly ActorSystems<RT> Systems;
-
-        EchoState(Atom<long> actorRequestId, Atom<ActorState<RT>> actorState, ActorSystems<RT> systems, SystemName currentSystem, SystemName defaultSystem)
-        {
-            ActorRequestId = actorRequestId;
-            ActorState     = actorState;
-            Systems        = systems;
-            CurrentSystem  = currentSystem;
-            DefaultSystem  = defaultSystem;
-        }
-
-        internal Fin<ProcessId> Root =>
-            GetCurrentSystem().Map(static sys => sys.Root);
-
-        internal Fin<ProcessId> User =>
-            Root.Map(static root => root[ActorSystemConfig.Default.UserProcessName]);
-
-        internal Fin<ProcessId> System =>
-            Root.Map(static root => root[ActorSystemConfig.Default.SystemProcessName]);
-
-        internal long NextRequestId =>
-            (long) ActorRequestId.Swap(static x => x + 1);
-
-        internal Fin<Actor<RT>> FindActor(ProcessId pid) =>
-            pid.System.IsValid
-                ? Systems.FindSystem(pid.System).Bind(sys => sys.FindActor(pid))
-                : ProcessError.SystemDoesNotExist(pid.System);
-
-        internal Fin<ActorState<RT>> FindActorState(ProcessId pid) =>
-            FindActor(pid).Map(static s => s.State);
-        
-        internal Eff<Unit> RemoveFromSystem(ProcessId pid) =>
-            Systems.RemoveFromSystem(pid);*/
     }
 }

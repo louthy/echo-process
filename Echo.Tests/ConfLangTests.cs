@@ -13,7 +13,14 @@ namespace Echo.Tests
 --               , surname : string
 --               , age     : int } 
 -- 
--- type State s a : s → { value: a, state: s, faulted: Bool }
+-- type State s a : s → { value: a, state: s, faulted: Bool }    let State = ∀ s. s → ∀ a. a → Bool → { value : a, state : s, faulted : Bool  }
+let State (value : a, faulted: Bool, state : s) =
+    { state = state
+    , value = value
+    , faulted = faulted }
+
+let return (value : a, state : s) = 
+    State value false state
 
 let applBool (f : Bool → Bool, x : Bool) = 
     if f x
@@ -34,8 +41,8 @@ cluster root as app = { node-name  = ""THE-BEAST""        -- Should match the we
                       , connection = ""localhost""
                       , database   = ""0"" }
 
-strategy strat = 
-    one-for-one => { backoff = (min = 1 seconds, max = 100 seconds, scalar = 2 * example) }
+strategy strat one-for-one = 
+     { backoff = (min = 1 seconds, max = 100 seconds, scalar = 2 * example) }
 
 process echo = { pid = /root/user/echo
                , strategy = strat }
@@ -49,15 +56,17 @@ process echo = { pid = /root/user/echo
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
-            Assert.True(decls.Count == 8);
+            Assert.True(decls.Count == 10);
             Assert.True(decls[0] is DeclGlobalVar);
             Assert.True(decls[1] is DeclGlobalVar);
             Assert.True(decls[2] is DeclGlobalVar);
             Assert.True(decls[3] is DeclGlobalVar);
             Assert.True(decls[4] is DeclGlobalVar);
-            Assert.True(decls[5] is DeclCluster);
-            Assert.True(decls[6] is DeclStrategy);
-            Assert.True(decls[7] is DeclProcess);
+            Assert.True(decls[5] is DeclGlobalVar);
+            Assert.True(decls[6] is DeclGlobalVar);
+            Assert.True(decls[7] is DeclCluster);
+            Assert.True(decls[8] is DeclStrategy);
+            Assert.True(decls[9] is DeclProcess);
 
             // TYPE-CHECK
             
@@ -87,6 +96,95 @@ process echo = { pid = /root/user/echo
             Assert.True(ctx.Context.TopBindings.Find("echo").Case is TmAbbBind vb3 && vb3.Type.Case is TyProcess process &&
                         process.Value.Fields.Find(f => f.Name == "pid").Case is FieldTy fty6 && fty6.Type is TyProcessId &&
                         process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyRecord);
+        }
+
+        [Fact]
+        public void Lambda_IdentityTest()
+        {
+            // PARSE
+            
+            var fres  = SyntaxParser.Parse(@"
+let identity (x : a) = x
+
+let test1 = identity 100
+let test2 = identity ""Hello, World""
+let test3 = identity ((x : Int) => x + 1)
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 4);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[3] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("test1").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
+                        vb0.Term is TmInt tmInt && tmInt.Value == 100); 
+
+            Assert.True(ctx.Context.TopBindings.Find("test2").Case is TmAbbBind vb1 && vb1.Type.Case is TyString && 
+                        vb1.Term is TmString tmStr && tmStr.Value == "Hello, World"); 
+
+            Assert.True(ctx.Context.TopBindings.Find("test3").Case is TmAbbBind vb2 && 
+                        vb2.Type.Case is TyArr arr &&
+                        arr.X is TyInt && arr.Y is TyInt &&
+                        vb2.Term is TmLam tmLam &&
+                        tmLam.Name == "x" &&
+                        tmLam.Type == Ty.Int &&
+                        tmLam.Body is TmAdd tmAdd &&
+                        tmAdd.Left is TmVar tmVar && tmVar.Name == "x" &&
+                        tmAdd.Right is TmInt tmInt1 && tmInt1.Value == 1
+                        ); 
+        }
+        
+        [Fact]
+        public void Lambda_PartialApplyConcrete()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let add (x : Int, y : Int) = x + y
+
+let test1 = add 1
+let test2 = test1 1
+let test3 = add 2 2
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 4);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[3] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("test1").Case is TmAbbBind vb2 &&
+                        vb2.Type.Case is TyArr arr &&
+                        arr.X is TyInt && arr.Y is TyInt &&
+                        vb2.Term is TmLam tmLam &&
+                        tmLam.Name == "y" &&
+                        tmLam.Type == Ty.Int &&
+                        tmLam.Body is TmAdd tmAdd &&
+                        tmAdd.Left is TmInt tmInt1 && tmInt1.Value == 1 &&
+                        tmAdd.Right is TmVar tmVarY && tmVarY.Name == "y");
+
+            Assert.True(ctx.Context.TopBindings.Find("test2").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+                        vbX.Term is TmInt tmIntX && tmIntX.Value == 2); 
+
+            Assert.True(ctx.Context.TopBindings.Find("test3").Case is TmAbbBind vb1 && vb1.Type.Case is TyInt && 
+                        vb1.Term is TmInt tmInt && tmInt.Value == 4); 
         }
 
         [Fact]

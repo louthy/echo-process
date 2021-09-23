@@ -5,6 +5,7 @@ using LanguageExt;
 using LanguageExt.ClassInstances.Const;
 using LanguageExt.Common;
 using LanguageExt.Parsec;
+using LanguageExt.TypeClasses;
 using LanguageExt.UnitsOfMeasure;
 using static LanguageExt.Prelude;
 
@@ -49,7 +50,8 @@ namespace Echo.ActorSys2.Configuration
         public static Term Assign(Term X, Term Y) => new TmAssign(X, Y);
         public static Term Loc(Loc Location, int StoreIndex) => new TmLoc(Location, StoreIndex);
         public static Term Ref(Term Expr) => new TmRef(Expr);
-        public static Term Deref(Term Expr) => new TmDeref(Expr); 
+        public static Term Deref(Term Expr) => new TmDeref(Expr);
+        public static Term LiftLam(Loc Location, string VarName, Kind Kind, Term Body) => new TmLiftLam(Location, VarName, Kind, Body);
         public static Term TLam(Loc Location, string Subject, Kind Kind, Term Expr) => new TmTLam(Location,  Subject, Kind, Expr); 
         public static Term TApp(Term Expr, Ty Type) => new TmTApp(Expr, Type); 
         public static Term Pack(Loc Location, Ty X, Term Expr, Ty Y) => new TmPack(Location, X, Expr, Y); 
@@ -111,7 +113,7 @@ namespace Echo.ActorSys2.Configuration
 
         public override bool IsVal =>
             true;
-    } 
+    }
 
     public record TmRef(Term Expr) : Term(Expr.Location)
     {
@@ -162,7 +164,6 @@ namespace Echo.ActorSys2.Configuration
                 var (x, y) when x.IsVal                  => y.Eval1.Map(ny => Assign(x, ny)),
                 var (x, y)                               => x.Eval1.Map(nx => Assign(nx, y))
             };
-
 
         public override Context<Ty> TypeOf =>
             from t in X.TypeOf.Bind(t => t.Simplify())
@@ -915,6 +916,23 @@ namespace Echo.ActorSys2.Configuration
             Context.getType(Location, Name);
     }
 
+    public record TmLiftLam(Loc Location, string VarName, Kind Kind, Term Body) : Term(Location)
+    {
+        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
+            new TmLiftLam(Location, VarName, Kind, Body.Subst(onVar, onType, name));
+
+        public override bool IsVal =>
+            false;
+
+        public override Context<Term> Eval1 =>
+            Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
+                          TLam(Location, VarName, Kind, Body).Eval1);
+
+        public override Context<Ty> TypeOf =>
+            Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
+                          TLam(Location, VarName, Kind, Body).TypeOf);
+    }
+
     public record TmLam(Loc Location, string Name, Ty Type, Term Body) : Term(Location)
     {
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
@@ -944,7 +962,9 @@ namespace Echo.ActorSys2.Configuration
             {
                 TmTLam(_, var x, _, var term) =>
                     from aty in Y.TypeOf
-                    from rtm in App(term.Subst(x, aty), Y).Eval1
+                    let ntm = term          //.Subst(x, aty)
+                    from rtm in Context.local(ctx => ctx.AddLocal(x, new VarBind(aty)),
+                                              App(ntm, Y).Eval1)
                     select rtm,
                 
                 TmLam(_, var x, var ty, var body) when Y.IsVal => 
@@ -967,7 +987,7 @@ namespace Echo.ActorSys2.Configuration
                         {
                             TyArr (var param, var resTy) =>
                                 from eq in arg.Equiv(param)
-                                from rt in eq ? Context.Pure(resTy) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(Location))
+                                from rt in eq ? Context.Pure(resTy) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(Location, fun, arg))
                                 select rt,
                             
                             TyAll (var name, var k1, var tyt) =>

@@ -8,6 +8,12 @@ namespace Echo.ActorSys2.Configuration
     public record Context(HashMap<string, Binding> TopBindings, HashMap<string, Binding> Bindings, Lst<Term> Store)
     {
         public static readonly Context Empty = new(default, default, default);
+
+        public Context<Unit> log<A>(A value) =>
+            new Context<Unit>(ctx => {
+                                  Console.WriteLine(value);
+                                  return FinSucc((unit, ctx));
+                              });
         
         /// <summary>
         /// Context success

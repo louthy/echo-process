@@ -46,7 +46,7 @@ namespace Echo
             Error.New(90010004, $"{loc}: top-level binding already exists: '{what}'");
  
         public static Error UndefinedBinding(Loc loc, string what) =>
-            Error.New(90010005, $"{loc}: variable undefined: '{what}'");
+            Error.New(90010005, $"{loc}: undefined: '{what}'");
         
         public static Error NoTypeRecordedForVariable(Loc loc, string name) =>
             Error.New(90010006, $"{loc}: no type recorded for variable: '{name}'");
@@ -75,8 +75,11 @@ namespace Echo
         public static Error ExpectedVariantType(Loc loc) =>
             Error.New(90010013, $"{loc}: expected variant type");
         
-        public static Error ParameterTypeMismatch(Loc loc) =>
-            Error.New(90010014, $"{loc}: parameter type mismatch");
+        public static Error ParameterTypeMismatch(Loc loc, Ty expected, Ty got) =>
+            Error.New(90010014, $"{loc}: parameter type mismatch, expected: {expected.Show()}, got: {got.Show()}");
+        
+        public static Error ParameterKindMismatch(Loc loc, Kind expected, Kind got) =>
+            Error.New(90010014, $"{loc}: parameter kind mismatch, expected: {expected.Show()}, got: {got.Show()}");
         
         public static Error FunctionTypeExpected(Loc loc) =>
             Error.New(90010015, $"{loc}: function type expected");
@@ -103,37 +106,37 @@ namespace Echo
             Error.New(90010022, $"{loc}: branches of array have no common type");
         
         public static Error ProcessTypeInvalid(Loc loc, Ty got) =>
-            Error.New(90010023, $"{loc}: expected process type, got: {got}");
+            Error.New(90010023, $"{loc}: expected process type, got: {got.Show()}");
         
         public static Error RecordTypeInvalid(Loc loc, Ty got) =>
-            Error.New(90010024, $"{loc}: expected record type, got: {got}");
+            Error.New(90010024, $"{loc}: expected record type, got: {got.Show()}");
         
         public static Error ClusterTypeInvalid(Loc loc, Ty got) =>
-            Error.New(90010025, $"{loc}: expected cluster type, got: {got}");
+            Error.New(90010025, $"{loc}: expected cluster type, got: {got.Show()}");
         
         public static Error StrategyTypeInvalid(Loc loc, Ty got) =>
-            Error.New(90010026, $"{loc}: expected strategy type, got: {got}");
+            Error.New(90010026, $"{loc}: expected strategy type, got: {got.Show()}");
         
         public static Error RouterTypeInvalid(Loc loc, Ty got) =>
-            Error.New(90010027, $"{loc}: expected router type, got: {got}");
+            Error.New(90010027, $"{loc}: expected router type, got: {got.Show()}");
         
         public static Error RequiredAttributeMissing(Loc loc, string name) =>
             Error.New(90010028, $"{loc}: required attribute missing: {name}");
         
         public static Error IncorrectTypeForAttribute(Loc loc, string name, Ty got, Ty expected) =>
-            Error.New(90010029, $"{loc}: incorrect type for attribute `{name}`, expected: {expected}, got: {got}");
+            Error.New(90010029, $"{loc}: incorrect type for attribute `{name}`, expected: {expected.Show()}, got: {got.Show()}");
         
         public static Error InvalidTypeInferred(Loc loc, string name, Ty got, Ty expected) =>
-            Error.New(90010030, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got}");
+            Error.New(90010030, $"{loc}: invalid type inferred for `{name}`, expected: {expected.Show()}, got: {got.Show()}");
         
         public static Error InvalidTypesInferred(Loc loc, string name, Ty got1, Ty got2, Ty expected) =>
-            Error.New(90010031, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got1} and {got2}");
+            Error.New(90010031, $"{loc}: invalid type inferred for `{name}`, expected: {expected.Show()}, got: {got1.Show()} and {got2.Show()}");
         
         public static Error InvalidTypesInferred(Loc loc, string name, Ty got1, Ty got2, string expected) =>
-            Error.New(90010032, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got1} and {got2}");
+            Error.New(90010032, $"{loc}: invalid type inferred for `{name}`, expected: {expected}, got: {got1.Show()} and {got2.Show()}");
         
         public static Error InvalidComparisonType(Loc loc, string name, Ty got1, Ty got2) =>
-            Error.New(90010033, $"{loc}: `{name}` operands have incompatible types: {got1} and {got2}");
+            Error.New(90010033, $"{loc}: `{name}` operands have incompatible types: {got1.Show()} and {got2.Show()}");
         
         public static Error NonVariableBinding(Loc loc, string name) =>
             Error.New(90010034, $"{loc}: wrong kind of binding for variable `{name}`");
@@ -154,13 +157,13 @@ namespace Echo
             Error.New(90010039, "assignment operator arguments incompatible");
         
         public static Error TypeArgumentHasWrongKind(Loc loc, Kind expected, Kind got) =>
-            Error.New(90010040, $"type argument has wrong kind: expected {expected}, got: {got}");
+            Error.New(90010040, $"type argument has wrong kind: expected {expected}, got: {got.Show()}");
         
         public static Error UniversalTypeExpected(Loc loc) =>        
             Error.New(90010041, "universal type expected");
         
         public static Error TypeComponentHasWrongKind(Loc loc, Kind expected, Kind got) =>
-            Error.New(90010042, $"type component has wrong kind: expected {expected}, got: {got}");
+            Error.New(90010042, $"type component has wrong kind: expected {expected.Show()}, got: {got.Show()}");
         
         public static Error DoesNotMatchDeclaredType(Loc loc) =>
             Error.New(90010043, $"doesn't match declared type");

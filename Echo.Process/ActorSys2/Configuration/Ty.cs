@@ -255,7 +255,7 @@ namespace Echo.ActorSys2.Configuration
                            KnArr (var k1, var k2) =>
                                 ky == k1
                                     ? Context.Pure(k2)
-                                    : Context.Fail<Kind>(ProcessError.ParameterTypeMismatch(location)),
+                                    : Context.Fail<Kind>(ProcessError.ParameterKindMismatch(location, k1, k2)),
                            _ => Context.Fail<Kind>(ProcessError.ArrowKindExpected(location)), 
                        }
             select kn;

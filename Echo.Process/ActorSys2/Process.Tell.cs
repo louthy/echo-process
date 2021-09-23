@@ -22,7 +22,7 @@ namespace Echo
         /// <typeparam name="A">Type of the message</typeparam>
         /// <returns>Unit if succeeds</returns>
         public static Aff<RT, Unit> tell<A>(ProcessId pid, A message, ProcessId sender = default(ProcessId)) =>
-            from s in sender.IsValid ? SuccessEff(sender) : Self
+            from s in sender.IsValid ? SuccessEff(sender) : Self | User
             from _ in post(pid, new UserPost(s, message, 0))
             select unit;
 

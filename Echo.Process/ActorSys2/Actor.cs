@@ -206,7 +206,7 @@ namespace Echo.ActorSys2
             from os in getState | userSetup
             from ns in ib(os, msg)
             from _1 in putState(ns)
-            from _2 in isStateEqual(os, ns) ? SuccessEff(unit) : publishState(ns)
+            from _2 in isStateEqual(os, ns) ? unitEff : publishState(ns)
             select unit;
 
         /// <summary>
@@ -326,7 +326,7 @@ namespace Echo.ActorSys2
             // Persist the state 
             from _4 in msg.MaintainState
                            ? saveState
-                           : unitEff
+                           : deleteState
             
             // Kill any subscriptions
             from _5 in publishComplete 
@@ -334,11 +334,17 @@ namespace Echo.ActorSys2
             // Run the user shutdown
             from state    in getState
             from shutdown in getShutdown
-            from _7       in shutdown(state) | logError // TODO: Log error
+            from _7       in shutdown(state) | logError 
 
             select unit;
         
         static Aff<RT, Unit> saveState =>
+            from s in getState
+            // TODO: Decide about persistence
+            
+            select unit;
+        
+        static Aff<RT, Unit> deleteState =>
             from s in getState
             // TODO: Decide about persistence
             
@@ -584,7 +590,7 @@ namespace Echo.ActorSys2
         /// </summary>
         static Pipe<RT, Channel<X>, X, Unit> channelPipe<X>() =>
             from c in Pipe.awaiting<RT, Channel<X>, X>()
-            from r in Pipe.lift<RT, Channel<X>, X, RT>(runtime<RT>())
+            from r in runtime<RT>()
             from _ in Pipe.enumerate<RT, Channel<X>, X>(channelYield(c, r))
             select unit;
         
@@ -596,7 +602,7 @@ namespace Echo.ActorSys2
         /// </remarks>
         static Pipe<RT, Channel<SysPost>, SysPost, Unit> sysChannelPipe =>
             from c in Pipe.awaiting<RT, Channel<SysPost>, SysPost>()
-            from r in Pipe.lift<RT, Channel<SysPost>, SysPost, RT>(runtime<RT>())
+            from r in runtime<RT>()
             from _ in Pipe.enumerate<RT, Channel<SysPost>, SysPost>(sysChannelYield(c, r))
             select unit;
         
