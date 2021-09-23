@@ -1056,6 +1056,13 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Term> Eval1 =>
             X switch
             {
+                TmLiftLam(var loc, var x, var kind, TmLam lam) =>
+                    from aty in Y.TypeOf
+                    from akd in aty.KindOf(loc)
+                    from _ in akd == kind ? Context.Unit : Context.Fail<Unit>(ProcessError.TypeComponentHasWrongKind(loc, kind, akd))
+                    let ntm = lam.Subst(x, aty)
+                    select App(ntm, Y),
+                
                 TmTLam(_, var x, _, var term) =>
                     from aty in Y.TypeOf
                     let ntm = term.Subst(x, aty)
