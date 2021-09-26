@@ -53,7 +53,7 @@ namespace Echo.ActorSys2.Configuration
             var lexer         = makeTokenParser(def);
             var identifier    = lexer.Identifier;
             var recordLabel   = token(from x in letter
-                                      from xs in asString(many1(either(alphaNum, oneOf("-_"))))
+                                      from xs in asString(many(either(alphaNum, oneOf("-_"))))
                                       select x + xs).label("record-label");
             var stringLiteral = lexer.StringLiteral;
             var integer       = lexer.Integer;

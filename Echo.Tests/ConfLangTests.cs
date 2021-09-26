@@ -410,7 +410,6 @@ let yr = f2 false
             Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }   
-        
                                      
         [Fact]
         public void ApplyGenericToGeneric()
@@ -456,6 +455,113 @@ let x  = f2 100
 
             Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb3 &&
                         vb3.Term is TmInt v && v.Value == 100);
+        }
+                                             
+        [Fact]
+        public void GenericRecordConstruction()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let f (x : b, y : Bool) = { x = x, y = y }
+let x  = f 100 true
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 2);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+                        vb.Type.Case is TyRecord rec && rec.Fields.Count == 2 &&
+                        rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
+                        rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&
+                        vb.Term is TmRecord tmrec && tmrec.Fields.Count == 2 &&
+                        tmrec.Fields[0].Name == "x" && tmrec.Fields[0].Value is TmInt x && x.Value == 100 &&
+                        tmrec.Fields[1].Name == "y" && tmrec.Fields[1].Value is TmTrue);
+
+        }
+                                                     
+        [Fact]
+        public void GenericRecordConstruction2()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let f (x : a, y : Bool, z : b) = { x = x, y = y, z = z }
+
+let x  = f 100 true ""Hello, World""
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 2);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+                        vb.Type.Case is TyRecord rec && rec.Fields.Count == 3 &&
+                        rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
+                        rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&
+                        rec.Fields[2].Name == "z" && rec.Fields[2].Type is TyString &&
+                        vb.Term is TmRecord tmrec && tmrec.Fields.Count == 3 &&
+                        tmrec.Fields[0].Name == "x" && tmrec.Fields[0].Value is TmInt x && x.Value == 100 &&
+                        tmrec.Fields[1].Name == "y" && tmrec.Fields[1].Value is TmTrue &&
+                        tmrec.Fields[2].Name == "z" && tmrec.Fields[2].Value is TmString z && z.Value == "Hello, World"
+                        );
+
+        }
+                                                             
+        [Fact]
+        public void GenericRecordConstruction3()
+        {
+            // PARSE
+            
+            var fres = SyntaxParser.Parse(@"
+let f (x : a, y : Bool, z : b) = { x = x, y = y, z = z }
+
+let g (one : d, two : e) = f one true two  
+
+let x  = g 100 ""Hello, World""
+
+", "general.conf");
+            
+            var decls = fres.ThrowIfFail();
+
+            Assert.True(decls.Count == 3);
+            Assert.True(decls[0] is DeclGlobalVar);
+            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[2] is DeclGlobalVar);
+
+            // TYPE-CHECK
+            
+            var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
+            var ctx  = fctx.ThrowIfFail();
+
+            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+                        vb.Type.Case is TyRecord rec && rec.Fields.Count == 3 &&
+                        rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
+                        rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&
+                        rec.Fields[2].Name == "z" && rec.Fields[2].Type is TyString &&
+                        vb.Term is TmRecord tmrec && tmrec.Fields.Count == 3 &&
+                        tmrec.Fields[0].Name == "x" && tmrec.Fields[0].Value is TmInt x && x.Value == 100 &&
+                        tmrec.Fields[1].Name == "y" && tmrec.Fields[1].Value is TmTrue &&
+                        tmrec.Fields[2].Name == "z" && tmrec.Fields[2].Value is TmString z && z.Value == "Hello, World"
+            );
+
         }
         
         [Fact]

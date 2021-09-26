@@ -254,6 +254,14 @@ namespace Echo.ActorSys2.Configuration
                                               : res;
                            });
 
+        public static Context<A> operator |(Context<A> left, Context<A> right) =>
+            new Context<A>(ctx => {
+                               var res = left.Op(ctx);
+                               return res.IsSucc
+                                          ? res
+                                          : right.Op(ctx);
+                           });
+
     }
 
     public static class ContextExtensions

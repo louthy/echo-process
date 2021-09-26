@@ -1056,30 +1056,86 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Ty> TypeOf =>
             from fun in X.TypeOf
             from arg in Y.TypeOf
-            from sty in Context.simplifyTy(fun)
-            from res in Go(Location, sty, arg)
+            from __1 in Context.log($"TO1: {fun.Show()} -- ARG: {arg.Show()}")
+            from res in Find(Location, fun, arg)
+            from __2 in Context.log($"TO2: {res.Show()}")
             select res;
 
-        static Context<Ty> Go(Loc loc, Ty simpleFun, Ty arg) =>
-            simpleFun switch
+        static Context<TyArr> FindArrow(Loc loc, Ty ty) =>
+            ty switch
             {
-                TyArr (var param, var resTy) =>
+                TyVar var   => Context.simplifyTy(var).Bind(ty => FindArrow(loc, ty)),
+                TyArr arr   => Context.Pure(arr),
+                TyAll all   => FindArrow(loc, all.Type),
+                TySome some => FindArrow(loc, some.Type),
+                _           => Context.Fail<TyArr>(ProcessError.FunctionTypeExpected(loc))
+            };
+
+        static Context<Ty> Subst(Loc loc, Ty ty, Ty arg, Ty param) =>
+            ty switch
+            {
+                // The function is a type-variable, so resolve it before continuing 
+                TyVar var => Context.simplifyTy(var).Bind(ty => Subst(loc, ty, arg, param)),
+
+                // Reached the function, so test argument/parameter equivalence.  If they match, return the co-domain type
+                TyArr arr =>
                     from eq in arg.Equiv(param)
-                    from rt in eq ? Context.Pure(resTy) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(loc, simpleFun, arg))
+                    from rt in eq ? Context.Pure(arr.Y) : Context.Fail<Ty>(ProcessError.ParameterTypeMismatch(loc, param, arg))
                     select rt,
 
-                TyAll (var name, var k1, var tyt) =>
+                // Applying a generic argument (which should already be defined, so we can remove this TyAll)
+                TyAll all when param is TyVar pvar &&
+                               all.Subject == pvar.Name &&
+                               arg is TyVar avar =>
                     from k2 in arg.KindOf(loc)
-                    from rt in k1 == k2
-                                   ? Context.local(ctx => ctx.AddLocal(name, new TyVarBind(k1)),
-                                                   Context.simplifyTy(tyt.Subst(name, arg))
-                                                          .Bind(t => Go(loc, t, arg)))
-                                                          //.Map(t => (Ty)new TyAll(name, k1, t)))
-                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, k1, k2))
+                    from rt in all.Kind == k2
+                                   ? Subst(loc, all.Type.Subst(all.Subject, arg), arg, arg)
+                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, all.Kind, k2))
                     select rt,
 
+                // Applying a concrete argument (so we can remove this TyAll)  
+                TyAll all when param is TyVar pvar &&
+                               all.Subject == pvar.Name =>
+                    from k2 in arg.KindOf(loc)
+                    from rt in all.Kind == k2
+                                   ? Subst(loc, all.Type.Subst(all.Subject, arg), arg, param)
+                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, all.Kind, k2))
+                    select rt,
+
+                // This doesn't match the parameter of the function, so lets just walk through it
+                TyAll all =>
+                    Subst(loc, all.Type, arg, param).Map(ty => (Ty) new TyAll(all.Subject, all.Kind, ty)),
+               
+                // Applying a generic argument (which should already be defined, so we can remove this TyAll)
+                TySome some when param is TyVar pvar &&
+                                 some.Subject == pvar.Name &&
+                                 arg is TyVar avar =>
+                    from k2 in arg.KindOf(loc)
+                    from rt in some.Kind == k2
+                                   ? Subst(loc, some.Type.Subst(some.Subject, arg), arg, arg)
+                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, some.Kind, k2))
+                    select rt,
+
+                // Applying a concrete argument (so we can remove this TyAll)  
+                TySome some when param is TyVar pvar &&
+                                 some.Subject == pvar.Name =>
+                    from k2 in arg.KindOf(loc)
+                    from rt in some.Kind == k2
+                                   ? Subst(loc, some.Type.Subst(some.Subject, arg), arg, param)
+                                   : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, some.Kind, k2))
+                    select rt,
+
+                // This doesn't match the parameter of the function, so lets just walk through it
+                TySome some =>
+                    Subst(loc, some.Type, arg, param).Map(ty => (Ty) new TySome(some.Subject, some.Kind, ty)),
+ 
                 _ => Context.Fail<Ty>(ProcessError.FunctionTypeExpected(loc))
             };
+
+        static Context<Ty> Find(Loc loc, Ty fun, Ty arg) =>
+            from arr in FindArrow(loc, fun)
+            from rty in Subst(loc, fun, arg, arr.X)
+            select rty;
         
         public override string Show() =>
             $"{X.Show()} {Y.Show()}";
