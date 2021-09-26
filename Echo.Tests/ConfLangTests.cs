@@ -388,8 +388,8 @@ let yr = f2 false
                         vb2.Type.Case is TyAll all && all.Type is TyArr arr &&
                         arr.X is TyVar tv1 && tv1.Name == "b" &&
                         arr.Y is TyInt && 
-                        vb2.Term is TmLiftLam tmLiftLam &&
-                        tmLiftLam.Body is TmLam tmLam &&
+                        vb2.Term is TmTLam tmLiftLam &&
+                        tmLiftLam.Expr is TmLam tmLam &&
                         tmLam.Name == "y" &&
                         tmLam.Type is TyVar tvr && tvr.Name == "b" &&
                         tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
@@ -401,8 +401,8 @@ let yr = f2 false
                         vb3.Type.Case is TyAll all1 && all1.Type is TyArr arr1 &&
                         arr1.X is TyVar tv2 && tv2.Name == "b" &&
                         arr1.Y is TyString && 
-                        vb3.Term is TmLiftLam tmLiftLam2 &&
-                        tmLiftLam2.Body is TmLam tmLam2 &&
+                        vb3.Term is TmTLam tmLiftLam2 &&
+                        tmLiftLam2.Expr is TmLam tmLam2 &&
                         tmLam2.Name == "y" &&
                         tmLam2.Type is TyVar tvr1 && tvr1.Name == "b" &&
                         tmLam2.Body is TmString tmStr && tmStr.Value == "Hello, World");
@@ -418,7 +418,7 @@ let yr = f2 false
             // PARSE
             
             var fres = SyntaxParser.Parse(@"
-let f1 (x : a) = x
+let f1 (x : b) = x
 let f2 (x : a) = f1 x
 let x  = f2 100
 
@@ -438,10 +438,10 @@ let x  = f2 100
 
             Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb1 && 
                         vb1.Type.Case is TyAll all && all.Type is TyArr tyarr && 
-                        tyarr.X is TyVar tvarA && tvarA.Name == "a" &&
-                        tyarr.Y is TyVar tvarB && tvarB.Name == "a" &&
+                        tyarr.X is TyVar tvarA && tvarA.Name == "b" &&
+                        tyarr.Y is TyVar tvarB && tvarB.Name == "b" &&
                         vb1.Term is TmTLam ttlam &&  
-                        ttlam.Subject == "a" && ttlam.Expr is TmLam tlam &&
+                        ttlam.Subject == "b" && ttlam.Expr is TmLam tlam &&
                         tlam.Name == "x" && tlam.Body is TmVar tmvar && 
                         tmvar.Name == "x");
 
@@ -452,8 +452,7 @@ let x  = f2 100
                         tyarr2.Y is TyVar tvarB2 && tvarB2.Name == "a" &&
                         vb2.Term is TmTLam ttlam2 &&  
                         ttlam2.Subject == "a" && ttlam2.Expr is TmLam tlam2 &&
-                        tlam2.Name == "x" && tlam2.Body is TmVar tmvar2 && 
-                        tmvar2.Name == "x");
+                        tlam2.Name == "x" );
 
             Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb3 &&
                         vb3.Term is TmInt v && v.Value == 100);

@@ -293,7 +293,7 @@ namespace Echo.ActorSys2.Configuration
                                     0 => Term.Lam(loc, "_", Ty.Unit, body),
                                     _ => vars.FoldBack(body, (b, v) =>
                                                                  v.Type is TyVar tv
-                                                                    ? Term.LiftLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
+                                                                    ? Term.TLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
                                                                     : Term.Lam(loc, v.Name, v.Type, b))
                                 };
             

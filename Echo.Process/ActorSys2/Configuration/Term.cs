@@ -51,7 +51,6 @@ namespace Echo.ActorSys2.Configuration
         public static Term Loc(Loc Location, int StoreIndex) => new TmLoc(Location, StoreIndex);
         public static Term Ref(Term Expr) => new TmRef(Expr);
         public static Term Deref(Term Expr) => new TmDeref(Expr);
-        public static Term LiftLam(Loc Location, string VarName, Kind Kind, Term Body) => new TmLiftLam(Location, VarName, Kind, Body);
         public static Term TLam(Loc Location, string Subject, Kind Kind, Term Expr) => new TmTLam(Location,  Subject, Kind, Expr); 
         public static Term TApp(Term Expr, Ty Type) => new TmTApp(Expr, Type); 
         public static Term Pack(Loc Location, Ty X, Term Expr, Ty Y) => new TmPack(Location, X, Expr, Y); 
@@ -206,7 +205,10 @@ namespace Echo.ActorSys2.Configuration
                           Expr.TypeOf.Map(t => (Ty)new TyAll(Subject, Kind, t)));
 
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
+            name == Subject
+                ? Expr.Subst(onVar, onType, name)
+                : new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
+            //new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
 
         public override string Show() =>
             Kind == Kind.Star
@@ -1002,34 +1004,6 @@ namespace Echo.ActorSys2.Configuration
             $"{Name}";
     }
 
-    public record TmLiftLam(Loc Location, string VarName, Kind Kind, Term Body) : Term(Location)
-    {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            name == VarName
-                ? Body.Subst(onVar, onType, name)
-                : new TmLiftLam(Location, VarName, Kind, Body.Subst(onVar, onType, name));
-
-        public override bool IsVal =>
-            false;
-
-        public override Context<Term> Eval1 =>
-            from bd in Context.isNameBound(VarName)
-            from tm in bd
-                            ? Body.Eval1
-                            : Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
-                                            TLam(Location, VarName, Kind, Body).Eval1)
-            select tm;
-
-        public override Context<Ty> TypeOf =>
-            Context.local(ctx => ctx.AddLocal(VarName, new TyVarBind(Kind)),
-                          Body.TypeOf.Map(t => (Ty)new TyAll(VarName, Kind, t)));
-        
-        public override string Show() =>
-            Kind == Kind.Star
-                ? $"(lift {VarName} => {Body.Show()})"
-                : $"(lift {VarName} : {Kind.Show()} => {Body.Show()})";
-    }
-
     public record TmLam(Loc Location, string Name, Ty Type, Term Body) : Term(Location)
     {
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
@@ -1045,7 +1019,7 @@ namespace Echo.ActorSys2.Configuration
             from _ in Context.checkKindStar(Location, Type)
             from r in Context.local(ctx => ctx.AddLocal(Name, new VarBind(Type)),
                                     from bty in Body.TypeOf
-                                    select new TyArr(Type, bty) as Ty)
+                                    select (Ty)new TyArr(Type, bty))
             select r;
         
         public override string Show() =>
@@ -1060,14 +1034,6 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Term> Eval1 =>
             X switch
             {
-                TmLiftLam(var loc, var x, var kind, TmLam lam) =>
-                    from aty in Y.TypeOf
-                    from akd in aty.KindOf(loc)
-                    from _ in akd == kind ? Context.Unit : Context.Fail<Unit>(ProcessError.TypeComponentHasWrongKind(loc, kind, akd))
-                    select App(TLam(loc, x, kind, lam), Y),
-                    //let ntm = lam.Subst(x, aty)
-                    //select App(ntm, Y),
-                
                 TmTLam(_, var x, _, var term) =>
                     from aty in Y.TypeOf
                     let ntm = term.Subst(x, aty)
@@ -1091,7 +1057,6 @@ namespace Echo.ActorSys2.Configuration
             from fun in X.TypeOf
             from arg in Y.TypeOf
             from sty in Context.simplifyTy(fun)
-            from __1 in Context.log($"fun simplified: {fun.Show()}  ==>  {sty.Show()}")
             from res in Go(Location, sty, arg)
             select res;
 
@@ -1107,8 +1072,9 @@ namespace Echo.ActorSys2.Configuration
                     from k2 in arg.KindOf(loc)
                     from rt in k1 == k2
                                    ? Context.local(ctx => ctx.AddLocal(name, new TyVarBind(k1)),
-                                                   Context.simplifyTy(tyt)
+                                                   Context.simplifyTy(tyt.Subst(name, arg))
                                                           .Bind(t => Go(loc, t, arg)))
+                                                          //.Map(t => (Ty)new TyAll(name, k1, t)))
                                    : Context.Fail<Ty>(ProcessError.TypeArgumentHasWrongKind(loc, k1, k2))
                     select rt,
 

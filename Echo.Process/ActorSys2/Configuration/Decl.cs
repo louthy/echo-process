@@ -52,15 +52,15 @@ namespace Echo.ActorSys2.Configuration
     public record DeclGlobalVar(Loc Location, string Name, Prototype Prototype, Term Value) : Decl(Location, Name)
     {
         public override Context<Unit> TypeCheck() =>
-            from tm in AddParameters(Prototype.Parameters)
+            from tm in AddParameters(Prototype.Parameters).Bind(static tm => tm.Eval)
             from _2 in Context.log(tm)
             from ty in tm.TypeOf
             from __ in Context.addTop(Location, Name, new TmAbbBind(tm, ty))
             select unit;
-
+        
         Context<Term> AddParameters(Seq<Parameter> ps) =>
             ps.IsEmpty
-                ? Value.Eval
+                ? Context.Pure(Value)
                 : ps.Head.Type is TyVar tvar
                     ? from x in Context.isNameBound(tvar.Name)
                       from r in x

@@ -60,7 +60,10 @@ namespace Echo.ActorSys2.Configuration
         /// Create a local context and run `ma` in it
         /// </summary>
         public static Context<A> local<A>(Func<Context, Context> f, Context<A> ma) =>
-            new Context<A>(ctx => ma.Op(f(ctx)));
+            new Context<A>(ctx => { 
+                               var ra = ma.Op(f(ctx));
+                               return ra.Map(p => (p.Item1, ctx));
+                           });
 
         /// <summary>
         /// Get the context
