@@ -129,22 +129,22 @@ namespace Echo.ActorSys2.Configuration
             name == Subject 
                 ? this  // Don't wipe out local alls
                 : new TyAll(Subject, Kind, Type.Subst(name, type));
-        
+
         public override Context<bool> Equiv(Ty rhs) =>
             rhs is TyAll rall && Kind == rall.Kind
-                ? Context.local(ctx => ctx.AddLocal(Subject, NameBind.Default),
-                                Type.Equiv(rall.Type))
+                ? Context.localBinding(Subject, TyNameBind.Default,
+                                       Type.Equiv(rall.Type))
                 : Context.False;
 
         public override string Show() =>
             $"forall {Subject} :: {Kind.Show()}. {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
-            Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
-                          Type.KindOf(location).Bind(
-                              k => k == Kind.Star
-                                       ? Context.StarKind 
-                                       : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
+            Context.localBinding(Subject, new TyVarBind(Kind),
+                                 Type.KindOf(location).Bind(
+                                     k => k == Kind.Star
+                                              ? Context.StarKind
+                                              : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());
@@ -166,19 +166,18 @@ namespace Echo.ActorSys2.Configuration
                 
         public override Context<bool> Equiv(Ty rhs) =>
             rhs is TySome rsome && Kind == rsome.Kind
-                ? Context.local(ctx => ctx.AddLocal(Subject, NameBind.Default),
-                                Type.Equiv(rsome.Type))
+                ? Context.localBinding(Subject, TyNameBind.Default, Type.Equiv(rsome.Type))
                 : Context.False;
 
         public override string Show() =>
             $"exists {Subject} :: {Kind.Show()} . {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
-            Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
-                          Type.KindOf(location).Bind(
-                              k => k == Kind.Star
-                                       ? Context.StarKind 
-                                       : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
+            Context.localBinding(Subject, new TyVarBind(Kind),
+                                 Type.KindOf(location).Bind(
+                                     k => k == Kind.Star
+                                              ? Context.StarKind
+                                              : Context.Fail<Kind>(ProcessError.StarKindExpected(location))));
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());
@@ -201,8 +200,7 @@ namespace Echo.ActorSys2.Configuration
             rhs switch
             {
                 TyLam rlam when Kind == rlam.Kind =>
-                    Context.local(ctx => ctx.AddLocal(Subject, NameBind.Default),
-                                  Type.Equiv(rlam.Type)),
+                    Context.localBinding(Subject, TyNameBind.Default, Type.Equiv(rlam.Type)),
 
                 TyVar tvar => Context.getTyLam(tvar.Name).Bind(this.Equiv) | @catch(ProcessError.NoRuleApplies, false),
                 _          => Context.False
@@ -212,8 +210,7 @@ namespace Echo.ActorSys2.Configuration
             $"{Subject} :: {Kind.Show()} => {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
-            Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
-                          Type.KindOf(location).Map(k2 => Kind.Arr(Kind, k2)));
+            Context.localBinding(Subject, new TyVarBind(Kind), Type.KindOf(location).Map(k2 => Kind.Arr(Kind, k2)));
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());

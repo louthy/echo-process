@@ -74,19 +74,19 @@ process echo = { pid = /root/user/echo
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("test").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("test").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
                         vb0.Term is TmInt tmInt && tmInt.Value == 100); 
 
-            Assert.True(ctx.Context.TopBindings.Find("result").Case is TmAbbBind vbr && vbr.Type.Case is TyBool && 
+            Assert.True(ctx.Context.TmBindings.Find("result").Case is TmAbbBind vbr && vbr.Type.Case is TyBool && 
                         vbr.Term is TmFalse); 
 
-            Assert.True(ctx.Context.TopBindings.Find("app").Case is TmAbbBind vb1 && vb1.Type.Case is TyCluster cluster &&
+            Assert.True(ctx.Context.TmBindings.Find("app").Case is TmAbbBind vb1 && vb1.Type.Case is TyCluster cluster &&
                         cluster.Value.Fields.Find(f => f.Name == "node-name").Case is FieldTy fty1 && fty1.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "role").Case is FieldTy fty2 && fty2.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "connection").Case is FieldTy fty3 && fty3.Type is TyString &&
                         cluster.Value.Fields.Find(f => f.Name == "database").Case is FieldTy fty4 && fty4.Type is TyString);
 
-            Assert.True(ctx.Context.TopBindings.Find("strat").Case is TmAbbBind vb2 && vb2.Type.Case is TyStrategy strategy &&
+            Assert.True(ctx.Context.TmBindings.Find("strat").Case is TmAbbBind vb2 && vb2.Type.Case is TyStrategy strategy &&
                         strategy.Type == StrategyType.OneForOne &&
                         strategy.Value.Fields.Find(f => f.Name == "backoff").Case is FieldTy fty5 && fty5.Type is TyTuple tuple &&
                         tuple.Types.Count == 3 &&
@@ -94,7 +94,7 @@ process echo = { pid = /root/user/echo
                         tuple.Types[1] is TyTime &&
                         tuple.Types[2] is TyInt);
 
-            Assert.True(ctx.Context.TopBindings.Find("echo").Case is TmAbbBind vb3 && vb3.Type.Case is TyProcess process &&
+            Assert.True(ctx.Context.TmBindings.Find("echo").Case is TmAbbBind vb3 && vb3.Type.Case is TyProcess process &&
                         process.Value.Fields.Find(f => f.Name == "pid").Case is FieldTy fty6 && fty6.Type is TyProcessId &&
                         process.Value.Fields.Find(f => f.Name == "strategy").Case is FieldTy fty7 && fty7.Type is TyRecord);
         }
@@ -126,13 +126,13 @@ let test3 = identity ((x : Int) => x + 1)
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("test1").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("test1").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
                         vb0.Term is TmInt tmInt && tmInt.Value == 100); 
 
-            Assert.True(ctx.Context.TopBindings.Find("test2").Case is TmAbbBind vb1 && vb1.Type.Case is TyString && 
+            Assert.True(ctx.Context.TmBindings.Find("test2").Case is TmAbbBind vb1 && vb1.Type.Case is TyString && 
                         vb1.Term is TmString tmStr && tmStr.Value == "Hello, World"); 
 
-            Assert.True(ctx.Context.TopBindings.Find("test3").Case is TmAbbBind vb2 && 
+            Assert.True(ctx.Context.TmBindings.Find("test3").Case is TmAbbBind vb2 && 
                         vb2.Type.Case is TyArr arr &&
                         arr.X is TyInt && arr.Y is TyInt &&
                         vb2.Term is TmLam tmLam &&
@@ -171,7 +171,7 @@ let test4 = add 2 2
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("add1").Case is TmAbbBind vb2 &&
+            Assert.True(ctx.Context.TmBindings.Find("add1").Case is TmAbbBind vb2 &&
                         vb2.Type.Case is TyArr arr &&
                         arr.X is TyInt && arr.Y is TyInt &&
                         vb2.Term is TmLam tmLam &&
@@ -181,10 +181,10 @@ let test4 = add 2 2
                         tmAdd.Left is TmInt tmInt1 && tmInt1.Value == 1 &&
                         tmAdd.Right is TmVar tmVarY && tmVarY.Name == "y");
 
-            Assert.True(ctx.Context.TopBindings.Find("test2").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("test2").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
                         vbX.Term is TmInt tmIntX && tmIntX.Value == 2); 
 
-            Assert.True(ctx.Context.TopBindings.Find("test4").Case is TmAbbBind vb1 && vb1.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("test4").Case is TmAbbBind vb1 && vb1.Type.Case is TyInt && 
                         vb1.Term is TmInt tmInt && tmInt.Value == 4); 
         }
         
@@ -218,7 +218,7 @@ let yr = f2 """"
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb2 &&
+            Assert.True(ctx.Context.TmBindings.Find("f1").Case is TmAbbBind vb2 &&
                         vb2.Type.Case is TyArr arr &&
                         arr.X is TyInt && arr.Y is TyInt &&
                         vb2.Term is TmLam tmLam &&
@@ -226,10 +226,10 @@ let yr = f2 """"
                         tmLam.Type == Ty.Int &&
                         tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
 
-            Assert.True(ctx.Context.TopBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
                         vbX.Term is TmInt tmIntX && tmIntX.Value == 1); 
 
-            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb3 &&
+            Assert.True(ctx.Context.TmBindings.Find("f2").Case is TmAbbBind vb3 &&
                         vb3.Type.Case is TyArr arr1 &&
                         arr1.X is TyString && arr1.Y is TyString &&
                         vb3.Term is TmLam tmLam1 &&
@@ -237,7 +237,7 @@ let yr = f2 """"
                         tmLam1.Type == Ty.String &&
                         tmLam1.Body is TmString tmStr && tmStr.Value == "Hello, World");
 
-            Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
+            Assert.True(ctx.Context.TmBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }
         
@@ -274,7 +274,7 @@ let yr = f2 """"
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb2 &&
+            Assert.True(ctx.Context.TmBindings.Find("f1").Case is TmAbbBind vb2 &&
                         vb2.Type.Case is TyArr arr &&
                         arr.X is TyInt && arr.Y is TyInt &&
                         vb2.Term is TmLam tmLam &&
@@ -282,10 +282,10 @@ let yr = f2 """"
                         tmLam.Type == Ty.Int &&
                         tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
 
-            Assert.True(ctx.Context.TopBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
                         vbX.Term is TmInt tmIntX && tmIntX.Value == 1); 
 
-            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb3 &&
+            Assert.True(ctx.Context.TmBindings.Find("f2").Case is TmAbbBind vb3 &&
                         vb3.Type.Case is TyArr arr1 &&
                         arr1.X is TyString && arr1.Y is TyString &&
                         vb3.Term is TmLam tmLam1 &&
@@ -293,7 +293,7 @@ let yr = f2 """"
                         tmLam1.Type == Ty.String &&
                         tmLam1.Body is TmString tmStr && tmStr.Value == "Hello, World");
 
-            Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
+            Assert.True(ctx.Context.TmBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }
                      
@@ -329,7 +329,7 @@ let yr = f2 """"
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb2 &&
+            Assert.True(ctx.Context.TmBindings.Find("f1").Case is TmAbbBind vb2 &&
                         vb2.Type.Case is TyArr arr &&
                         arr.X is TyInt && arr.Y is TyInt &&
                         vb2.Term is TmLam tmLam &&
@@ -337,10 +337,10 @@ let yr = f2 """"
                         tmLam.Type == Ty.Int &&
                         tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
 
-            Assert.True(ctx.Context.TopBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
                         vbX.Term is TmInt tmIntX && tmIntX.Value == 1); 
 
-            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb3 &&
+            Assert.True(ctx.Context.TmBindings.Find("f2").Case is TmAbbBind vb3 &&
                         vb3.Type.Case is TyArr arr1 &&
                         arr1.X is TyString && arr1.Y is TyString &&
                         vb3.Term is TmLam tmLam1 &&
@@ -348,7 +348,7 @@ let yr = f2 """"
                         tmLam1.Type == Ty.String &&
                         tmLam1.Body is TmString tmStr && tmStr.Value == "Hello, World");
 
-            Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
+            Assert.True(ctx.Context.TmBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }   
                              
@@ -384,7 +384,7 @@ let yr = f2 false
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb2 &&
+            Assert.True(ctx.Context.TmBindings.Find("f1").Case is TmAbbBind vb2 &&
                         vb2.Type.Case is TyAll all && all.Type is TyArr arr &&
                         arr.X is TyVar tv1 && tv1.Name == "b" &&
                         arr.Y is TyInt && 
@@ -394,10 +394,10 @@ let yr = f2 false
                         tmLam.Type is TyVar tvr && tvr.Name == "b" &&
                         tmLam.Body is TmInt tmInt0 && tmInt0.Value == 1);
 
-            Assert.True(ctx.Context.TopBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
+            Assert.True(ctx.Context.TmBindings.Find("xr").Case is TmAbbBind vbX && vbX.Type.Case is TyInt && 
                         vbX.Term is TmInt tmIntX && tmIntX.Value == 1); 
 
-            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb3 &&
+            Assert.True(ctx.Context.TmBindings.Find("f2").Case is TmAbbBind vb3 &&
                         vb3.Type.Case is TyAll all1 && all1.Type is TyArr arr1 &&
                         arr1.X is TyVar tv2 && tv2.Name == "b" &&
                         arr1.Y is TyString && 
@@ -407,7 +407,7 @@ let yr = f2 false
                         tmLam2.Type is TyVar tvr1 && tvr1.Name == "b" &&
                         tmLam2.Body is TmString tmStr && tmStr.Value == "Hello, World");
 
-            Assert.True(ctx.Context.TopBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
+            Assert.True(ctx.Context.TmBindings.Find("yr").Case is TmAbbBind vbY && vbY.Type.Case is TyString && 
                         vbY.Term is TmString tmStrY && tmStrY.Value == "Hello, World"); 
         }   
                                      
@@ -435,7 +435,7 @@ let x  = f2 100
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("f1").Case is TmAbbBind vb1 && 
+            Assert.True(ctx.Context.TmBindings.Find("f1").Case is TmAbbBind vb1 && 
                         vb1.Type.Case is TyAll all && all.Type is TyArr tyarr && 
                         tyarr.X is TyVar tvarA && tvarA.Name == "b" &&
                         tyarr.Y is TyVar tvarB && tvarB.Name == "b" &&
@@ -445,7 +445,7 @@ let x  = f2 100
                         tmvar.Name == "x");
 
 
-            Assert.True(ctx.Context.TopBindings.Find("f2").Case is TmAbbBind vb2 && 
+            Assert.True(ctx.Context.TmBindings.Find("f2").Case is TmAbbBind vb2 && 
                         vb2.Type.Case is TyAll all2 && all2.Type is TyArr tyarr2 && 
                         tyarr2.X is TyVar tvarA2 && tvarA2.Name == "a" &&
                         tyarr2.Y is TyVar tvarB2 && tvarB2.Name == "a" &&
@@ -453,7 +453,7 @@ let x  = f2 100
                         ttlam2.Subject == "a" && ttlam2.Expr is TmLam tlam2 &&
                         tlam2.Name == "x" );
 
-            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb3 &&
+            Assert.True(ctx.Context.TmBindings.Find("x").Case is TmAbbBind vb3 &&
                         vb3.Term is TmInt v && v.Value == 100);
         }
                                              
@@ -479,7 +479,7 @@ let x  = f 100 true
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+            Assert.True(ctx.Context.TmBindings.Find("x").Case is TmAbbBind vb &&
                         vb.Type.Case is TyRecord rec && rec.Fields.Count == 2 &&
                         rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
                         rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&
@@ -512,7 +512,7 @@ let x  = f 100 true ""Hello, World""
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+            Assert.True(ctx.Context.TmBindings.Find("x").Case is TmAbbBind vb &&
                         vb.Type.Case is TyRecord rec && rec.Fields.Count == 3 &&
                         rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
                         rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&
@@ -551,7 +551,7 @@ let x  = g 100 ""Hello, World""
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
 
-            Assert.True(ctx.Context.TopBindings.Find("x").Case is TmAbbBind vb &&
+            Assert.True(ctx.Context.TmBindings.Find("x").Case is TmAbbBind vb &&
                         vb.Type.Case is TyRecord rec && rec.Fields.Count == 3 &&
                         rec.Fields[0].Name == "x" && rec.Fields[0].Type is TyInt &&
                         rec.Fields[1].Name == "y" && rec.Fields[1].Type is TyBool &&

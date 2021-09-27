@@ -5,9 +5,15 @@ using static LanguageExt.Prelude;
 
 namespace Echo.ActorSys2.Configuration
 {
-    public record Context(HashMap<string, Binding> TopBindings, HashMap<string, Binding> Bindings, Lst<Term> Store)
+    public record Context(
+        ContextBindings<TmBinding> TmBindings, 
+        ContextBindings<TyBinding> TyBindings, 
+        Lst<Term> Store)
     {
-        public static readonly Context Empty = new(default, default, default);
+        public static readonly Context Empty = new(
+            new ContextBindings<TmBinding>(default, ProcessError.UndefinedVariable, ProcessError.VariableAlreadyExists),
+            new ContextBindings<TyBinding>(default, ProcessError.UndefinedType, ProcessError.TypeAlreadyExists),
+            default);
 
         public static Context<Unit> log<A>(A value) =>
             new Context<Unit>(ctx => {
@@ -64,6 +70,24 @@ namespace Echo.ActorSys2.Configuration
                                var ra = ma.Op(f(ctx));
                                return ra.Map(p => (p.Item1, ctx));
                            });
+        
+        /// <summary>
+        /// Add a local binding to run `ma` in
+        /// </summary>
+        public static Context<A> localBinding<A>(string name, TyBinding binding, Context<A> ma) =>
+            new Context<A>(ctx => {
+                               var ra = ma.Op(ctx with {TyBindings = ctx.TyBindings.AddLocal(name, binding)});
+                               return ra.Map(p => (p.Item1, ctx));
+                           });
+        
+        /// <summary>
+        /// Add a local binding to run `ma` in
+        /// </summary>
+        public static Context<A> localBinding<A>(string name, TmBinding binding, Context<A> ma) =>
+            new Context<A>(ctx => {
+                               var ra = ma.Op(ctx with {TmBindings = ctx.TmBindings.AddLocal(name, binding)});
+                               return ra.Map(p => (p.Item1, ctx));
+                           });
 
         /// <summary>
         /// Get the context
@@ -72,28 +96,64 @@ namespace Echo.ActorSys2.Configuration
             new Context<Context>(static ctx => FinSucc((ctx, ctx)));
 
         /// <summary>
-        /// Get the context
+        /// Modify the context
         /// </summary>
         public static Context<Unit> modify(Func<Context, Fin<Context>> f) =>
             new Context<Unit>(ctx => f(ctx).Map(nctx => (unit, nctx)));
 
         /// <summary>
-        /// Get the context
+        /// Modify the context
         /// </summary>
         public static Context<Unit> modify(Func<Context, Context> f) =>
             new Context<Unit>(ctx => (unit, f(ctx)));
 
         /// <summary>
+        /// Modify the type bindings
+        /// </summary>
+        public static Context<Unit> modifyTys(Func<ContextBindings<TyBinding>, Fin<ContextBindings<TyBinding>>> f) =>
+            new Context<Unit>(ctx => f(ctx.TyBindings).Map(nctx => (unit, ctx with { TyBindings = nctx })));
+
+        /// <summary>
+        /// Modify the type bindings
+        /// </summary>
+        public static Context<Unit> modifyTys(Func<ContextBindings<TyBinding>, ContextBindings<TyBinding>> f) =>
+            new Context<Unit>(ctx => (unit, ctx with {TyBindings = f(ctx.TyBindings)}));
+
+        /// <summary>
+        /// Modify the term bindings
+        /// </summary>
+        public static Context<Unit> modifyTms(Func<ContextBindings<TmBinding>, Fin<ContextBindings<TmBinding>>> f) =>
+            new Context<Unit>(ctx => f(ctx.TmBindings).Map(nctx => (unit, ctx with {TmBindings = nctx})));
+
+        /// <summary>
+        /// Modify the term bindings
+        /// </summary>
+        public static Context<Unit> modifyTms(Func<ContextBindings<TmBinding>, ContextBindings<TmBinding>> f) =>
+            new Context<Unit>(ctx => (unit, ctx with {TmBindings = f(ctx.TmBindings)}));
+
+        /// <summary>
         /// Get binding
         /// </summary>
-        public static Context<Binding> getBinding(Loc loc, string name) =>
-            get.Bind(ctx => ctx.GetBinding(loc, name).ToContext());
+        public static Context<TyBinding> getTyBinding(Loc loc, string name) =>
+            get.Bind(ctx => ctx.TyBindings.GetBinding(loc, name).ToContext());
+
+        /// <summary>
+        /// Get binding
+        /// </summary>
+        public static Context<TmBinding> getTmBinding(Loc loc, string name) =>
+            get.Bind(ctx => ctx.TmBindings.GetBinding(loc, name).ToContext());
 
         /// <summary>
         /// Add a top level binding
         /// </summary>
-        public static Context<Unit> addTop(Loc loc, string name, Binding b) =>
-            modify(ctx => ctx.AddTop(loc, name, b));
+        public static Context<Unit> addTop(Loc loc, string name, TyBinding b) =>
+            modifyTys(ctx => ctx.AddTop(loc, name, b));
+
+        /// <summary>
+        /// Add a top level binding
+        /// </summary>
+        public static Context<Unit> addTop(Loc loc, string name, TmBinding b) =>
+            modifyTms(ctx => ctx.AddTop(loc, name, b));
 
         /// <summary>
         /// Add a term to the store
@@ -121,10 +181,10 @@ namespace Echo.ActorSys2.Configuration
         /// Get type of the binding
         /// </summary>
         public static Context<Ty> getType(Loc loc, string name) =>
-            from b in getBinding(loc, name)
+            from b in getTmBinding(loc, name)
             from t in b switch
                       {
-                          VarBind (var ty)                                => Pure(ty),
+                          TmVarBind (var ty)                              => Pure(ty),
                           TmAbbBind (_, var oty) when oty.Case is (Ty ty) => Pure(ty),
                           TmAbbBind (_, var oty) when oty.Case is null    => Fail<Ty>(ProcessError.NoTypeRecordedForVariable(loc, name)),
                           _                                               => Fail<Ty>(ProcessError.WrongTypeOfBindingForVariable(loc, name))
@@ -135,7 +195,7 @@ namespace Echo.ActorSys2.Configuration
         /// Get kind of the binding 
         /// </summary>
         public static Context<Kind> getKind(Loc loc, string name) =>
-            from b in getBinding(loc, name)
+            from b in getTyBinding(loc, name)
             from k in b.GetKind(loc, name).ToContext()
             select k;
 
@@ -144,20 +204,23 @@ namespace Echo.ActorSys2.Configuration
             from r in k == Kind.Star ? Unit : Fail<Unit>(ProcessError.StarKindExpected(loc))
             select r;
 
-        public static Context<bool> isNameBound(string name) =>
-            get.Map(c => c.Bindings.ContainsKey(name) || c.TopBindings.ContainsKey(name));
+        public static Context<bool> isTmNameBound(string name) =>
+            get.Map(c => c.TmBindings.IsNameBound(name));
+
+        public static Context<bool> isTyNameBound(string name) =>
+            get.Map(c => c.TyBindings.IsNameBound(name));
 
         /// <summary>
         /// Is the binding a type-lambda
         /// </summary>
         public static Context<bool> isTyLam(string name) =>
-            getBinding(Loc.None, name).Map(b => b is TyLamBind);
+            getTyBinding(Loc.None, name).Map(b => b is TyLamBind);
 
         /// <summary>
         /// Get the binding if it's a type-lambda
         /// </summary>
         public static Context<Ty> getTyLam(string name) =>
-            getBinding(Loc.None, name).Bind(b => b is TyLamBind ab ? Context.Pure(ab.Type) :  Context.NoRuleAppliesTy);
+            getTyBinding(Loc.None, name).Bind(b => b is TyLamBind ab ? Context.Pure(ab.Type) :  Context.NoRuleAppliesTy);
 
         public static Context<Ty> computeTy(Ty ty) =>
             ty switch
@@ -171,40 +234,6 @@ namespace Echo.ActorSys2.Configuration
             from ty2 in simplifyTy(ty1)
             select ty2)
           | @catch(ProcessError.NoRuleApplies, ty);
-        
-        /// <summary>
-        /// Get the binding
-        /// </summary>
-        public Fin<Binding> GetBinding(Loc loc, string name) =>
-            (Bindings.Find(name) || TopBindings.Find(name)).ToFin(default) || ProcessError.UndefinedBinding(loc, name);
-        
-        /// <summary>
-        /// Add a top level binding
-        /// </summary>
-        public Fin<Context> AddTop(Loc loc, string name, Binding b) =>
-            TopBindings.ContainsKey(name)
-                ? ProcessError.TopLevelBindingAlreadyExists(loc, name)
-                : this with {TopBindings = TopBindings.Add(name, b)};
-
-        /// <summary>
-        /// Add a local binding
-        /// </summary>
-        public Context AddLocal(string name, Binding b) =>
-            this with {Bindings = Bindings.AddOrUpdate(name, b)};
-
-        /// <summary>
-        /// Check if a name is bound
-        /// </summary>
-        public bool IsNameBound(string name) =>
-            Bindings.ContainsKey(name) || TopBindings.ContainsKey(name);
-
-        /// <summary>
-        /// Find a unique name from an existing name
-        /// </summary>
-        public string PickFreshName(string name) =>
-            IsNameBound(name)
-                ? PickFreshName($"{name}'")
-                : name;
 
         /// <summary>
         /// Add a term to the store
@@ -217,6 +246,49 @@ namespace Echo.ActorSys2.Configuration
         /// </summary>
         public Context UpdateStore(int ix, Term term) =>
             this with {Store = Store.SetItem(ix, term)};
+    }
+
+    public record ContextBindings<A>(HashMap<string, A> Bindings, Func<Loc, string, Error> Undefined, Func<Loc, string, Error> AlreadyExists)
+    {
+        /// <summary>
+        /// Get the binding
+        /// </summary>
+        public Fin<A> GetBinding(Loc loc, string name) =>
+            Bindings.Find(name).ToFin(default) || Undefined(loc, name);
+        
+        /// <summary>
+        /// Add a top level binding
+        /// </summary>
+        public Fin<ContextBindings<A>> AddTop(Loc loc, string name, A b) =>
+            Bindings.ContainsKey(name)
+                ? AlreadyExists(loc, name)
+                : this with {Bindings = Bindings.Add(name, b)};
+
+        /// <summary>
+        /// Add a local binding
+        /// </summary>
+        public ContextBindings<A> AddLocal(string name, A b) =>
+            this with {Bindings = Bindings.AddOrUpdate(name, b)};
+
+        /// <summary>
+        /// Check if a name is bound
+        /// </summary>
+        public bool IsNameBound(string name) =>
+            Bindings.ContainsKey(name);
+
+        /// <summary>
+        /// Find a unique name from an existing name
+        /// </summary>
+        public string PickFreshName(string name) =>
+            IsNameBound(name)
+                ? PickFreshName($"{name}'")
+                : name;
+        
+        /// <summary>
+        /// Find binding
+        /// </summary>
+        public Option<A> Find(string name) =>
+            Bindings.Find(name);
     }
 
     public class Context<A>

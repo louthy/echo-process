@@ -170,5 +170,17 @@ namespace Echo
         
         public static Error ExistentialTypeExpected(Loc loc) =>
             Error.New(90010044, $"existential type expected");
+         
+        public static Error UndefinedVariable(Loc loc, string what) =>
+            Error.New(90010045, $"{loc}: undefined variable: '{what}'");
+        
+        public static Error UndefinedType(Loc loc, string what) =>
+            Error.New(90010046, $"{loc}: undefined type: '{what}'");
+        
+        public static Error VariableAlreadyExists(Loc loc, string what) =>
+            Error.New(90010047, $"Variable already exists: {what}");
+        
+        public static Error TypeAlreadyExists(Loc loc, string what) =>
+            Error.New(90010048, $"Type already exists: {what}");
     }
 }

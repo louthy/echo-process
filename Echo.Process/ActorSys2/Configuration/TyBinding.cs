@@ -3,9 +3,9 @@ using static LanguageExt.Prelude;
 
 namespace Echo.ActorSys2.Configuration
 {
-    public abstract record Binding
+    public abstract record TyBinding
     {
-        public virtual Context<Binding> Eval  =>
+        public virtual Context<TyBinding> Eval  =>
             Context.Pure(this);
 
         public virtual Option<TyLamBind> AsTyLam =>
@@ -16,17 +16,17 @@ namespace Echo.ActorSys2.Configuration
     }
 
     /// <summary>
-    /// Name binding, no type, no term
+    /// Name binding, no type
     /// </summary>
-    public record NameBind : Binding
+    public record TyNameBind : TyBinding
     {
-        public static readonly Binding Default = new NameBind();
+        public static readonly TyBinding Default = new TyNameBind();
     }
 
     /// <summary>
     /// Type variable kind binding
     /// </summary>
-    public record TyVarBind(Kind Kind) : Binding
+    public record TyVarBind(Kind Kind) : TyBinding
     {
         public override Fin<Kind> GetKind(Loc location, string name) =>
             Kind;
@@ -35,7 +35,7 @@ namespace Echo.ActorSys2.Configuration
     /// <summary>
     /// Type lambda abstraction binding
     /// </summary>
-    public record TyLamBind(Ty Type, Option<Kind> Kind) : Binding
+    public record TyLamBind(Ty Type, Option<Kind> Kind) : TyBinding
     {
         public override Option<TyLamBind> AsTyLam =>
             Some(this);
@@ -43,20 +43,4 @@ namespace Echo.ActorSys2.Configuration
         public override Fin<Kind> GetKind(Loc location, string name) =>
             Kind.ToFin(ProcessError.NoKindRecordedForVariable(location, name));
     }
-
-    /// <summary>
-    /// Type variable binding
-    /// </summary>
-    public record VarBind(Ty Type) : Binding;
-
-    /// <summary>
-    /// Term and type binding
-    /// </summary>
-    public record TmAbbBind(Term Term, Option<Ty> Type) : Binding
-    {
-        public override Context<Binding> Eval =>
-            from t in Term.Eval
-            select new TmAbbBind(t, Type) as Binding;
-    }
-
 }

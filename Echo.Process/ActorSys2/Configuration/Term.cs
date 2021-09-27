@@ -201,14 +201,13 @@ namespace Echo.ActorSys2.Configuration
             Context.NoRuleAppliesTerm;
 
         public override Context<Ty> TypeOf =>
-            Context.local(ctx => ctx.AddLocal(Subject, new TyVarBind(Kind)),
-                          Expr.TypeOf.Map(t => (Ty)new TyAll(Subject, Kind, t)));
+            Context.localBinding(Subject, new TyVarBind(Kind),
+                                 Expr.TypeOf.Map(t => (Ty) new TyAll(Subject, Kind, t)));
 
         public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
             name == Subject
                 ? Expr.Subst(onVar, onType, name)
                 : new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
-            //new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
 
         public override string Show() =>
             Kind == Kind.Star
@@ -295,9 +294,9 @@ namespace Echo.ActorSys2.Configuration
             from r in t switch
                       {
                           TySome (var tyT, var k, var tyT11) =>
-                              Context.local(ctx => ctx.AddLocal(TyX, new TyVarBind(k)),
-                              Context.local(ctx => ctx.AddLocal(X, new VarBind(tyT11)),
-                                            Term2.TypeOf)),
+                              Context.localBinding(TyX, new TyVarBind(k),
+                                                   Context.localBinding(X, new TmVarBind(tyT11),
+                                                                        Term2.TypeOf)),
                           _ => Context.Fail<Ty>(ProcessError.ExistentialTypeExpected(Location))
                       }
             select r;
@@ -989,7 +988,7 @@ namespace Echo.ActorSys2.Configuration
             onVar(Location, name, Name, this);
 
         public override Context<Term> Eval1 =>
-            from b in Context.getBinding(Location, Name)
+            from b in Context.getTmBinding(Location, Name)
             from r in b switch
                       {
                           TmAbbBind(var t, _) => Context.Pure(t),
@@ -1017,9 +1016,9 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             from _ in Context.checkKindStar(Location, Type)
-            from r in Context.local(ctx => ctx.AddLocal(Name, new VarBind(Type)),
-                                    from bty in Body.TypeOf
-                                    select (Ty)new TyArr(Type, bty))
+            from r in Context.localBinding(Name, new TmVarBind(Type),
+                                           from bty in Body.TypeOf
+                                           select (Ty) new TyArr(Type, bty))
             select r;
         
         public override string Show() =>
@@ -1037,9 +1036,7 @@ namespace Echo.ActorSys2.Configuration
                 TmTLam(_, var x, _, var term) =>
                     from aty in Y.TypeOf
                     let ntm = term.Subst(x, aty)
-                    from rtm in Context.local(ctx => ctx.AddLocal(x, new VarBind(aty)),
-                                              App(ntm, Y).Eval1)
-                    select rtm,
+                    select App(ntm, Y),
                 
                 TmLam(_, var x, var ty, var body) when Y.IsVal => 
                     Context.Pure(body.Subst(x, Y)),
@@ -1156,8 +1153,8 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             from v in Value.TypeOf
-            from r in Context.local(ctx => ctx.AddLocal(Name, new VarBind(v)),
-                                    Body.TypeOf)
+            from r in Context.localBinding(Name, new TmVarBind(v),
+                                           Body.TypeOf)
             select r;
         
         public override string Show() =>

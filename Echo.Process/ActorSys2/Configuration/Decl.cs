@@ -57,24 +57,24 @@ namespace Echo.ActorSys2.Configuration
             from ty in tm.TypeOf
             from __ in Context.addTop(Location, Name, new TmAbbBind(tm, ty))
             select unit;
-        
+
         Context<Term> AddParameters(Seq<Parameter> ps) =>
             ps.IsEmpty
                 ? Context.Pure(Value)
                 : ps.Head.Type is TyVar tvar
-                    ? from x in Context.isNameBound(tvar.Name)
+                    ? from x in Context.isTyNameBound(tvar.Name)
                       from r in x
                                     ? AddParameter(ps)
-                                    : Context.local(ctx => ctx.AddLocal(tvar.Name, NameBind.Default),
-                                                    AddParameter(ps).Map(body => Term.TLam(ps.Head.Location, tvar.Name, Kind.Star, body)))
+                                    : Context.localBinding(tvar.Name, TyNameBind.Default,
+                                                           AddParameter(ps).Map(body => Term.TLam(ps.Head.Location, tvar.Name, Kind.Star, body)))
                       select r
                     : AddParameter(ps);
-                        
+
         Context<Term> AddParameter(Seq<Parameter> ps) =>
-            Context.local(ctx => ctx.AddLocal(ps.Head.Name, NameBind.Default),
-                          AddParameters(ps.Tail).Map(
-                              body =>
-                                Term.Lam(ps.Head.Location, ps.Head.Name, ps.Head.Type, body)));
+            Context.localBinding(ps.Head.Name, TmNameBind.Default,
+                                 AddParameters(ps.Tail).Map(
+                                     body =>
+                                         Term.Lam(ps.Head.Location, ps.Head.Name, ps.Head.Type, body)));
     }
 
     public record DeclStrategy(Loc Location, string Name, StrategyType Type, TmRecord Value) : Decl(Location, Name)
