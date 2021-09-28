@@ -13,15 +13,14 @@ namespace Echo.Tests
 --               , surname : string
 --               , age     : int } 
 -- 
--- type State s a : s → { value: a, state: s, faulted: Bool }    let State = ∀ s. s → ∀ a. a → Bool → { value : a, state : s, faulted : Bool  }
 
-let State (value : a, faulted: Bool, state : s) =
-    { state = state
-    , value = value
-    , faulted = faulted }
+type State s a = s → { value : a, state : s, faulted : Bool }  
 
-let return (value : a, state : s) = 
-    State value false state
+let return (value : a) : State s a =
+    (state : s) =>
+        { state = state
+        , value = value
+        , faulted = false }
 
 let applBool (f : Bool → Bool, x : Bool) = 
     if f x
@@ -58,13 +57,13 @@ process echo = { pid = /root/user/echo
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 10);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
-            Assert.True(decls[4] is DeclGlobalVar);
-            Assert.True(decls[5] is DeclGlobalVar);
-            Assert.True(decls[6] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclType);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
+            Assert.True(decls[4] is DeclVar);
+            Assert.True(decls[5] is DeclVar);
+            Assert.True(decls[6] is DeclVar);
             Assert.True(decls[7] is DeclCluster);
             Assert.True(decls[8] is DeclStrategy);
             Assert.True(decls[9] is DeclProcess);
@@ -116,10 +115,10 @@ let test3 = identity ((x : Int) => x + 1)
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 4);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
 
             // TYPE-CHECK
             
@@ -161,10 +160,10 @@ let test4 = add 2 2
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 4);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
 
             // TYPE-CHECK
             
@@ -207,11 +206,11 @@ let yr = f2 """"
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 5);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
-            Assert.True(decls[4] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
+            Assert.True(decls[4] is DeclVar);
 
             // TYPE-CHECK
             
@@ -263,11 +262,11 @@ let yr = f2 """"
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 5);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
-            Assert.True(decls[4] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
+            Assert.True(decls[4] is DeclVar);
 
             // TYPE-CHECK
             
@@ -318,11 +317,11 @@ let yr = f2 """"
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 5);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
-            Assert.True(decls[4] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
+            Assert.True(decls[4] is DeclVar);
 
             // TYPE-CHECK
             
@@ -373,11 +372,11 @@ let yr = f2 false
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 5);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
-            Assert.True(decls[3] is DeclGlobalVar);
-            Assert.True(decls[4] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
+            Assert.True(decls[3] is DeclVar);
+            Assert.True(decls[4] is DeclVar);
 
             // TYPE-CHECK
             
@@ -426,9 +425,9 @@ let x  = f2 100
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 3);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
 
             // TYPE-CHECK
             
@@ -471,8 +470,8 @@ let x  = f 100 true
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 2);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
 
             // TYPE-CHECK
             
@@ -504,8 +503,8 @@ let x  = f 100 true ""Hello, World""
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 2);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
 
             // TYPE-CHECK
             
@@ -542,9 +541,9 @@ let x  = g 100 ""Hello, World""
             var decls = fres.ThrowIfFail();
 
             Assert.True(decls.Count == 3);
-            Assert.True(decls[0] is DeclGlobalVar);
-            Assert.True(decls[1] is DeclGlobalVar);
-            Assert.True(decls[2] is DeclGlobalVar);
+            Assert.True(decls[0] is DeclVar);
+            Assert.True(decls[1] is DeclVar);
+            Assert.True(decls[2] is DeclVar);
 
             // TYPE-CHECK
             
@@ -571,7 +570,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmTuple val &&
                         val.Values.Count == 3 &&
@@ -597,7 +596,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmVar val &&
                         val.Name == name);
@@ -616,7 +615,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmInt val &&
                         val.Value == value);
@@ -634,7 +633,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmString val &&
                         val.Value == output);
@@ -647,7 +646,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmTrue);
         }
@@ -659,7 +658,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmFalse);
         }
@@ -671,7 +670,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmUnit);
         }
@@ -690,7 +689,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmProcessFlag flag &&
                         flag.Value == expected);
@@ -710,7 +709,7 @@ let x  = g 100 ""Hello, World""
             var res = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmProcessId pid &&
                         pid.Value == new ProcessId(input));
@@ -724,7 +723,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmArray val &&
                         val.Values.ForAll(v => v is TmProcessId)
@@ -744,7 +743,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
 
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmFloat val &&
                         val.Value == double.Parse(value));
@@ -775,7 +774,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
 
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmTime val &&
                         (int)val.Value.Milliseconds == expected);
@@ -788,7 +787,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmMessageDirective flag &&
                         flag.Value == MessageDirective.ForwardToSelf);
@@ -801,7 +800,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmMessageDirective flag &&
                         flag.Value == MessageDirective.ForwardToDeadLetters);
@@ -814,7 +813,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmMessageDirective flag &&
                         flag.Value == MessageDirective.StayInQueue);
@@ -833,7 +832,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmMessageDirective flag &&
                         flag.Value == MessageDirective.ForwardTo(input));
@@ -846,7 +845,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmDirective flag &&
                         flag.Value == Directive.Resume);
@@ -859,7 +858,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmDirective flag &&
                         flag.Value == Directive.Restart);
@@ -872,7 +871,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmDirective flag &&
                         flag.Value == Directive.Escalate);
@@ -885,7 +884,7 @@ let x  = g 100 ""Hello, World""
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmDirective flag &&
                         flag.Value == Directive.Stop);
@@ -906,7 +905,7 @@ let x = { id        = //root/user/test/123
             var res  = fres.ThrowIfFail();
             
             Assert.True(res.Count == 1);
-            Assert.True(res.Head is DeclGlobalVar decl &&
+            Assert.True(res.Head is DeclVar decl &&
                         decl.Name == "x" &&
                         decl.Value is TmRecord record &&
                         record.Fields.Count == 6 &&

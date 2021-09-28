@@ -145,31 +145,31 @@ namespace Echo
             Error.New(90010035, $"{loc}: no kind recorded for variable `{name}`");
         
         public static Error StarKindExpected(Loc loc) =>
-            Error.New(90010036, "{loc}: `*` kind expected");
+            Error.New(90010036, $"{loc}: `*` kind expected");
         
         public static Error ArrowKindExpected(Loc loc) =>
-            Error.New(90010037, "{loc}: `* => *` kind expected");
+            Error.New(90010037, $"{loc}: `* => *` kind expected");
 
         public static Error ArgumentNotRef(Loc loc) =>
-            Error.New(90010038, "argument is not a Ref");
+            Error.New(90010038, $"{loc}: argument is not a Ref");
         
         public static Error AssignmentOperatorArgumentsIncompatible(Loc loc) =>
-            Error.New(90010039, "assignment operator arguments incompatible");
+            Error.New(90010039, $"{loc}: assignment operator arguments incompatible");
         
         public static Error TypeArgumentHasWrongKind(Loc loc, Kind expected, Kind got) =>
-            Error.New(90010040, $"type argument has wrong kind: expected {expected}, got: {got.Show()}");
+            Error.New(90010040, $"{loc}: type argument has wrong kind: expected {expected}, got: {got.Show()}");
         
         public static Error UniversalTypeExpected(Loc loc) =>        
-            Error.New(90010041, "universal type expected");
+            Error.New(90010041, $"{loc}: universal type expected");
         
         public static Error TypeComponentHasWrongKind(Loc loc, Kind expected, Kind got) =>
-            Error.New(90010042, $"type component has wrong kind: expected {expected.Show()}, got: {got.Show()}");
+            Error.New(90010042, $"{loc}: type component has wrong kind: expected {expected.Show()}, got: {got.Show()}");
         
         public static Error DoesNotMatchDeclaredType(Loc loc) =>
-            Error.New(90010043, $"doesn't match declared type");
+            Error.New(90010043, $"{loc}: doesn't match declared type");
         
         public static Error ExistentialTypeExpected(Loc loc) =>
-            Error.New(90010044, $"existential type expected");
+            Error.New(90010044, $"{loc}: existential type expected");
          
         public static Error UndefinedVariable(Loc loc, string what) =>
             Error.New(90010045, $"{loc}: undefined variable: '{what}'");
@@ -178,9 +178,9 @@ namespace Echo
             Error.New(90010046, $"{loc}: undefined type: '{what}'");
         
         public static Error VariableAlreadyExists(Loc loc, string what) =>
-            Error.New(90010047, $"Variable already exists: {what}");
+            Error.New(90010047, $"{loc}: variable already exists: {what}");
         
         public static Error TypeAlreadyExists(Loc loc, string what) =>
-            Error.New(90010048, $"Type already exists: {what}");
+            Error.New(90010048, $"{loc}: type already exists: {what}");
     }
 }

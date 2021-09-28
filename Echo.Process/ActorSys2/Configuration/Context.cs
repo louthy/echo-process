@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using LanguageExt;
 using LanguageExt.Common;
 using static LanguageExt.Prelude;
@@ -17,12 +18,16 @@ namespace Echo.ActorSys2.Configuration
 
         public static Context<Unit> log<A>(A value) =>
             new Context<Unit>(ctx => {
-                                  if(value is Term tm) Console.WriteLine(tm.Show());
-                                  else if(value is Ty tt) Console.WriteLine(tt.Show());
-                                  else Console.WriteLine(value);
+                                  Show(value);
                                   return FinSucc((unit, ctx));
                               });
-        
+
+        static Unit Show<A>(A value)
+        {
+            if (value != null) Console.WriteLine(value);
+            return unit;
+        }
+
         /// <summary>
         /// Context success
         /// </summary>

@@ -40,7 +40,8 @@ namespace Echo.ActorSys2.Configuration
                                     "forward-to-self", "forward-to-parent", "forward-to-dead-letters", "stay-in-queue", "forward-to-process",
                                     "resume", "restart", "escalate", "stop",
                                     "cluster", "strategy", "router",
-                                    "all-for-one", "one-for-one"
+                                    "all-for-one", "one-for-one",
+                                    "type"
                 ),
                 ReservedOpNames: List("-", "+", "/", "*", "==", "!=", ">", "<", "<=", ">=", "||", "&&", "|", "&", "%", "!", "~", "^")
             );
@@ -52,8 +53,16 @@ namespace Echo.ActorSys2.Configuration
             // This builds the standard token parser from the definition above
             var lexer         = makeTokenParser(def);
             var identifier    = lexer.Identifier;
+            var typeName      = token(
+                                    from x in satisfy(char.IsUpper)
+                                    from xs in asString(many(satisfy(static c => char.IsLetter(c) || char.IsDigit(c) || c == '_' || c == '-')))
+                                    select x + xs).label("type-name");
+            var typeVar       = token(
+                                    from x in satisfy(char.IsLower)
+                                    from xs in asString(many(satisfy(static c => char.IsLetter(c) || char.IsDigit(c))))
+                                    select x + xs).label("type-variable");
             var recordLabel   = token(from x in letter
-                                      from xs in asString(many(either(alphaNum, oneOf("-_"))))
+                                      from xs in asString(many(satisfy(static c => char.IsLetter(c) || char.IsDigit(c) || c == '_' || c == '-')))
                                       select x + xs).label("record-label");
             var stringLiteral = lexer.StringLiteral;
             var integer       = lexer.Integer;
@@ -281,20 +290,28 @@ namespace Echo.ActorSys2.Configuration
                                                select (Name: nm, Type: ty),
                                                lexer.Comma)
                             from clos in symbol(")")
-                            select  args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type));
+                            from retr in optional(
+                                            from _ in symbol(":")
+                                            from t in type
+                                            select t)
+                            select new Prototype(args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type)), retr);
  
             var lambda = from begi in getPos
-                         from vars in prototype
+                         from prot in prototype
                          from arrw in symbol("=>")
-                         from body in expr
+                         from body in expr.Map(e => prot.ReturnType.Case switch
+                                                    {
+                                                        Ty ty => Term.Ascribe(e, ty),
+                                                        _     => e
+                                                    })
                          let loc = mkLoc(begi, arrw.EndPos)
-                         select vars.Count switch
+                         select prot.Parameters.Count switch
                                 {
                                     0 => Term.Lam(loc, "_", Ty.Unit, body),
-                                    _ => vars.FoldBack(body, (b, v) =>
-                                                                 v.Type is TyVar tv
-                                                                    ? Term.TLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
-                                                                    : Term.Lam(loc, v.Name, v.Type, b))
+                                    _ => prot.Parameters.FoldBack(body, (b, v) =>
+                                                                            v.Type is TyVar tv
+                                                                                ? Term.TLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
+                                                                                : Term.Lam(loc, v.Name, v.Type, b))
                                 };
             
             term = choice(attempt(letTerm),
@@ -309,14 +326,15 @@ namespace Echo.ActorSys2.Configuration
                                    ? ts.Head
                                    : ts.Tail.Fold(ts.Head, Term.App); 
             
-            expr = buildExpressionParser(operators, expr1);
-
-            /*
-            expr = lexer.CommaSep1(attempt(expr2.Expand()))
-                        .Map(xs => xs.Value.Count == 1
-                                       ? xs.Value.Head
-                                       : Term.Tuple(xs.Value));
-                                       */
+            var expr2 = buildExpressionParser(operators, expr1);
+            
+            expr = from e in expr2
+                   from t in optional(lexer.Colon.Bind(_ => type))
+                   select t.Case switch
+                          {
+                              Ty ty => Term.Ascribe(e, ty),
+                              _     => e
+                          };
 
             // Single identifier atomic type
             var typeRefAtom = from id in identifier
@@ -337,8 +355,18 @@ namespace Echo.ActorSys2.Configuration
                                          _                             => new TyVar(id.Value),
                                      };
 
+            var fieldType = from id in identifier
+                            from co in lexer.Colon
+                            from ty in type
+                            select new FieldTy(id.Value, ty);
+
+            var typeRecord = from op in symbol("{")
+                             from fs in sepBy(fieldType, lexer.Comma)
+                             from cl in symbol("}")
+                             select (Ty)new TyRecord(fs);
+            
             // Type application
-            var typeApply = from atoms in many1(typeRefAtom)
+            var typeApply = from atoms in many1(either(typeRecord, typeRefAtom))
                             select atoms.Count == 1
                                        ? atoms.Head
                                        : atoms.Tail.Fold(atoms.Head, Ty.App);
@@ -353,7 +381,7 @@ namespace Echo.ActorSys2.Configuration
                                 attempt(from o  in symbol("(")
                                         from ts in sepBy1(type, lexer.Comma)
                                         from c  in symbol(")")
-                                        select Ty.Tuple(ts)),
+                                        select ts.Count > 1 ? Ty.Tuple(ts) : ts.Head),
                                 typeApply);
 
             var typeArrow = from ts in sepBy1(typeOuter, either(symbol("->"), symbol("→")))
@@ -361,16 +389,23 @@ namespace Echo.ActorSys2.Configuration
                                       ? ts.Head
                                       : ts.Init.FoldBack(ts.Last, (s, t) => Ty.Arr(t, s));
 
-            type = typeArrow;  // TODO: Existential and Universal types 
+            type = typeArrow;  // TODO: Kinds 
             
             var topLevelVarDecl = from k in keyword("let")
                                   from v in indented(from n in identifier
-                                                     from f in optional(prototype)
+                                                     from f in either(prototype, result(Prototype.Default))
                                                      from e in symbol("=")
                                                      from v in expr
-                                                     select (Name: n.Value, Prototype: f.IfNone(Empty), Value: v))
-                                  select Decl.GlobalVar(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, new Prototype(v.Prototype), v.Value);
+                                                     select (Name: n.Value, Prototype: f, Value: v))
+                                  select Decl.Var(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Prototype, v.Value);
 
+            var typeDecl = from k in keyword("type")
+                           from n in typeName
+                           from gs in many(attempt(typeVar))
+                           from eq in symbol("=")
+                           from ty in type
+                           select Decl.Type(mkLoc(k.BeginPos, eq.BeginPos), n.Value, gs.Map(g => (g.Value, Kind.Star)), ty);
+            
             var clusterDecl = from k in keyword("cluster")
                               from n in identifier
                               from _ in keyword("as")
@@ -407,6 +442,7 @@ namespace Echo.ActorSys2.Configuration
                              select Decl.Record(mkLoc(k.BeginPos, r.Location.End), n.Value, (TmRecord) r);
 
             var decls = many1(choice(attempt(topLevelVarDecl),
+                                     attempt(typeDecl),
                                      attempt(clusterDecl),
                                      attempt(processDecl),
                                      attempt(routerDecl),

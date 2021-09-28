@@ -6,18 +6,22 @@ namespace Echo.ActorSys2.Configuration
         public static Kind Arr(Kind x, Kind y) => new KnArr(x, y);
 
         public abstract string Show();
-
-        public override string ToString() =>
-            Show();
     }
 
     public record KnStar : Kind
     {
         public override string Show() => "*";
+
+        public override string ToString() =>
+            Show();
     }
 
     public record KnArr(Kind X, Kind Y) : Kind
     {
-        public override string Show() => $"({X.Show()} => {X.Show()})";
+        public override string Show() =>
+            $"({X.Show()} => {X.Show()})";
+
+        public override string ToString() =>
+            Show();
     }
 }

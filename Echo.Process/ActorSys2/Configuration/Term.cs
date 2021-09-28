@@ -13,14 +13,13 @@ namespace Echo.ActorSys2.Configuration
 {
     public abstract record Term(Loc Location)
     {
-        public virtual Term Subst(string name, Term term) =>
-            Subst((loc, n1, n2, self) => n1 == n2 ? term : self, (n, ty) => ty, name);
+        public abstract Term Subst(string name, Term term);
+        public abstract Term Subst(string name, Ty type);
 
-        public virtual Term Subst(string name, Ty type) =>
-            Subst((loc, n1, n2, self) => self, (n, ty) => ty is TyVar tv && tv.Name == name ? type : ty, name);
-
-        public virtual Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            this;
+        static Ty SubstTyDefault(string name, Ty type, Ty selfTy) =>
+            selfTy is TyVar tv && tv.Name == name 
+                ? type 
+                : selfTy; 
 
         public Context<Term> Eval =>
             new Context<Term>(
@@ -117,6 +116,15 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"(loc {StoreIndex})";
+            
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+        
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmRef(Term Expr) : Term(Expr.Location)
@@ -130,11 +138,17 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Ty> TypeOf =>
             Expr.TypeOf.Map(t => (Ty)new TyRef(t));
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmRef(Expr.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"(ref {Expr.Show()})";
+            
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Ref(Expr.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Ref(Expr.Subst(name, type));
     } 
 
     public record TmDeref(Term Expr) : Term(Expr.Location)
@@ -157,13 +171,19 @@ namespace Echo.ActorSys2.Configuration
                       }
             select r;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmDeref(Expr.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"(deref {Expr.Show()})";
-    }
+            
+        public override string ToString() =>
+            Show();
+ 
+        public override Term Subst(string name, Term term) =>
+            Deref(Expr.Subst(name, term));
         
+        public override Term Subst(string name, Ty type) =>
+            Deref(Expr.Subst(name, type));
+    }
+
     public record TmAssign(Term X, Term Y) : Term(X.Location)
     {
         public override Context<Term> Eval1 =>
@@ -179,20 +199,26 @@ namespace Echo.ActorSys2.Configuration
             from t in X.TypeOf.Bind(t => t.Simplify())
             from r in t switch
                       {
-                          TyRef tr => Y.TypeOf.Bind(yt => 
+                          TyRef tr => Y.TypeOf.Bind(yt =>
                                                         yt.Equiv(tr.Type)
-                                                          .Bind(b => b 
-                                                                  ? Context.Pure(TyUnit.Default) 
-                                                                  : Context.Fail<Ty>(ProcessError.AssignmentOperatorArgumentsIncompatible(X.Location)))),
-                          _        => Context.Fail<Ty>(ProcessError.ArgumentNotRef(Location))
+                                                          .Bind(b => b
+                                                                         ? Context.Pure(TyUnit.Default)
+                                                                         : Context.Fail<Ty>(ProcessError.AssignmentOperatorArgumentsIncompatible(X.Location)))),
+                          _ => Context.Fail<Ty>(ProcessError.ArgumentNotRef(Location))
                       }
             select r;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmAssign(X.Subst(onVar, onType, name), Y.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"({X.Show()} = {Y.Show()})";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Assign(X.Subst(name, term), Y.Subst(name, term));
+
+        public override Term Subst(string name, Ty type) =>
+            Assign(X.Subst(name, type), Y.Subst(name, type));
     }
 
     public record TmTLam(Loc Location, string Subject, Kind Kind, Term Expr) : Term(Location)
@@ -204,15 +230,21 @@ namespace Echo.ActorSys2.Configuration
             Context.localBinding(Subject, new TyVarBind(Kind),
                                  Expr.TypeOf.Map(t => (Ty) new TyAll(Subject, Kind, t)));
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            name == Subject
-                ? Expr.Subst(onVar, onType, name)
-                : new TmTLam(Location, Subject, Kind, Expr.Subst(onVar, onType, name));
-
         public override string Show() =>
             Kind == Kind.Star
                 ? $"<{Subject}> {Expr.Show()}"
                 : $"<{Subject} : {Kind.Show()}> {Expr.Show()}";
+        
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            new TmTLam(Location, Subject, Kind, Expr.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            name == Subject
+                ? Expr.Subst(name, type) 
+                : TLam(Location, Subject, Kind, Expr.Subst(name, type));
     }
 
     public record TmTApp(Term Expr, Ty Type) : Term(Expr.Location)
@@ -236,14 +268,20 @@ namespace Echo.ActorSys2.Configuration
                        }
             select rt;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmTApp(Expr.Subst(onVar, onType, name), onType(name, Type));
-
         public override bool IsVal =>
             true;
 
         public override string Show() =>
             $"{Expr.Show()}<{Type.Show()}>";
+        
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            TApp(Expr.Subst(name, term), Type);
+        
+        public override Term Subst(string name, Ty type) =>
+            TApp(Expr.Subst(name, type), type.Subst(name, type));
     }
 
     public record TmPack(Loc Location, Ty X, Term Expr, Ty Y) : Term(Location)
@@ -268,14 +306,20 @@ namespace Echo.ActorSys2.Configuration
                       }
             select r;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmPack(Location, onType(name, X), Expr.Subst(onVar, onType, name), onType(name, Y));
-        
         public override bool IsVal =>
             Expr.IsVal;
 
         public override string Show() =>
             $"(pack {X.Show()} {Expr.Show()} {Y.Show()})";
+        
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Pack(Location, X, Expr.Subst(name, term), Y);
+        
+        public override Term Subst(string name, Ty type) =>
+            Pack(Location, X.Subst(name, type), Expr.Subst(name, type), Y.Subst(name, type));
     }
     
     public record TmUnpack(Loc Location, string TyX, string X, Term Term1, Term Term2) : Term(Location)
@@ -301,11 +345,17 @@ namespace Echo.ActorSys2.Configuration
                       }
             select r;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmUnpack(Location, TyX, X, Term1.Subst(onVar, onType, name), Term2.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"(unpack {TyX} {X} {Term1.Show()} {Term2.Show()})";
+        
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Unpack(Location, TyX, X, Term1.Subst(name, term), Term2.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Unpack(Location, TyX, X, Term1.Subst(name, type), Term2.Subst(name, type));
     }
 
     public record TmNot(Term Expr) : Term(Expr.Location)
@@ -326,11 +376,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidTypeInferred(Location, "!", t, TyBool.Default)) 
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Not(Expr.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"!{Expr.Show()}";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Not(Expr.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Not(Expr.Subst(name, type));
     } 
     
     public abstract record TmNumberOp(
@@ -373,19 +429,49 @@ namespace Echo.ActorSys2.Configuration
                        }
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}{Op}{Right.Show()}";
+            $"{Left.Show()} {Op} {Right.Show()}";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Construct(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Construct(Left.Subst(name, type), Right.Subst(name, type));
     }
 
-    public record TmMul(Term Left, Term Right) : TmNumberOp(Left, Right, "*", Mul, (x, y) => x * y, (x, y) => x * y);
-    public record TmDiv(Term Left, Term Right) : TmNumberOp(Left, Right, "/", Div, (x, y) => x / y, (x, y) => x / y);
-    public record TmMod(Term Left, Term Right) : TmNumberOp(Left, Right, "%", Mod, (x, y) => x % y, (x, y) => x % y);
-    public record TmSub(Term Left, Term Right) : TmNumberOp(Left, Right, "-", Sub, (x, y) => x - y, (x, y) => x - y);
-    public record TmAdd(Term Left, Term Right) : TmNumberOp(Left, Right, "+", Add, (x, y) => x + y, (x, y) => x + y);
+    public record TmMul(Term Left, Term Right) : TmNumberOp(Left, Right, "*", Mul, (x, y) => x * y, (x, y) => x * y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+        
+    public record TmDiv(Term Left, Term Right) : TmNumberOp(Left, Right, "/", Div, (x, y) => x / y, (x, y) => x / y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+        
+    public record TmMod(Term Left, Term Right) : TmNumberOp(Left, Right, "%", Mod, (x, y) => x % y, (x, y) => x % y)
+    {
+        public override string ToString() =>
+            Show();
+    }
     
+    public record TmSub(Term Left, Term Right) : TmNumberOp(Left, Right, "-", Sub, (x, y) => x - y, (x, y) => x - y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
+    public record TmAdd(Term Left, Term Right) : TmNumberOp(Left, Right, "+", Add, (x, y) => x + y, (x, y) => x + y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
     public abstract record TmBooleanOp(
         Term Left, 
         Term Right, 
@@ -420,15 +506,30 @@ namespace Echo.ActorSys2.Configuration
                        }
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}{Op}{Right.Show()}";
-    }    
+            $"{Left.Show()} {Op} {Right.Show()}";
+        
+        public override string ToString() =>
+            Show();
 
-    public record TmAnd(Term Left, Term Right) : TmBooleanOp(Left, Right, "&&", And, (x, y) => x && y);
-    public record TmOr(Term Left, Term Right) : TmBooleanOp(Left, Right, "||", Or, (x, y) => x || y);
+        public override Term Subst(string name, Term term) =>
+            Construct(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Construct(Left.Subst(name, type), Right.Subst(name, type));
+    }
+
+    public record TmAnd(Term Left, Term Right) : TmBooleanOp(Left, Right, "&&", And, (x, y) => x && y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
+    public record TmOr(Term Left, Term Right) : TmBooleanOp(Left, Right, "||", Or, (x, y) => x || y)
+    {
+        public override string ToString() =>
+            Show();
+    }
 
     public record TmEq(Term Left, Term Right) : Term(Left.Location)
     {
@@ -484,11 +585,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "==", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Eq(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}=={Right.Show()}";
+            $"{Left.Show()} == {Right.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Eq(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Eq(Left.Subst(name, type), Right.Subst(name, type));
     }      
 
     public record TmNeq(Term Left, Term Right) : Term(Left.Location)
@@ -545,11 +652,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "!=", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Neq(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}!={Right.Show()}";
+            $"{Left.Show()} != {Right.Show()}";
+   
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Neq(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Neq(Left.Subst(name, type), Right.Subst(name, type));
     }  
     
     public record TmLt(Term Left, Term Right) : Term(Left.Location)
@@ -578,11 +691,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "<", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Lt(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}<{Right.Show()}";
+            $"{Left.Show()} < {Right.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Lt(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Lt(Left.Subst(name, type), Right.Subst(name, type));
     }      
     
     public record TmLte(Term Left, Term Right) : Term(Left.Location)
@@ -611,11 +730,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, "<=", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Lte(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}<={Right.Show()}";
+            $"{Left.Show()} <= {Right.Show()}";
+   
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Lte(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Lte(Left.Subst(name, type), Right.Subst(name, type));
     }
     
     public record TmGt(Term Left, Term Right) : Term(Left.Location)
@@ -644,11 +769,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, ">", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Gt(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}>{Right.Show()}";
+            $"{Left.Show()} > {Right.Show()}";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Gt(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Gt(Left.Subst(name, type), Right.Subst(name, type));
     }      
     
     public record TmGte(Term Left, Term Right) : Term(Left.Location)
@@ -677,11 +808,17 @@ namespace Echo.ActorSys2.Configuration
                            : Context.Fail<Ty>(ProcessError.InvalidComparisonType(Location, ">=", t1, t2))
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Gte(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
-
         public override string Show() =>
-            $"{Left.Show()}>={Right.Show()}";
+            $"{Left.Show()} >= {Right.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Gte(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Gte(Left.Subst(name, type), Right.Subst(name, type));
     }      
     
     public abstract record TmBitwiseOp(
@@ -724,16 +861,37 @@ namespace Echo.ActorSys2.Configuration
                        }
             select ty;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Construct(Left.Subst(onVar, onType, name), Right.Subst(onVar, onType, name));
         public override string Show() =>
-            $"{Left.Show()}{Op}{Right.Show()}";
+            $"{Left.Show()} {Op} {Right.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Construct(Left.Subst(name, term), Right.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Construct(Left.Subst(name, type), Right.Subst(name, type));
     }
 
-    public record TmBitwiseAnd(Term Left, Term Right) : TmBitwiseOp(Left, Right, "&", BitwiseAnd, (x, y) => x & y, (x, y) => x & y);
-    public record TmBitwiseOr(Term Left, Term Right) : TmBitwiseOp(Left, Right, "|", BitwiseOr, (x, y) => x | y, (x, y) => x | y);
-    public record TmBitwiseXor(Term Left, Term Right) : TmBitwiseOp(Left, Right, "^", BitwiseXor, (x, y) => x ^ y, (x, y) => x ^ y);
-    
+    public record TmBitwiseAnd(Term Left, Term Right) : TmBitwiseOp(Left, Right, "&", BitwiseAnd, (x, y) => x & y, (x, y) => x & y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
+    public record TmBitwiseOr(Term Left, Term Right) : TmBitwiseOp(Left, Right, "|", BitwiseOr, (x, y) => x | y, (x, y) => x | y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
+    public record TmBitwiseXor(Term Left, Term Right) : TmBitwiseOp(Left, Right, "^", BitwiseXor, (x, y) => x ^ y, (x, y) => x ^ y)
+    {
+        public override string ToString() =>
+            Show();
+    }
+
     public record TmFail(Loc Location, Error Message) : Term(Location)
     {
         public override Context<Term> Eval1 =>
@@ -748,10 +906,17 @@ namespace Echo.ActorSys2.Configuration
         public override bool IsNumeric =>
             false;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            this;
         public override string Show() =>
             $"(fail: {Message})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+        
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmNamed(Loc Location, string Name, Term Expr) : Term(Location)
@@ -769,18 +934,21 @@ namespace Echo.ActorSys2.Configuration
         public override bool IsNumeric =>
             Expr.IsNumeric;
 
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmNamed(Location, Name, Expr.Subst(onVar, onType, name));
-
         public override string Show() =>
             $"{Name}: {Expr.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Named(Location, Name, Expr.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Named(Location, Name, Expr.Subst(name, type));
     }
 
     public record TmArray(Loc Location, Seq<Term> Values) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmArray(Location, Values.Map(v => v.Subst(onVar, onType, name)));
- 
         public override bool IsVal =>
             Values.ForAll(static f => f.IsVal);
 
@@ -806,13 +974,19 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"[{string.Join(", ", Values.Map(v => v.Show()))}]";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Array(Location, Values.Map(v => v.Subst(name, term)));
+        
+        public override Term Subst(string name, Ty type) =>
+            Array(Location, Values.Map(v => v.Subst(name, type)));
     }
 
     public record TmTuple(Loc Location, Seq<Term> Values) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmTuple(Location, Values.Map(v => v.Subst(onVar, onType, name)));
- 
         public override bool IsVal =>
             Values.ForAll(static f => f.IsVal);
 
@@ -831,6 +1005,15 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"({string.Join(", ", Values.Map(v => v.Show()))})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Tuple(Values.Map(v => v.Subst(name, term)));
+        
+        public override Term Subst(string name, Ty type) =>
+            Tuple(Values.Map(v => v.Subst(name, type)));
     }
     
     public record TmTrue(Loc Location) : Term(Location)
@@ -846,6 +1029,15 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"true";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+        
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmFalse(Loc Location) : Term(Location)
@@ -861,13 +1053,19 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"false";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+        
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmIf(Loc Location, Term Pred, Term TrueTerm, Term FalseTerm) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmIf(Location, Pred.Subst(onVar, onType, name), TrueTerm.Subst(onVar, onType, name), FalseTerm.Subst(onVar, onType, name));
-
         public override Context<Term> Eval1 =>
             Pred switch
             {
@@ -892,15 +1090,28 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"(if {Pred.Show()} then {TrueTerm.Show()} else {FalseTerm.Show()})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            If(Pred.Subst(name, term), TrueTerm.Subst(name, term), FalseTerm.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            If(Pred.Subst(name, type), TrueTerm.Subst(name, type), FalseTerm.Subst(name, type));
     }
 
-    public record Case(string Tag, string Match, Term Body);
+    public record Case(string Tag, string Match, Term Body)
+    {
+        public Case Subst(string name, Term term) =>
+            this with {Body = Body.Subst(name, term)};
+        
+        public Case Subst(string name, Ty type) =>
+            this with {Body = Body.Subst(name, type)};
+    }
 
     public record TmCase(Loc Location, Term Subject, Seq<Case> Cases) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmCase(Location, Subject.Subst(onVar, onType, name), Cases.Map(cs => new Case(cs.Tag, cs.Match, cs.Body.Subst(onVar, onType, name))));
-
         public override Context<Term> Eval1 =>
             Subject switch
             {
@@ -946,13 +1157,19 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             $"(case {Subject} with {string.Join(", ", Cases.Map(c => Show()))})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Case(Subject.Subst(name, term), Cases.Map(c => c.Subst(name, term)));
+        
+        public override Term Subst(string name, Ty type) =>
+            Case(Subject.Subst(name, type), Cases.Map(c => c.Subst(name, type)));
     }
 
     public record TmTag(Loc Location, string TagName, Term Term, Ty Type) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmTag(Location, TagName, Term.Subst(onVar, onType, name), onType(name, Type));
-
         public override bool IsVal =>
             Term.IsVal;
 
@@ -980,13 +1197,19 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"({TagName} {Term.Show()} : {Type.Show()})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Tag(TagName, Term.Subst(name, term), Type);
+        
+        public override Term Subst(string name, Ty type) =>
+            Tag(TagName, Term.Subst(name, type), Type.Subst(name, type));
     }
 
     public record TmVar(Loc Location, string Name) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            onVar(Location, name, Name, this);
-
         public override Context<Term> Eval1 =>
             from b in Context.getTmBinding(Location, Name)
             from r in b switch
@@ -1000,14 +1223,22 @@ namespace Echo.ActorSys2.Configuration
             Context.getType(Location, Name);
         
         public override string Show() =>
-            $"{Name}";
+            Name;
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            name == Name
+                ? term
+                : this;
+        
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmLam(Loc Location, string Name, Ty Type, Term Body) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            Lam(Location, Name, onType(name, Type), Body.Subst(onVar, onType, name));
-
         public override bool IsVal =>
             true;
 
@@ -1023,13 +1254,21 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"(lam {Name} : {Type.Show()} => {Body.Show()})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            name == Name
+                ? this
+                : Lam(Location, Name, Type, Body.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            Lam(Location, Name, Type.Subst(name, type), Body.Subst(name, type));
     }
 
     public record TmApp(Loc Location, Term X, Term Y) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmApp(Location, X.Subst(onVar, onType, name), Y.Subst(onVar, onType, name));
- 
         public override Context<Term> Eval1 =>
             X switch
             {
@@ -1136,13 +1375,19 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{X.Show()} {Y.Show()}";
+   
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            App(X.Subst(name, term), Y.Subst(name, term));
+        
+        public override Term Subst(string name, Ty type) =>
+            App(X.Subst(name, type), Y.Subst(name, type));
     }
 
     public record TmLet(Loc Location, string Name, Term Value, Term Body) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmLet(Location, Name, Value.Subst(onVar, onType, name), Body.Subst(onVar, onType, name));
-        
         public override Context<Term> Eval1 =>
             Value switch
             {
@@ -1158,14 +1403,22 @@ namespace Echo.ActorSys2.Configuration
             select r;
         
         public override string Show() =>
-            $"(let {Name} = {Value} in {Body.Show()})";
+            $"(let {Name} = {Value.Show()} in {Body.Show()})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            name == Name
+                ? Let(Location, Name, Value.Subst(name, term), Body)
+                : Let(Location, Name, Value.Subst(name, term), Body.Subst(name, term));
+
+        public override Term Subst(string name, Ty type) =>
+            Let(Location, Name, Value.Subst(name, type), Body.Subst(name, type));
     }
 
     public record TmFix(Loc Location, Term Term) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmFix(Location, Term.Subst(onVar, onType, name));
-
         public override Context<Term> Eval1 =>
             Term switch
             {
@@ -1190,6 +1443,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"(fix {Term.Show()})";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Fix(Term.Subst(name, term));
+
+        public override Term Subst(string name, Ty type) =>
+            Fix(Term.Subst(name, type));
     }
 
     public record TmString(Loc Location, string Value) : Term(Location)
@@ -1205,6 +1467,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"\"{Value}\"";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmInt(Loc Location, long Value) : Term(Location)
@@ -1220,6 +1491,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmFloat(Loc Location, double Value) : Term(Location)
@@ -1235,6 +1515,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmProcessId(Loc Location, ProcessId Value) : Term(Location)
@@ -1250,6 +1539,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmProcessName(Loc Location, ProcessName Value) : Term(Location)
@@ -1265,6 +1563,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmProcessFlag(Loc Location, ProcessFlags Value) : Term(Location)
@@ -1280,6 +1587,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmTime(Loc Location, Time Value) : Term(Location)
@@ -1295,6 +1611,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmMessageDirective(Loc Location, MessageDirective Value) : Term(Location)
@@ -1310,6 +1635,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmDirective(Loc Location, Directive Value) : Term(Location)
@@ -1325,6 +1659,15 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Value}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmUnit(Loc Location) : Term(Location)
@@ -1340,13 +1683,19 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"unit";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            this;
     }
 
     public record TmAscribe (Loc Location, Term Term, Ty Type) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmAscribe(Location, Term.Subst(onVar, onType, name), onType(name, Type));
-
         public override Context<Term> Eval1 =>
             Term switch
             {
@@ -1359,24 +1708,39 @@ namespace Echo.ActorSys2.Configuration
             from __ in Context.checkKindStar(Location, Type)
             from t1 in Term.TypeOf
             from eq in t1.Equiv(Type)
-            from rt in eq ? Context.Pure(Type) :  Context.Fail<Ty>(ProcessError.AscribeMismatch(Location))
+            from rt in eq ? Context.Pure(Type) : Context.Fail<Ty>(ProcessError.AscribeMismatch(Location))
             select rt;
         
         public override string Show() =>
             $"{Term.Show()} : {Type.Show()}";
+    
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Ascribe(Term.Subst(name, term), Type);
+
+        public override Term Subst(string name, Ty type) =>
+            Ascribe(Term.Subst(name, type), Type.Subst(name, type));
     }
 
     public record Field(string Name, Term Value)
     {
         public string Show() =>
             $"{Name} : {Value.Show()}";
+   
+        public override string ToString() =>
+            Show();
+
+        public Field Subst(string name, Term term) =>
+            new Field(Name, Value.Subst(name, term));
+
+        public Field Subst(string name, Ty type) =>
+            new Field(Name, Value.Subst(name, type));
     }
 
     public record TmRecord (Loc Location, Seq<Field> Fields) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmRecord(Location, Fields.Map(cs => new Field(cs.Name, cs.Value.Subst(onVar, onType, name))));
-
         public override bool IsVal =>
             Fields.ForAll(f => f.Value.IsVal);
 
@@ -1393,13 +1757,19 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{{ { string.Join(", ", Fields.Map(f => f.Show())) } }}";
+ 
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Record(Location, Fields.Map(f => f.Subst(name, term)));
+
+        public override Term Subst(string name, Ty type) =>
+            Record(Location, Fields.Map(f => f.Subst(name, type)));
     }
 
     public record TmProj (Loc Location, Term Term, string Member) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmProj(Location, Term.Subst(onVar, onType, name), Member);
-
         public override Context<Term> Eval1 =>
             Term switch
             {
@@ -1431,13 +1801,19 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"{Term.Show()}.{Member}";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            Proj(Term.Subst(name, term), Member);
+
+        public override Term Subst(string name, Ty type) =>
+            Proj(Term.Subst(name, type), Member);
     }
 
     public record TmInert (Loc Location, Ty Type) : Term(Location)
     {
-        public override Term Subst(Func<Loc, string, string, Term, Term> onVar, Func<string, Ty, Ty> onType, string name) =>
-            new TmInert(Location, onType(name, Type));
-     
         public override Context<Term> Eval1 =>
             Context.NoRuleAppliesTerm;
 
@@ -1446,5 +1822,14 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"(inert {Type.Show()})";
+
+        public override string ToString() =>
+            Show();
+
+        public override Term Subst(string name, Term term) =>
+            this;
+
+        public override Term Subst(string name, Ty type) =>
+            Inert(Location, Type.Subst(name, type));
     }
 }

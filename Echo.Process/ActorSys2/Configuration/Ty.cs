@@ -23,9 +23,6 @@ namespace Echo.ActorSys2.Configuration
         public virtual Context<Kind> KindOf(Loc location) =>
             Context.StarKind;
 
-        public override string ToString() =>
-            Show();
-
         public Seq<TyVar> GetVars() =>
             GetVarsSeq().Strict().Distinct();
         
@@ -114,6 +111,9 @@ namespace Echo.ActorSys2.Configuration
        
         internal override Seq<TyVar> GetVarsSeq() =>
             Type.GetVarsSeq();
+
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -148,6 +148,9 @@ namespace Echo.ActorSys2.Configuration
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());
+
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -181,6 +184,9 @@ namespace Echo.ActorSys2.Configuration
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());
+ 
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -200,7 +206,8 @@ namespace Echo.ActorSys2.Configuration
             rhs switch
             {
                 TyLam rlam when Kind == rlam.Kind =>
-                    Context.localBinding(Subject, TyNameBind.Default, Type.Equiv(rlam.Type)),
+                    Context.localBinding(Subject, TyNameBind.Default, 
+                                         Type.Equiv(rlam.Type)),
 
                 TyVar tvar => Context.getTyLam(tvar.Name).Bind(this.Equiv) | @catch(ProcessError.NoRuleApplies, false),
                 _          => Context.False
@@ -210,10 +217,14 @@ namespace Echo.ActorSys2.Configuration
             $"{Subject} :: {Kind.Show()} => {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
-            Context.localBinding(Subject, new TyVarBind(Kind), Type.KindOf(location).Map(k2 => Kind.Arr(Kind, k2)));
+            Context.localBinding(Subject, new TyVarBind(Kind), 
+                                 Type.KindOf(location).Map(k2 => Kind.Arr(Kind, k2)));
        
         internal override Seq<TyVar> GetVarsSeq() =>
             new TyVar(Subject).Cons(Type.GetVarsSeq());
+   
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -262,6 +273,9 @@ namespace Echo.ActorSys2.Configuration
        
         internal override Seq<TyVar> GetVarsSeq() =>
             X.GetVarsSeq() + Y.GetVarsSeq();
+   
+        public override string ToString() =>
+            Show();
     }
     
     /// <summary>
@@ -280,7 +294,7 @@ namespace Echo.ActorSys2.Configuration
             select result;
 
         public override string Show() =>
-            $"{Name}";
+            Name;
 
         public override Ty Subst(string name, Ty type) =>
             Name == name ? type : this;
@@ -290,6 +304,9 @@ namespace Echo.ActorSys2.Configuration
        
         internal override Seq<TyVar> GetVarsSeq() =>
             Seq1(this);
+    
+        public override string ToString() =>
+            Show();
     }
         
     /// <summary>
@@ -301,7 +318,10 @@ namespace Echo.ActorSys2.Configuration
             Context.Pure(rhs is TyId (var n) && Name == n);
 
         public override string Show() =>
-            $"{Name}";
+            Name;
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -332,6 +352,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             X.GetVarsSeq() + Y.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -351,6 +374,9 @@ namespace Echo.ActorSys2.Configuration
 
         public override string Show() =>
             "[]";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -377,6 +403,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Type.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -392,6 +421,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal Seq<TyVar> GetVarsSeq() =>
             Type.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -424,6 +456,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Fields.Bind(static f => f.GetVarsSeq());
+    
+        public override string ToString() =>
+            Show();
     }
     
     /// <summary>
@@ -451,6 +486,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Types.Bind(t => t.GetVarsSeq());
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -477,6 +515,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Value.GetVarsSeq();
+   
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -503,6 +544,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Value.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -529,6 +573,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Value.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -556,6 +603,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Value.GetVarsSeq();
+    
+        public override string ToString() =>
+            Show();
     }
 
     public record TyVariant(Seq<FieldTy> Fields) : Ty
@@ -584,6 +634,9 @@ namespace Echo.ActorSys2.Configuration
 
         internal override Seq<TyVar> GetVarsSeq() =>
             Fields.Bind(f => f.GetVarsSeq());
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -602,6 +655,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"unit";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -620,6 +676,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"bool";
+    
+        public override string ToString() =>
+            Show();
     }
     
     /// <summary>
@@ -638,6 +697,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"int";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -656,6 +718,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"float";
+   
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -674,6 +739,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"string";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -692,6 +760,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"process-id";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -710,6 +781,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"process-name";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -728,6 +802,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"process-flag";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -746,6 +823,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"time";
+    
+        public override string ToString() =>
+            Show();
     }
 
     /// <summary>
@@ -764,6 +844,9 @@ namespace Echo.ActorSys2.Configuration
     
         public override string Show() =>
             $"message-directive";
+    
+        public override string ToString() =>
+            Show();
     }
     
     /// <summary>
@@ -782,5 +865,8 @@ namespace Echo.ActorSys2.Configuration
         
         public override string Show() =>
             $"directive";
+    
+        public override string ToString() =>
+            Show();
     }
 }
