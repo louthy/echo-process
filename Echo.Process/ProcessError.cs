@@ -84,8 +84,8 @@ namespace Echo
         public static Error FunctionTypeExpected(Loc loc) =>
             Error.New(90010015, $"{loc}: function type expected");
         
-        public static Error AscribeMismatch(Loc loc) =>
-            Error.New(90010016, $"{loc}: body of as-term does not have the expected type");
+        public static Error AscribeMismatch(Loc loc, Ty expected, Ty got) =>
+            Error.New(90010016, $"{loc}: body of as-term does not have the expected type, expected: {expected}, got: {got}");
 
         public static Error FieldNotMemberOfType(Loc loc, string member) =>
             Error.New(90010017, $"{loc}: record member not defined: " + member);
@@ -145,10 +145,10 @@ namespace Echo
             Error.New(90010035, $"{loc}: no kind recorded for variable `{name}`");
         
         public static Error StarKindExpected(Loc loc) =>
-            Error.New(90010036, $"{loc}: `*` kind expected");
+            Error.New(90010036, $"{loc}: * kind expected");
         
-        public static Error ArrowKindExpected(Loc loc) =>
-            Error.New(90010037, $"{loc}: `* => *` kind expected");
+        public static Error ArrowKindExpected(Loc loc, Ty lam, Ty arg, Kind got) =>
+            Error.New(90010037, $"{loc}: * => * kind expected when type-abstraction: {lam} is applied to type-parameter: {arg}, instead got: {got}");
 
         public static Error ArgumentNotRef(Loc loc) =>
             Error.New(90010038, $"{loc}: argument is not a Ref");

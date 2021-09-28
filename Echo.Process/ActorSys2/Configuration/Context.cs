@@ -185,13 +185,13 @@ namespace Echo.ActorSys2.Configuration
         /// <summary>
         /// Get type of the binding
         /// </summary>
-        public static Context<Ty> getType(Loc loc, string name) =>
+        public static Context<Ty> getTmType(Loc loc, string name) =>
             from b in getTmBinding(loc, name)
             from t in b switch
                       {
                           TmVarBind (var ty)                              => Pure(ty),
                           TmAbbBind (_, var oty) when oty.Case is (Ty ty) => Pure(ty),
-                          TmAbbBind (_, var oty) when oty.Case is null    => Fail<Ty>(ProcessError.NoTypeRecordedForVariable(loc, name)),
+                          TmAbbBind (_, var oty)          Case            => Fail<Ty>(ProcessError.NoTypeRecordedForVariable(loc, name)),
                           _                                               => Fail<Ty>(ProcessError.WrongTypeOfBindingForVariable(loc, name))
                       }
             select t;
@@ -227,18 +227,24 @@ namespace Echo.ActorSys2.Configuration
         public static Context<Ty> getTyLam(string name) =>
             getTyBinding(Loc.None, name).Bind(b => b is TyLamBind ab ? Context.Pure(ab.Type) :  Context.NoRuleAppliesTy);
 
-        public static Context<Ty> computeTy(Ty ty) =>
+        public static Context<Ty> computeTy(Loc location, Ty ty) =>
             ty switch
             {
+                TyId (var n)  => getTyLam(n),
                 TyVar (var n) => getTyLam(n),
                 _             => Context.Fail<Ty>(ProcessError.NoRuleApplies)
             };
 
-        public static Context<Ty> simplifyTy(Ty ty) =>
-           (from ty1 in computeTy(ty)
-            from ty2 in simplifyTy(ty1)
-            select ty2)
-          | @catch(ProcessError.NoRuleApplies, ty);
+        public static Context<Ty> simplifyTy(Loc location, Ty ty) =>
+            from pty in ty switch
+                        {
+                            TyApp(var tyx, var tyy) => simplifyTy(location, tyx).Map<Ty>(lam => new TyApp(lam, tyy)),
+                            _                       => Context.Pure(ty)
+                        }
+            from rty in (from t1 in computeTy(location, pty)
+                         from t2 in simplifyTy(location, t1)
+                         select t2) | @catch(ProcessError.NoRuleApplies, pty)
+            select rty;
 
         /// <summary>
         /// Add a term to the store

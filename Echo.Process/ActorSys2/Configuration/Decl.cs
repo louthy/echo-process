@@ -59,11 +59,8 @@ namespace Echo.ActorSys2.Configuration
     public record DeclVar(Loc Location, string Name, Prototype Prototype, Term Value) : Decl(Location, Name)
     {
         public override Context<Unit> TypeCheck() =>
-            from _1 in Context.log(Prototype.ReturnType.Case)
             from tm in AddParameters(Prototype.Parameters, AddReturn(Value, Prototype)).Bind(static tm => tm.Eval)
-            from _2 in Context.log(tm)
             from ty in tm.TypeOf
-            from _3 in Context.log(ty)
             from __ in Context.addTop(Location, Name, new TmAbbBind(tm, ty))
             select unit;
 

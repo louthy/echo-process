@@ -210,6 +210,7 @@ namespace Echo.ActorSys2.Configuration
                                          Type.Equiv(rlam.Type)),
 
                 TyVar tvar => Context.getTyLam(tvar.Name).Bind(this.Equiv) | @catch(ProcessError.NoRuleApplies, false),
+                TyId  tid  => Context.getTyLam(tid.Name).Bind(this.Equiv) | @catch(ProcessError.NoRuleApplies, false),
                 _          => Context.False
             };
         
@@ -267,7 +268,7 @@ namespace Echo.ActorSys2.Configuration
                                 ky == k1
                                     ? Context.Pure(k2)
                                     : Context.Fail<Kind>(ProcessError.ParameterKindMismatch(location, k1, k2)),
-                           _ => Context.Fail<Kind>(ProcessError.ArrowKindExpected(location)), 
+                           _ => Context.Fail<Kind>(ProcessError.ArrowKindExpected(location, X, Y, kx)), 
                        }
             select kn;
        
@@ -314,8 +315,18 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyId(string Name) : Ty
     {
+        public override Context<Ty> Compute() =>
+            Context.getTmType(Loc.None, Name) | @catch((Ty)this);
+ 
+        public override Context<Kind> KindOf(Loc location) =>
+            Context.getKind(location, Name) | @catch(Kind.Star);
+       
         public override Context<bool> Equiv(Ty rhs) =>
-            Context.Pure(rhs is TyId (var n) && Name == n);
+            from isTyAbb in Context.isTyLam(Name)
+            from result in isTyAbb
+                               ? Context.getTyLam(Name).Bind(t => t.Equiv(rhs))
+                               : Context.Pure(rhs is TyId (var n) && Name == n)
+            select result;
 
         public override string Show() =>
             Name;

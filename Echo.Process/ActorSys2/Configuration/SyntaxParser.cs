@@ -294,7 +294,7 @@ namespace Echo.ActorSys2.Configuration
                                             from _ in symbol(":")
                                             from t in type
                                             select t)
-                            select new Prototype(args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type)), retr);
+                            select new Prototype(args.Map(a => new Parameter(mkLoc(a.Name.BeginPos, a.Name.EndPos), a.Name.Value, a.Type)).Strict(), retr);
  
             var lambda = from begi in getPos
                          from prot in prototype
