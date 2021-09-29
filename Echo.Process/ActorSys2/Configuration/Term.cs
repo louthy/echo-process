@@ -1128,7 +1128,7 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             from sbj1 in Subject.TypeOf
-            from sbj2 in Context.simplifyTy(Location, sbj1)
+            from sbj2 in sbj1.Simplify()
             from resu in sbj2 switch
                          {
                              TyVariant (var fieldtys) =>
@@ -1178,7 +1178,7 @@ namespace Echo.ActorSys2.Configuration
             select new TmTag(Location, TagName, t, Type) as Term;
 
         public override Context<Ty> TypeOf =>
-            from type in Context.simplifyTy(Location, Type)
+            from type in Type.Simplify()
             from resu in type switch
                          {
                              TyVariant (var fieldTys) =>
@@ -1300,7 +1300,7 @@ namespace Echo.ActorSys2.Configuration
         static Context<TyArr> FindArrow(Loc loc, Ty ty) =>
             ty switch
             {
-                TyVar var   => Context.simplifyTy(loc, var).Bind(ty => FindArrow(loc, ty)),
+                TyVar var   => var.Simplify().Bind(ty => FindArrow(loc, ty)),
                 TyArr arr   => Context.Pure(arr),
                 TyAll all   => FindArrow(loc, all.Type),
                 TySome some => FindArrow(loc, some.Type),
@@ -1311,7 +1311,7 @@ namespace Echo.ActorSys2.Configuration
             ty switch
             {
                 // The function is a type-variable, so resolve it before continuing 
-                TyVar var => Context.simplifyTy(loc, var).Bind(ty => Subst(loc, ty, arg, param)),
+                TyVar var => var.Simplify().Bind(ty => Subst(loc, ty, arg, param)),
 
                 // Reached the function, so test argument/parameter equivalence.  If they match, return the co-domain type
                 TyArr arr =>
@@ -1430,7 +1430,7 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             from tyt1 in Term.TypeOf
-            from simp in Context.simplifyTy(Location, tyt1)
+            from simp in tyt1.Simplify()
             from resu in simp switch
                          {
                              TyArr (var tyT11, var tyT12) =>
@@ -1707,8 +1707,7 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Ty> TypeOf =>
             from __ in Context.checkKindStar(Location, Type)
             from t1 in Term.TypeOf
-            from t2 in Context.simplifyTy(Location, Type)
-            from _1 in Context.log($"ASCRIBE: {t2}")
+            from _1 in Context.log($"ASCRIBE: {t1} : {Type}")
             from eq in t1.Equiv(Type)
             from rt in eq ? Context.Pure(Type) : Context.Fail<Ty>(ProcessError.AscribeMismatch(Location, Type, t1))
             select rt;
@@ -1788,7 +1787,7 @@ namespace Echo.ActorSys2.Configuration
 
         public override Context<Ty> TypeOf =>
             from ty in Term.TypeOf
-            from st in Context.simplifyTy(Location, ty)
+            from st in ty.Simplify()
             from rt in st switch
                        {
                            TyRecord (var fieldtys) =>

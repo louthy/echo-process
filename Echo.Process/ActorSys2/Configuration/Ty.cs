@@ -6,16 +6,30 @@ namespace Echo.ActorSys2.Configuration
 {
     public abstract record Ty
     {
-        public abstract Context<bool> Equiv(Ty rhs);
+        public abstract Context<bool> EquivCase(Ty rhs);
         public abstract string Show();
 
-        public virtual Context<Ty> Compute() =>
+        public Context<bool> Equiv(Ty rhs) =>
+            from l in Simplify()
+            from r in rhs.Simplify()
+            from f in l.EquivCase(r)
+            select f;
+
+        public Context<Ty> Compute() =>
+            ComputeCase();
+
+        public Context<Ty> Simplify() =>
+            from ty1 in SimplifyCase()
+            from ty2 in (from cty in ty1.Compute()
+                         from sty in cty.Simplify()
+                         select sty) | @catch(ProcessError.NoRuleApplies, ty1)
+            select ty2;
+ 
+        public virtual Context<Ty> ComputeCase() =>
             Context.NoRuleAppliesTy;
-        
-        public virtual Context<Ty> Simplify() =>
-            from t in Compute()
-            from s in t.Simplify() | @catch(ProcessError.NoRuleApplies, t)
-            select t;
+
+        public virtual Context<Ty> SimplifyCase() =>
+            Context.Pure(this);
 
         public virtual Ty Subst(string name, Ty ty) =>
             this;
@@ -99,7 +113,7 @@ namespace Echo.ActorSys2.Configuration
         public override Ty Subst(string name, Ty type) =>
             new TyRef(Type.Subst(name, type));
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyRef tref => Type.Equiv(tref.Type),
@@ -130,7 +144,7 @@ namespace Echo.ActorSys2.Configuration
                 ? this  // Don't wipe out local alls
                 : new TyAll(Subject, Kind, Type.Subst(name, type));
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyAll rall && Kind == rall.Kind
                 ? Context.localBinding(Subject, TyNameBind.Default,
                                        Type.Equiv(rall.Type))
@@ -167,7 +181,7 @@ namespace Echo.ActorSys2.Configuration
                 ? this // Don't wipe out local somes
                 : new TySome(Subject, Kind, Type.Subst(name, type));
                 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TySome rsome && Kind == rsome.Kind
                 ? Context.localBinding(Subject, TyNameBind.Default, Type.Equiv(rsome.Type))
                 : Context.False;
@@ -202,7 +216,7 @@ namespace Echo.ActorSys2.Configuration
                 ? new TyLam(name, Kind, Type.Subst(name, type))
                 : new TyLam(Subject, Kind, Type.Subst(name, type));
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyLam rlam when Kind == rlam.Kind =>
@@ -233,23 +247,20 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyApp(Ty X, Ty Y) : Ty
     {
-        public override Context<Ty> Compute() =>
+        public override Context<Ty> ComputeCase() =>
             X switch
             {
                 TyLam (var x, _, var body) => Context.Pure(body.Subst(x, Y)),
                 _                          => Context.NoRuleAppliesTy
             };
  
-        public override Context<Ty> Simplify() =>
-            from x in X.Simplify()
-            from tyt in Context.Pure<Ty>(new TyApp(x, Y))
-            from res in tyt.Simplify()
-            select res; 
+        public override Context<Ty> SimplifyCase() =>
+            X.Simplify().Map<Ty>(x => new TyApp(x, Y)); 
         
         public override Ty Subst(string name, Ty type) =>
             new TyApp(X.Subst(name, type), Y.Subst(name, type));
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyApp rapp
                 ? from x in X.Equiv(rapp.X)
                   from y in Y.Equiv(rapp.Y)
@@ -284,10 +295,10 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyVar(string Name) : Ty
     {
-        public override Context<Ty> Compute() =>
+        public override Context<Ty> ComputeCase() =>
             Context.getTyLam(Name);
  
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             from isTyAbb in Context.isTyLam(Name)
             from result in isTyAbb
                                ? Context.getTyLam(Name).Bind(t => t.Equiv(rhs))
@@ -315,13 +326,13 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyId(string Name) : Ty
     {
-        public override Context<Ty> Compute() =>
-            Context.getTmType(Loc.None, Name) | @catch((Ty)this);
+        public override Context<Ty> ComputeCase() =>
+            Context.getTyLam(Name) | @catch(ProcessError.NoRuleApplies, (Ty)this);
  
         public override Context<Kind> KindOf(Loc location) =>
             Context.getKind(location, Name) | @catch(Kind.Star);
        
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             from isTyAbb in Context.isTyLam(Name)
             from result in isTyAbb
                                ? Context.getTyLam(Name).Bind(t => t.Equiv(rhs))
@@ -340,10 +351,10 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyArr(Ty X, Ty Y) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyArr mr
-                ? from l in X.Equiv(Y)
-                  from r in mr.X.Equiv(mr.Y)
+                ? from l in X.Equiv(X)
+                  from r in Y.Equiv(mr.Y)
                   select l && r
                 : Context.False;
 
@@ -375,7 +386,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyNil(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyNil => Context.True,
@@ -395,7 +406,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyArray(Ty Type) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyNil     => Context.True,
@@ -442,7 +453,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyRecord(Seq<FieldTy> Fields) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyRecord mr
                 ? Fields.Count == mr.Fields.Count
                       ? from xs in Fields.OrderBy(f => f.Name).ToSeq()
@@ -477,7 +488,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyTuple(Seq<Ty> Types) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyTuple mr
                 ? Types.Zip(mr.Types)
                        .Sequence(p => p.Left.Equiv(p.Right))
@@ -507,7 +518,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyProcess(TyRecord Value) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyProcess rp => Value.Equiv(rp.Value),
@@ -536,7 +547,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyRouter(TyRecord Value) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyRouter rp => Value.Equiv(rp.Value),
@@ -565,7 +576,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyCluster(TyRecord Value) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyCluster rp => Value.Equiv(rp.Value),
@@ -594,7 +605,7 @@ namespace Echo.ActorSys2.Configuration
     /// </summary>
     public record TyStrategy(StrategyType Type, TyRecord Value) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyStrategy rp => Type == rp.Type
@@ -621,7 +632,7 @@ namespace Echo.ActorSys2.Configuration
 
     public record TyVariant(Seq<FieldTy> Fields) : Ty
     {
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyVariant mr
                 ? Fields.Count == mr.Fields.Count
                       ? from xs in Fields.Zip(mr.Fields)
@@ -657,7 +668,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyUnit();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyUnit => Context.True,
@@ -678,7 +689,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyBool(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyBool => Context.True,
@@ -699,7 +710,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyInt(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyInt => Context.True,
@@ -720,7 +731,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyFloat(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyFloat => Context.True,
@@ -741,7 +752,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyString(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyString => Context.True,
@@ -762,7 +773,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyProcessId();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyProcessId => Context.True,
@@ -783,7 +794,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyProcessName();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyProcessName => Context.True,
@@ -804,7 +815,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyProcessFlag(); 
         
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyProcessFlag => Context.True,
@@ -825,7 +836,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyTime();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyTime => Context.True,
@@ -846,7 +857,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyMessageDirective();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyMessageDirective => Context.True,
@@ -867,7 +878,7 @@ namespace Echo.ActorSys2.Configuration
     {
         public static readonly Ty Default = new TyDirective();
 
-        public override Context<bool> Equiv(Ty rhs) =>
+        public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
             {
                 TyDirective => Context.True,
