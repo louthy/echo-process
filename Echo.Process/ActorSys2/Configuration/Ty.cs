@@ -43,7 +43,7 @@ namespace Echo.ActorSys2.Configuration
         internal virtual Seq<TyVar> GetVarsSeq() =>
             Empty;
 
-        public Ty Ref(Ty Type) =>
+        public static Ty Ref(Ty Type) =>
             new TyRef(Type);
 
         public static Ty All(string Subject, Kind Kind, Ty Type) =>
@@ -111,7 +111,7 @@ namespace Echo.ActorSys2.Configuration
     public record TyRef(Ty Type) : Ty
     {
         public override Ty Subst(string name, Ty type) =>
-            new TyRef(Type.Subst(name, type));
+            Ref(Type.Subst(name, type));
 
         public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
@@ -142,7 +142,7 @@ namespace Echo.ActorSys2.Configuration
         public override Ty Subst(string name, Ty type) =>
             name == Subject 
                 ? this  // Don't wipe out local alls
-                : new TyAll(Subject, Kind, Type.Subst(name, type));
+                : All(Subject, Kind, Type.Subst(name, type));
 
         public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyAll rall && Kind == rall.Kind
@@ -151,7 +151,9 @@ namespace Echo.ActorSys2.Configuration
                 : Context.False;
 
         public override string Show() =>
-            $"forall {Subject} :: {Kind.Show()}. {Type.Show()}";
+            Kind == Kind.Star
+                ? $"forall {Subject}. {Type.Show()}"
+                : $"forall {Subject} :: ({Kind.Show()}). {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
             Context.localBinding(Subject, new TyVarBind(Kind),
@@ -179,7 +181,7 @@ namespace Echo.ActorSys2.Configuration
         public override Ty Subst(string name, Ty type) =>
             name == Subject 
                 ? this // Don't wipe out local somes
-                : new TySome(Subject, Kind, Type.Subst(name, type));
+                : Some(Subject, Kind, Type.Subst(name, type));
                 
         public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TySome rsome && Kind == rsome.Kind
@@ -187,7 +189,9 @@ namespace Echo.ActorSys2.Configuration
                 : Context.False;
 
         public override string Show() =>
-            $"exists {Subject} :: {Kind.Show()} . {Type.Show()}";
+            Kind == Kind.Star
+                ? $"exists {Subject}. {Type.Show()}"
+                : $"exists {Subject} :: ({Kind.Show()}). {Type.Show()}";
 
         public override Context<Kind> KindOf(Loc location) =>
             Context.localBinding(Subject, new TyVarBind(Kind),
@@ -213,8 +217,8 @@ namespace Echo.ActorSys2.Configuration
     {
         public override Ty Subst(string name, Ty type) =>
             Subject == name
-                ? new TyLam(name, Kind, Type.Subst(name, type))
-                : new TyLam(Subject, Kind, Type.Subst(name, type));
+                ? Lam(name, Kind, Type.Subst(name, type))
+                : Lam(Subject, Kind, Type.Subst(name, type));
 
         public override Context<bool> EquivCase(Ty rhs) =>
             rhs switch
@@ -255,10 +259,10 @@ namespace Echo.ActorSys2.Configuration
             };
  
         public override Context<Ty> SimplifyCase() =>
-            X.Simplify().Map<Ty>(x => new TyApp(x, Y)); 
+            X.Simplify().Map<Ty>(x => App(x, Y)); 
         
         public override Ty Subst(string name, Ty type) =>
-            new TyApp(X.Subst(name, type), Y.Subst(name, type));
+            App(X.Subst(name, type), Y.Subst(name, type));
         
         public override Context<bool> EquivCase(Ty rhs) =>
             rhs is TyApp rapp
@@ -362,7 +366,7 @@ namespace Echo.ActorSys2.Configuration
             $"{X.Show()} -> {Y.Show()}";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyArr(X.Subst(name, type), Y.Subst(name, type));
+            Arr(X.Subst(name, type), Y.Subst(name, type));
 
         public override Context<Kind> KindOf(Loc location) =>
             from x in X.KindOf(location)
@@ -418,7 +422,7 @@ namespace Echo.ActorSys2.Configuration
             $"[{Type.Show()}]";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyArray(Type.Subst(name, type));
+            Array(Type.Subst(name, type));
         
         public override Context<Kind> KindOf(Loc location) =>
             Type.KindOf(location);
@@ -469,7 +473,7 @@ namespace Echo.ActorSys2.Configuration
             $"record ({string.Join(", ", Fields.Map(f => f.Show()))})";
 
         public override Ty Subst(string name, Ty type) =>
-            new TyRecord(Fields.Map(f => new FieldTy(f.Name, f.Type.Subst(name, type))));
+            Record(Fields.Map(f => new FieldTy(f.Name, f.Type.Subst(name, type))));
 
         public override Context<Kind> KindOf(Loc location) =>
             from star in Fields.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))
@@ -499,7 +503,7 @@ namespace Echo.ActorSys2.Configuration
             $"tuple ({string.Join(", ", Types.Map(f => f.Show()))})";
 
         public override Ty Subst(string name, Ty type) =>
-            new TyTuple(Types.Map(t => t.Subst(name, type)));
+            Tuple(Types.Map(t => t.Subst(name, type)));
 
         public override Context<Kind> KindOf(Loc location) =>
             from star in Types.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))
@@ -530,7 +534,7 @@ namespace Echo.ActorSys2.Configuration
             "process";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyProcess((TyRecord)Value.Subst(name, type));
+            Process((TyRecord)Value.Subst(name, type));
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
@@ -559,7 +563,7 @@ namespace Echo.ActorSys2.Configuration
             "router";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyRouter((TyRecord)Value.Subst(name, type));
+            Router((TyRecord)Value.Subst(name, type));
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
@@ -588,7 +592,7 @@ namespace Echo.ActorSys2.Configuration
             "cluster";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyCluster((TyRecord)Value.Subst(name, type));
+            Cluster((TyRecord)Value.Subst(name, type));
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
@@ -618,7 +622,7 @@ namespace Echo.ActorSys2.Configuration
             "strategy";
         
         public override Ty Subst(string name, Ty type) =>
-            new TyStrategy(Type, (TyRecord)Value.Subst(name, type));
+            Strategy(Type, (TyRecord)Value.Subst(name, type));
             
         public override Context<Kind> KindOf(Loc location) =>
             Value.KindOf(location);
@@ -647,7 +651,7 @@ namespace Echo.ActorSys2.Configuration
             $"variant ({string.Join(", ", Fields.Map(f => f.Show()))})";
 
         public override Ty Subst(string name, Ty type) =>
-            new TyVariant(Fields.Map(f => new FieldTy(f.Name, f.Type.Subst(name, type))));
+            Variant(Fields.Map(f => new FieldTy(f.Name, f.Type.Subst(name, type))));
 
         public override Context<Kind> KindOf(Loc location) =>
             from star in Fields.Sequence(f => f.KindOf(location).Map(k => k == Kind.Star)).Map(fs => fs.ForAll(identity))

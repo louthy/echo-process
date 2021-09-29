@@ -238,9 +238,14 @@ namespace Echo.ActorSys2.Configuration
         /// </summary>
         public Context UpdateStore(int ix, Term term) =>
             this with {Store = Store.SetItem(ix, term)};
+
+        public override string ToString() => "Context";
     }
 
-    public record ContextBindings<A>(HashMap<string, A> Bindings, Func<Loc, string, Error> Undefined, Func<Loc, string, Error> AlreadyExists)
+    public record ContextBindings<A>(
+        HashMap<string, A> Bindings, 
+        Func<Loc, string, Error> Undefined, 
+        Func<Loc, string, Error> AlreadyExists)
     {
         /// <summary>
         /// Get the binding

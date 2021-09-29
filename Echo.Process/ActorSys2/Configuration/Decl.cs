@@ -45,7 +45,6 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Unit> TypeCheck() =>
             from ty in AddParameters(Vars)
             from kd in ty.KindOf(Location)
-            from _x in Context.log($"ty: {ty}  ---- kind: {kd}")
             from __ in Context.addTop(Location, Name, new TyLamBind(ty, kd))
             select unit;
 
@@ -81,14 +80,17 @@ namespace Echo.ActorSys2.Configuration
         Context<Term> AddParameters(Seq<Parameter> ps, Term body) =>
             ps.IsEmpty
                 ? Context.Pure(body)
-                : ps.Head.Type is TyVar tvar
-                    ? from x in Context.isTyNameBound(tvar.Name)
-                      from r in x
-                                    ? AddParameter(ps, body)
-                                    : Context.localBinding(tvar.Name, TyNameBind.Default,
-                                                           AddParameter(ps, body).Map(body => Term.TLam(ps.Head.Location, tvar.Name, Kind.Star, body)))
-                      select r
-                    : AddParameter(ps, body);
+                : AddVars(ps.Head.Type.GetVars(), ps, body);
+
+        Context<Term> AddVars(Seq<TyVar> vars, Seq<Parameter> ps, Term body) =>
+            vars.IsEmpty
+                ? AddParameter(ps, body)
+                : from x in Context.isTyNameBound(vars.Head.Name)
+                  from r in x
+                                ? AddVars(vars.Tail, ps, body)
+                                : Context.localBinding(vars.Head.Name, TyNameBind.Default,
+                                                       AddVars(vars.Tail, ps, body).Map(body => Term.TLam(ps.Head.Location, vars.Head.Name, Kind.Star, body)))
+                  select r;
 
         Context<Term> AddParameter(Seq<Parameter> ps, Term body) =>
             Context.localBinding(ps.Head.Name, TmNameBind.Default,

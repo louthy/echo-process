@@ -22,6 +22,16 @@ let return (value : a) : State s a =
         , value = value
         , faulted = false }
 
+let bind (ma : State s a, f : a → State s b) : State s b =
+    (state : s) =>
+        let result = debug (ma state)
+        f result.value result.state 
+
+let ma = return 2
+let mb = return 3
+let mc = bind ma ((x : int) => bind mb ((y : int) => return x + y))
+let rs = mc ""Hello, World""
+
 let applBool (f : Bool → Bool, x : Bool) = 
     if f x
     then true
@@ -56,7 +66,7 @@ process echo = { pid = /root/user/echo
             var fres  = SyntaxParser.Parse(general, "general.conf");
             var decls = fres.ThrowIfFail();
 
-            Assert.True(decls.Count == 10);
+            Assert.True(decls.Count == 15);
             Assert.True(decls[0] is DeclType);
             Assert.True(decls[1] is DeclVar);
             Assert.True(decls[2] is DeclVar);
@@ -64,14 +74,22 @@ process echo = { pid = /root/user/echo
             Assert.True(decls[4] is DeclVar);
             Assert.True(decls[5] is DeclVar);
             Assert.True(decls[6] is DeclVar);
-            Assert.True(decls[7] is DeclCluster);
-            Assert.True(decls[8] is DeclStrategy);
-            Assert.True(decls[9] is DeclProcess);
+            Assert.True(decls[7] is DeclVar);
+            Assert.True(decls[8] is DeclVar);
+            Assert.True(decls[9] is DeclVar);
+            Assert.True(decls[10] is DeclVar);
+            Assert.True(decls[11] is DeclVar);
+            Assert.True(decls[12] is DeclCluster);
+            Assert.True(decls[13] is DeclStrategy);
+            Assert.True(decls[14] is DeclProcess);
 
             // TYPE-CHECK
             
             var fctx = TypeChecker.Decls(decls).Run(Context.Empty);
             var ctx  = fctx.ThrowIfFail();
+
+            var bind = ctx.Context.TmBindings.Find("bind").ToFin(default).ThrowIfFail();
+            var retu = ctx.Context.TmBindings.Find("return").ToFin(default).ThrowIfFail();
 
             Assert.True(ctx.Context.TmBindings.Find("test").Case is TmAbbBind vb0 && vb0.Type.Case is TyInt && 
                         vb0.Term is TmInt tmInt && tmInt.Value == 100); 

@@ -41,7 +41,7 @@ namespace Echo.ActorSys2.Configuration
                                     "resume", "restart", "escalate", "stop",
                                     "cluster", "strategy", "router",
                                     "all-for-one", "one-for-one",
-                                    "type"
+                                    "type", "let", "debug"
                 ),
                 ReservedOpNames: List("-", "+", "/", "*", "==", "!=", ">", "<", "<=", ">=", "||", "&&", "|", "&", "%", "!", "~", "^")
             );
@@ -117,7 +117,7 @@ namespace Echo.ActorSys2.Configuration
                 new[] {BinaryTerm("&", Assoc.Left, Term.BitwiseAnd)},
                 new[] {BinaryTerm("^", Assoc.Left, Term.BitwiseXor)},
                 new[] {BinaryTerm("|", Assoc.Left, Term.BitwiseOr)},
-                new[] {PrefixTerm("!", Term.Not)},
+                new[] {PrefixTerm("!", Term.Not)}
             };
 
             Parser<(ProcessId Value, Pos Begin, Pos End, int BeginIndex, int EndIndex)>? processId = null;
@@ -140,13 +140,12 @@ namespace Echo.ActorSys2.Configuration
                               select pid);
 
             // Let term
-            var letTerm = from k in keyword("let")
-                          from v in indented(from n in identifier
-                                             from e in symbol(":")
-                                             from v in expr
-                                             select (Name: n.Value, Value: v))
-                          from r in expr
-                          select Term.Let(mkLoc(k.BeginPos, v.Value.Location.End), v.Name, v.Value, r);
+            var letTerm = indented(from k in keyword("let")
+                                   from n in identifier
+                                   from e in symbol("=")
+                                   from v in indented2(expr)
+                                   from b in expr
+                                   select Term.Let(mkLoc(n.BeginPos, v.Location.End), n.Value, v, b));
 
             var recordFields =
                 from fs in sepBy(attempt(
@@ -313,15 +312,29 @@ namespace Echo.ActorSys2.Configuration
                                                                                 ? Term.TLam(loc, tv.Name, Kind.Star, Term.Lam(loc, v.Name, v.Type, b))
                                                                                 : Term.Lam(loc, v.Name, v.Type, b))
                                 };
+
+            var debug = from kw in keyword("debug")
+                        from io in either(stringLiteral.Map(static s => s.Value), result(""))
+                        from ex in expr
+                        select Term.Debug(ex, io);
             
-            term = choice(attempt(letTerm),
-                          attempt(ternary),
-                          attempt(valueTerm),
-                          attempt(identTerm),
-                          attempt(lambda),
+            term = choice(attempt(ternary).label("ternary"),
+                          attempt(valueTerm).label("Value"),
+                          attempt(letTerm).label("let"),
+                          attempt(identTerm).label("identifier"),
+                          attempt(lambda).label("lambda"),
+                          attempt(debug).label("debug"),
                           tupleTerm);
 
-            var expr1 = from ts in many1(term)
+            var expr0 = from t in term
+                        from ms in either(
+                                        from x in lexer.Dot
+                                        from xs in sepBy1(identTerm, lexer.Dot).Map(static ts => ts.Map(static t => ((TmVar)t).Name))
+                                        select xs.Tail.Fold(Term.Proj(t, xs.Head), Term.Proj),
+                                        result(t))
+                        select ms;
+
+            var expr1 = from ts in many1(expr0)
                         select ts.Count == 1
                                    ? ts.Head
                                    : ts.Tail.Fold(ts.Head, Term.App); 

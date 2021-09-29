@@ -46,6 +46,7 @@ namespace Echo.ActorSys2.Configuration
 
         public abstract Context<Ty> TypeOf { get; }
 
+        public static Term Debug(Term Term, string Info) => new TmDebug(Term, Info);
         public static Term Assign(Term X, Term Y) => new TmAssign(X, Y);
         public static Term Loc(Loc Location, int StoreIndex) => new TmLoc(Location, StoreIndex);
         public static Term Ref(Term Expr) => new TmRef(Expr);
@@ -136,7 +137,7 @@ namespace Echo.ActorSys2.Configuration
                 : Expr.Eval1.Map(Ref);
 
         public override Context<Ty> TypeOf =>
-            Expr.TypeOf.Map(t => (Ty)new TyRef(t));
+            Expr.TypeOf.Map(t => Ty.Ref(t));
 
         public override string Show() =>
             $"(ref {Expr.Show()})";
@@ -1290,11 +1291,9 @@ namespace Echo.ActorSys2.Configuration
             };
 
         public override Context<Ty> TypeOf =>
-            from fun in X.TypeOf
+            from fun in X.TypeOf.Bind(static t => t.Simplify())
             from arg in Y.TypeOf
-            from __1 in Context.log($"TO1: {fun.Show()} -- ARG: {arg.Show()}")
             from res in Find(Location, fun, arg)
-            from __2 in Context.log($"TO2: {res.Show()}")
             select res;
 
         static Context<TyArr> FindArrow(Loc loc, Ty ty) =>
@@ -1707,7 +1706,6 @@ namespace Echo.ActorSys2.Configuration
         public override Context<Ty> TypeOf =>
             from __ in Context.checkKindStar(Location, Type)
             from t1 in Term.TypeOf
-            from _1 in Context.log($"ASCRIBE: {t1} : {Type}")
             from eq in t1.Equiv(Type)
             from rt in eq ? Context.Pure(Type) : Context.Fail<Ty>(ProcessError.AscribeMismatch(Location, Type, t1))
             select rt;
@@ -1832,5 +1830,36 @@ namespace Echo.ActorSys2.Configuration
 
         public override Term Subst(string name, Ty type) =>
             Inert(Location, Type.Subst(name, type));
+    }
+
+    public record TmDebug (Term Term, string Info) : Term(Term.Location)
+    {
+        public override Context<Term> Eval1 =>
+            from t in Term.Eval
+            from _ in Context.log(string.IsNullOrWhiteSpace(Info) ? $"eval: {t}" : $"eval ({Info}): {t}" )
+            select t;
+        
+        public override Context<Ty> TypeOf =>
+            from t in Term.TypeOf
+            from _ in Context.log(string.IsNullOrWhiteSpace(Info) ? $"typeof: {t}" : $"eval ({Info}): {t}" )
+            select t;
+
+        public override string Show() =>
+            Term.Show();
+
+        public override string ToString() =>
+            Term.ToString();
+        
+        public override Term Subst(string name, Term term) =>
+            Debug(Term.Subst(name, term), Info);
+
+        public override Term Subst(string name, Ty type) =>
+            Debug(Term.Subst(name, type), Info);
+
+        public override bool IsVal =>
+            Term.IsVal;
+
+        public override bool IsNumeric =>
+            Term.IsNumeric;
     }
 }
