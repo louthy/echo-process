@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using static Echo.Process;
 
 namespace Echo
@@ -63,16 +64,13 @@ namespace Echo
             Inbox.Ask(message, sender, ActorContext.SessionId);
 
         public Unit Kill() =>
-            transactionalIO
-                ? ProcessOp.IO(() => ShutdownProcess(false))
-                : ShutdownProcess(false);
+            TellSystem(new ShutdownProcessMessage(false), ProcessId.NoSender);
 
         public Unit Shutdown() =>
-            transactionalIO
-                ? ProcessOp.IO(() => ShutdownProcess(true))
-                : ShutdownProcess(true);
+            TellSystem(new ShutdownProcessMessage(false), ProcessId.NoSender);
 
-        Unit ShutdownProcess(bool maintainState) =>
+        ValueTask<Unit> ShutdownProcess(bool maintainState) =>
+            
             ActorContext.System(Actor.Id).WithContext(
                 new ActorItem(
                     Actor,
@@ -84,7 +82,7 @@ namespace Echo
                 null,
                 SystemMessage.ShutdownProcess(maintainState),
                 None,
-                () => Actor.ShutdownProcess(maintainState)
+                () => Actor.Shutdown(maintainState)
             );
 
         public HashMap<string, ProcessId> GetChildren() =>

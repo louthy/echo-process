@@ -125,7 +125,7 @@ namespace Echo.Tests
                 Assert.Equal(1, inboxResult);
             }
 
-            [Fact(Timeout = 5000)]
+            /*[Fact(Timeout = 5000)]
             // issue 47 / pr 49
             public void ActorWithCancellationToken()
             {
@@ -144,7 +144,7 @@ namespace Echo.Tests
                 Task.Delay(50).Wait();
                 kill(actor);
                 Assert.Equal(0, inboxResult);
-            }
+            }*/
         }
     }
 }

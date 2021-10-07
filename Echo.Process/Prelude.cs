@@ -207,19 +207,6 @@ namespace Echo
                 : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
 
         /// <summary>
-        /// Gets a CancellationToken that is in state Cancel when actor will shutdown.
-        /// This can be used in message loop to e.g. avoid long running message loop blocking actor shutdown.
-        /// </summary>
-        /// <remarks>
-        /// This should be used from within a process' message loop only
-        /// </remarks>
-        public static CancellationToken SelfProcessCancellationToken =>
-            InMessageLoop 
-                ? ActorContext.SelfProcess.Actor.CancellationTokenSource.Token
-                : raiseUseInMsgLoopOnlyException<CancellationToken>(nameof(SelfProcessCancellationToken));
-
-
-        /// <summary>
         /// Immediately kills the Process that is running from within its message
         /// loop.  It does this by throwing a ProcessKillException which is caught
         /// and triggers the shutdown of the Process.  Any Process that has a 

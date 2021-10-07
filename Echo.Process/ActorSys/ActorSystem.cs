@@ -6,6 +6,7 @@ using LanguageExt;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using System.Threading;
+using System.Threading.Tasks;
 using Echo.Config;
 using Echo.Session;
 using Echo.ActorSys;
@@ -17,6 +18,7 @@ namespace Echo
         const string ClusterOnlineKey = "cluster-node-online";
 
         public static Func<S, Unit> NoShutdown<S>() => (S s) => unit;
+        public static Func<S, ValueTask<Unit>> NoShutdownAsync<S>() => (S s) => unit.AsValueTask();
 
         enum DisposeState
         {
@@ -206,7 +208,7 @@ namespace Echo
                     {
                         rootItem.Actor.Children.Values
                             .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
-                            .Iter(c => c.Actor.ShutdownProcess(true));
+                            .Iter(c => c.Actor.Shutdown(true));
                     }
                     catch(Exception e)
                     {
@@ -427,6 +429,14 @@ namespace Echo
             cluster.Map(x => x.NodeName)
                    .IfNone(ActorSystemConfig.Default.RootProcessName);
 
+        public Unit UpdateSettings(ProcessSystemConfig settings, AppProfile profile)
+        {
+            this.settings   = settings;
+            this.appProfile = profile;
+            // TODO: Consider notification system for Processes
+            return unit;
+        }
+
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
@@ -437,16 +447,43 @@ namespace Echo
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy) =>
-                ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+                ActorCreateAsync<S, T>(
+                    parent, 
+                    name, 
+                    (s, t) => { 
+                        actorFn(t); 
+                        return default(S).AsValueTask(); 
+                    }, 
+                    () => default(S).AsValueTask(), 
+                    shutdownFn == null ? NoShutdownAsync<S>() : (S st) => shutdownFn(st).AsValueTask(), 
+                    termFn == null ? null : (s, p) => termFn(s, p).AsValueTask(), 
+                    strategy, 
+                    flags, 
+                    maxMailboxSize, 
+                    lazy);
 
-        public Unit UpdateSettings(ProcessSystemConfig settings, AppProfile profile)
-        {
-            this.settings = settings;
-            this.appProfile = profile;
-            // TODO: Consider notification system for Processes
-            return unit;
-        }
-
+        public ProcessId ActorCreateAsync<S, T>(
+            ActorItem parent,
+            ProcessName name,
+            Func<T, ValueTask> actorFn,
+            Func<S, ValueTask<Unit>> shutdownFn,
+            Func<S, ProcessId, ValueTask<S>> termFn,
+            State<StrategyContext, Unit> strategy,
+            ProcessFlags flags,
+            int maxMailboxSize,
+            bool lazy
+            ) =>
+            ActorCreateAsync<S, T>(parent, 
+                                   name, 
+                                   async (s, t) => { await actorFn(t).ConfigureAwait(false); return default(S); }, 
+                                   () => default(S).AsValueTask(), 
+                                   shutdownFn ?? NoShutdownAsync<S>(), 
+                                   termFn, 
+                                   strategy, 
+                                   flags, 
+                                   maxMailboxSize, 
+                                   lazy);
+        
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
@@ -457,8 +494,31 @@ namespace Echo
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
+        ) =>
+            ActorCreateAsync<S, T>(parent, 
+                                   name, 
+                                   (s, t) => { actorFn(t); return default(S).AsValueTask(); }, 
+                                   () => default(S).AsValueTask(), 
+                                   shutdownFn == null ? NoShutdownAsync<S>() : (S st) => shutdownFn(st).AsValueTask(), 
+                                   termFn == null ? null : (s, p) => termFn(s, p).AsValueTask(), 
+                                   strategy, 
+                                   flags, 
+                                   maxMailboxSize, 
+                                   lazy);        
+
+        public ProcessId ActorCreateAsync<S, T>(
+            ActorItem parent,
+            ProcessName name,
+            Func<S, T, ValueTask<S>> actorFn,
+            Func<ValueTask<S>> setupFn,
+            Func<S, ValueTask<Unit>> shutdownFn,
+            Func<S, ProcessId, ValueTask<S>> termFn,
+            State<StrategyContext, Unit> strategy,
+            ProcessFlags flags,
+            int maxMailboxSize,
+            bool lazy
             ) =>
-            ActorCreate<S, T>(parent, name, (s, t) => { actorFn(t); return default(S); }, () => default(S), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
+            ActorCreateAsync<S, T>(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdownAsync<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
 
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
@@ -471,9 +531,19 @@ namespace Echo
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
-            ) =>
-            ActorCreate(parent, name, actorFn, _ => setupFn(), shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, maxMailboxSize, lazy);
-
+        ) =>
+            ActorCreateAsync<S, T>(
+                parent, 
+                name, 
+                (s, m) => actorFn(s, m).AsValueTask(), 
+                _ => setupFn().AsValueTask(), 
+                shutdownFn == null ? NoShutdownAsync<S>() : (S st) => shutdownFn(st).AsValueTask(), 
+                termFn == null ? null : (s, p) => termFn(s, p).AsValueTask(), 
+                strategy, 
+                flags, 
+                maxMailboxSize, 
+                lazy);
+        
         public ProcessId ActorCreate<S, T>(
             ActorItem parent,
             ProcessName name,
@@ -484,9 +554,32 @@ namespace Echo
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
+            bool lazy) =>
+            ActorCreateAsync<S, T>(
+                parent, 
+                name, 
+                (s, m) => actorFn(s, m).AsValueTask(), 
+                a => setupFn(a).AsValueTask(), 
+                shutdownFn == null ? NoShutdownAsync<S>() : (S st) => shutdownFn(st).AsValueTask(), 
+                termFn == null ? null : (s, p) => termFn(s, p).AsValueTask(), 
+                strategy, 
+                flags, 
+                maxMailboxSize, 
+                lazy);
+
+        public ProcessId ActorCreateAsync<S, T>(
+            ActorItem parent,
+            ProcessName name,
+            Func<S, T, ValueTask<S>> actorFn,
+            Func<IActor, ValueTask<S>> setupFn,
+            Func<S, ValueTask<Unit>> shutdownFn,
+            Func<S, ProcessId, ValueTask<S>> termFn,
+            State<StrategyContext, Unit> strategy,
+            ProcessFlags flags,
+            int maxMailboxSize,
             bool lazy)
         {
-            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, shutdownFn ?? NoShutdown<S>(), termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
+            var actor = new Actor<S, T>(cluster, parent, name, actorFn, setupFn, shutdownFn ?? NoShutdownAsync<S>(), termFn, strategy, flags, ActorContext.System(parent.Actor.Id).Settings, this);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && cluster.IsSome)
@@ -530,7 +623,7 @@ namespace Echo
             }
             catch
             {
-                item?.Actor?.ShutdownProcess(false);
+                item?.Actor?.Shutdown(false);
                 throw;
             }
             return item.Actor.Id;
@@ -749,7 +842,7 @@ by name then use Process.deregisterByName(name).");
             }
         }
 
-        public R WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, Func<R> f)
+        public async ValueTask<R> WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, Func<ValueTask<R>> f)
         {
             var savedContext = ActorContext.Request;
             var savedSession = ActorContext.SessionId;
@@ -771,7 +864,7 @@ by name then use Process.deregisterByName(name).");
                             ? ProcessOpTransaction.Start(self.Actor.Id) 
                             : null));
 
-                return f();
+                return await f().ConfigureAwait(false);
             }
             catch(Exception e)
             {
@@ -784,9 +877,6 @@ by name then use Process.deregisterByName(name).");
                 ActorContext.SetContext(savedContext);
             }
         }
-
-        public Unit WithContext(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, Action f) =>
-            WithContext(self, parent, sender, request, msg, sessionId, fun(f));
 
         internal IObservable<T> Observe<T>(ProcessId pid) =>
             GetDispatcher(pid).Observe<T>();

@@ -55,19 +55,19 @@ namespace ScheduledMessages
             tell(
                 pid, 
                 Set(new Notification(NotificationType.Info, message)), 
-                Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
+                Echo.Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
 
         public static void Warning(int personId, string message) =>
             tell(
                 pid,
                 Set(new Notification(NotificationType.Warning, message)),
-                Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
+                Echo.Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
 
         public static void Error(int personId, string message) =>
             tell(
                 pid,
                 Set(new Notification(NotificationType.Error, message)),
-                Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
+                Echo.Schedule.EphemeralAppend<MNotify, Set<Notification>>(1 * hour, $"person-{personId}"));
 
         public static void Inbox(Set<Notification> notifications)
         {
