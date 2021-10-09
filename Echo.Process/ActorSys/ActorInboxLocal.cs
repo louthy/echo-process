@@ -21,6 +21,7 @@ namespace Echo
         readonly ConcurrentQueue<SystemMessage> sysInboxQueue = new();
 
         Actor<S, T> actor;
+        IActorSystem system;
         ActorItem parent;
         Option<ICluster> cluster;
         int maxMailboxSize;
@@ -32,14 +33,15 @@ namespace Echo
         /// <summary>
         /// Start up the inbox
         /// </summary>
-        public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
+        public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             this.cluster = cluster;
-            this.parent = parent;
-            this.actor = (Actor<S, T>)process;
+            this.parent  = parent;
+            this.actor   = (Actor<S, T>)process;
+            this.system  = system; 
             this.maxMailboxSize = maxMailboxSize == -1
-                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
-                : maxMailboxSize;
+                                      ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
+                                      : maxMailboxSize;
 
             Unpause();
             DrainUserQueue();
@@ -108,6 +110,7 @@ namespace Echo
             if (userInboxQueue.Count > 0 &&
                 !shutdownRequested && 
                 !IsPaused &&
+                system.IsActive && 
                 Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
                 Task.Run(DrainUserQueueAsync);
@@ -121,6 +124,7 @@ namespace Echo
         Unit DrainSystemQueue()
         {
             if (sysInboxQueue.Count > 0 &&
+                system.IsActive && 
                 Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
                 Task.Run(DrainSystemQueueAsync);
@@ -137,7 +141,7 @@ namespace Echo
             {
                 while (true)
                 {
-                    if (!shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
+                    if (system.IsActive && !shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
                     {
                         try
                         {
@@ -175,7 +179,6 @@ namespace Echo
                         return unit;
                     }
                 }
-                return unit;
             }
             finally
             {
@@ -193,7 +196,7 @@ namespace Echo
             {
                 while (true)
                 {
-                    if (!shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
+                    if (system.IsActive && !shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
                     {
                         try
                         {
@@ -217,8 +220,6 @@ namespace Echo
                         return unit;
                     }
                 }
-
-                return unit;
             }
             finally
             {

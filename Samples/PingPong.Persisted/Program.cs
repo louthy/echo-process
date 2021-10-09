@@ -2,25 +2,34 @@
 using System;
 using System.Diagnostics;
 using LanguageExt;
+using LanguageExt.Pipes;
 using static System.Console;
 using static Echo.Process;
 using Process = Echo.Process;
 
-const int interval = 100000;  
+const int interval = 1000;
 
+RedisCluster.register();
 Process.ProcessSystemLog.Subscribe(WriteLine);
-ProcessConfig.initialise();
+ProcessConfig.initialise("app", "examples", "ping-pong", "localhost", "5", "redis");
 
 var logger = spawn<Stopwatch, string>("logger", loggerSetup, loggerInbox);
-var ping   = spawn<int>("ping", pingInbox, Shutdown: shutdownInbox);
-var pong   = spawn<int>("pong", pongInbox, Shutdown: shutdownInbox);
+var ping   = spawn<int>("ping", pingInbox, ProcessFlags.PersistInbox, Shutdown: shutdownInbox);
+var pong   = spawn<int>("pong", pongInbox, ProcessFlags.PersistInbox, Shutdown: shutdownInbox);
 
 tell(ping, 0);
 
 ReadKey();
+WriteLine("Killing ping pong processes...");
 
-WriteLine("Shutting down...");
+kill(ping);
+kill(pong);
+
+WriteLine("Done, press enter to shutdown");
+ReadKey();
+
 shutdownAll();
+
 WriteLine("Goodbye!");
 
 void pingInbox(int n)
@@ -29,8 +38,10 @@ void pingInbox(int n)
     tell(pong, n + 1);
 }
 
-void pongInbox(int n) =>
+void pongInbox(int n)
+{
     tell(ping, n + 1);
+}
 
 static Stopwatch loggerSetup()
 {

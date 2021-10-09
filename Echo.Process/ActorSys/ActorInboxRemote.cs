@@ -15,6 +15,7 @@ namespace Echo
     {
         ICluster cluster;
         Actor<S, T> actor;
+        IActorSystem system;
         ActorItem parent;
         int maxMailboxSize;
         bool shutdownRequested = false;
@@ -23,10 +24,11 @@ namespace Echo
         volatile int drainingSystemQueue = 0;
         volatile int paused = 1;
 
-        public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
+        public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             if (cluster.IsNone) throw new Exception("Remote inboxes not supported when there's no cluster");
-            this.actor = (Actor<S, T>)process;
+            this.actor   = (Actor<S, T>)process;
+            this.system  = system; 
             this.cluster = cluster.IfNoneUnsafe(() => null);
 
             this.maxMailboxSize = maxMailboxSize == -1
@@ -46,6 +48,9 @@ namespace Echo
 
             Unpause();
 
+            DrainSystemQueue();
+            DrainUserQueue();
+ 
             return unit;
         }
 
@@ -118,7 +123,8 @@ namespace Echo
         /// </summary>
         Unit DrainSystemQueue()
         {
-            if (Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+            if (system.IsActive && 
+                Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
                 Task.Run(DrainSystemQueueAsync);
             }
@@ -133,7 +139,7 @@ namespace Echo
             try
             {
                 // Keep processing whilst we're not shutdown or there's something in the queue
-                while (!shutdownRequested)
+                while (!shutdownRequested && system.IsActive)
                 {
                     if (sysInboxQueue.TryDequeue(out var dto))
                     {
@@ -201,6 +207,7 @@ namespace Echo
             
             if (!shutdownRequested && 
                 !IsPaused && 
+                system.IsActive && 
                 (cluster?.QueueLength(key) ?? 0) > 0 &&
                 Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
@@ -216,7 +223,7 @@ namespace Echo
                 var inbox = this;
                 var count = cluster?.QueueLength(key) ?? 0;
 
-                while (count > 0 && !IsPaused && !shutdownRequested)
+                while (!IsPaused && !shutdownRequested && system.IsActive && count > 0 )
                 {
                     if (ActorInboxCommon.GetNextMessage(cluster, actor.Id, key).Case is ValueTuple<RemoteMessageDTO, Message> m)
                     {

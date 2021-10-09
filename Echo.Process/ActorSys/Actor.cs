@@ -44,12 +44,11 @@ namespace Echo
         readonly Subject<object> stateSubject = new Subject<object>();
         readonly Option<ICluster> cluster;
         readonly AtomHashMap<string, ActorItem> children = AtomHashMap<string, ActorItem>();
-        HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
+        readonly AtomHashMap<string, IDisposable> subs = AtomHashMap<string, IDisposable>();
+        readonly IActorSystem sys;
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
-        volatile ActorResponse response;
         bool remoteSubsAcquired;
-        IActorSystem sys;
         volatile int astatus;
         volatile int mstatus;
 
@@ -182,24 +181,25 @@ namespace Echo
             private set => strategy = value;
         }
 
-        public Unit AddSubscription(ProcessId pid, IDisposable sub)
-        {
-            RemoveSubscription(pid);
-            subs = subs.Add(pid.Path, sub);
-            return unit;
-        }
+        public Unit AddSubscription(ProcessId pid, IDisposable sub) =>
+            subs.AddOrUpdate(pid.Path,
+                             exist => {
+                                 exist?.Dispose();
+                                 return sub;
+                             },
+                             sub);
 
-        public Unit RemoveSubscription(ProcessId pid)
-        {
-            subs.Find(pid.Path).IfSome(x => x.Dispose());
-            subs = subs.Remove(pid.Path);
-            return unit;
-        }
+        public Unit RemoveSubscription(ProcessId pid) =>
+            subs.Swap(s => {
+                          if (s.Find(pid.Path).Case is IDisposable d) d?.Dispose();
+                          return s.Remove(pid.Path);
+                      });
 
         Unit RemoveAllSubscriptions()
         {
-            subs.Iter(x => x.Dispose());
-            subs = HashMap<string, IDisposable>();
+            var snapshot = subs.ToHashMap();
+            subs.Clear();
+            snapshot.Iter(x => x?.Dispose());
             return unit;
         }
 
