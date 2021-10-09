@@ -32,7 +32,7 @@ namespace Echo
         Actor<S, T> actor;
         ActorItem parent;
         int maxMailboxSize;
-        int paused = 0;
+        int paused = 1;
         bool shutdownRequested = false;
         volatile int drainingUserQueue = 0;
         volatile int drainingSystemQueue = 0;
@@ -49,17 +49,20 @@ namespace Echo
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id) 
                 : maxMailboxSize;
 
-            SubscribeToSysInboxChannel();
-            SubscribeToUserInboxChannel();
-            DrainUserQueue();
-            DrainSystemQueue();
-            
             this.cluster.SetValue(ActorInboxCommon.ClusterMetaDataKey(actor.Id),
                                   new ProcessMetaData(
                                       new[] {typeof(T).AssemblyQualifiedName},
                                       typeof(S).AssemblyQualifiedName,
                                       typeof(S).GetTypeInfo().ImplementedInterfaces.Map(x => x.AssemblyQualifiedName).ToArray()));
 
+            SubscribeToSysInboxChannel();
+            SubscribeToUserInboxChannel();
+
+            Unpause();
+            
+            DrainUserQueue();
+            DrainSystemQueue();
+            
             return unit;
         }
 
@@ -214,7 +217,8 @@ namespace Echo
         /// </summary>
         void DrainRemoteInbox(string key)
         {
-            if (Interlocked.CompareExchange(ref checkingRemoteInbox, 1, 0) == 0)
+            if (cluster.QueueLength(key) > 0 &&
+                Interlocked.CompareExchange(ref checkingRemoteInbox, 1, 0) == 0)
             {
                 DoDrainRemoteInbox(key);
             }
@@ -268,6 +272,7 @@ namespace Echo
             finally
             {
                 Interlocked.CompareExchange(ref checkingRemoteInbox, 0, 1);
+                DrainRemoteInbox(key);
             }
         }
 
@@ -278,6 +283,7 @@ namespace Echo
         {
             if (!shutdownRequested && 
                 !IsPaused && 
+                userInboxQueue.Count > 0 &&
                 Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
                 Task.Run(DrainUserQueueAsync);
@@ -290,7 +296,8 @@ namespace Echo
         /// </summary>
         Unit DrainSystemQueue()
         {
-            if (Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+            if (sysInboxQueue.Count > 0 &&
+                Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
                 Task.Run(DrainSystemQueueAsync);
             }
@@ -304,20 +311,38 @@ namespace Echo
         {
             try
             {
-                while (!shutdownRequested && !IsPaused)
+                while (true)
                 {
-                    if (userInboxQueue.TryDequeue(out var msg))
+                    if (!shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
                     {
-                        while (msg != null)
+                        try
                         {
                             switch (await ActorInboxCommon.UserMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
                             {
-                                case InboxDirective.Default:            msg = null; break;
-                                case InboxDirective.Pause:              Pause(); return unit;
-                                case InboxDirective.PushToFrontOfQueue: break;
-                                case InboxDirective.Shutdown:           Shutdown(); break; 
-                                default:                                throw new InvalidOperationException("unknown directive");
+                                case InboxDirective.Default:
+                                    userInboxQueue.TryDequeue(out _);
+                                    break;
+                                
+                                case InboxDirective.Pause:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Pause();
+                                    return unit;
+                                
+                                case InboxDirective.PushToFrontOfQueue: 
+                                    break;
+                                
+                                case InboxDirective.Shutdown:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Shutdown();
+                                    break;
+                                
+                                default: 
+                                    throw new InvalidOperationException("unknown directive");
                             }
+                        }
+                        catch (Exception e)
+                        {
+                            logSysErr(e);
                         }
                     }
                     else
@@ -330,6 +355,7 @@ namespace Echo
             finally
             {
                 Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
+                DrainUserQueue();
             }
         }
         
@@ -340,18 +366,25 @@ namespace Echo
         {
             try
             {
-                while (!shutdownRequested)
+                while (true)
                 {
-                    if (sysInboxQueue.TryDequeue(out var msg))
+                    if (!shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
                     {
-                        switch (await ActorInboxCommon.SystemMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
+                        try
                         {
-                            case InboxDirective.Pause:
-                                Pause();
-                                return unit;
-                            case InboxDirective.Shutdown:
-                                Shutdown();
-                                break;
+                            switch (await ActorInboxCommon.SystemMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
+                            {
+                                case InboxDirective.Pause:
+                                    Pause();
+                                    return unit;
+                                case InboxDirective.Shutdown:
+                                    Shutdown();
+                                    break;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            logSysErr(e);
                         }
                     }
                     else
@@ -364,6 +397,7 @@ namespace Echo
             finally
             {
                 Interlocked.CompareExchange(ref drainingSystemQueue, 0, 1);
+                DrainSystemQueue();
             }
         }        
 

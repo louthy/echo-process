@@ -371,10 +371,11 @@ namespace Echo
         /// </summary>
         void SpinUntilPaused()
         {
+            SpinWait sw = default;
             while (Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage) != MState.WaitingForMessage)
             {
+                // Something else might make us paused, so exit if that happens
                 if (mstatus == MState.Paused) return;
-                SpinWait sw = default;
                 sw.SpinOnce();
             }
         }
@@ -566,11 +567,11 @@ namespace Echo
         public async ValueTask<InboxDirective> ProcessAsk(ActorRequest request)
         {
             // Make sure we only process one message at a time
+            SpinWait sw = default;
             while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
             {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
+                if (mstatus == MState.Paused) return InboxDirective.PushToFrontOfQueue;
+                if (astatus != AState.Running) return InboxDirective.PushToFrontOfQueue;
                 sw.SpinOnce();
             }
 
@@ -692,11 +693,11 @@ namespace Echo
             if (termFn == null) return InboxDirective.Default;
 
             // Make sure we only process one message at a time
+            SpinWait sw = default;
             while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
             {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
+                if (mstatus == MState.Paused) return InboxDirective.PushToFrontOfQueue;
+                if (astatus != AState.Running) return InboxDirective.PushToFrontOfQueue;
                 sw.SpinOnce();
             }
             
@@ -780,11 +781,11 @@ namespace Echo
         public async ValueTask<InboxDirective> ProcessMessage(object message)
         {
             // Make sure we only process one message at a time
+            SpinWait sw = default;
             while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
             {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
+                if (mstatus == MState.Paused) return InboxDirective.PushToFrontOfQueue;
+                if (astatus != AState.Running) return InboxDirective.PushToFrontOfQueue;
                 sw.SpinOnce();
             }
 

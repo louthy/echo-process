@@ -57,7 +57,7 @@ namespace Echo
                 Strategy,
                 MaxMailboxSize,
                 (state, pid) => {
-                    Terminated(pid);
+                    Terminated?.Invoke(pid);
                     return state;
                 }
             );
