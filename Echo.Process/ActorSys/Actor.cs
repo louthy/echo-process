@@ -43,7 +43,7 @@ namespace Echo
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
         readonly Option<ICluster> cluster;
-        readonly Atom<HashMap<string, ActorItem>> children = Atom(HashMap<string, ActorItem>());
+        readonly AtomHashMap<string, ActorItem> children = AtomHashMap<string, ActorItem>();
         HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
@@ -364,7 +364,7 @@ namespace Echo
         /// Child processes
         /// </summary>
         public HashMap<string, ActorItem> Children =>
-            children;
+            children.ToHashMap();
 
         /// <summary>
         /// Waits for any message being processed to finish
@@ -415,7 +415,7 @@ namespace Echo
         /// </summary>
         public Unit UnlinkChild(ProcessId pid)
         {
-            children.Swap(c => c.Remove(pid.Name.Value));
+            children.Remove(pid.Name.Value);
             return unit;
         }
 
@@ -424,7 +424,7 @@ namespace Echo
         /// </summary>
         public Unit LinkChild(ActorItem item)
         {
-            children.Swap(c => c.AddOrUpdate(item.Actor.Id.Name.Value, item));
+            children.AddOrUpdate(item.Actor.Id.Name.Value, item);
             return unit;
         }
 
@@ -485,7 +485,7 @@ namespace Echo
             {
                 // Shutdown children
                 var kids = Children;
-                children.Swap(_ => Empty);
+                children.Clear();
                 foreach (var child in kids)
                 {
                     await child.Value.Actor.Shutdown(maintainState);
