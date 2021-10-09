@@ -42,8 +42,8 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.5.62-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.62-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="3.5.64-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.5.64-beta" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
