@@ -37,9 +37,9 @@ namespace Caching
 
             Console.WriteLine(count);
 
-            proxy.Add("a", "1");
-            proxy.Add("b", "2");
-            proxy.Add("c", "3");
+            proxy.Add("a", "X");
+            proxy.Add("b", "Y");
+            proxy.Add("c", "Z");
 
             // Find the number of items
             count = proxy.Count();
@@ -87,7 +87,7 @@ namespace Caching
             state.Count;
 
         public void Flush(DateTime cutOff) =>
-            state = state.Filter(item => item.time < cutOff);
+            state = state.Filter(item => cutOff < item.time);
 
         public string Get(string key) =>
             (from pair in state.Find(key)

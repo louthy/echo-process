@@ -96,7 +96,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <returns></returns>
         public static IEnumerable<T> askChildren<T>(object message, int take = Int32.MaxValue) =>
-            ActorContext.System(default(SystemName)).AskMany<T>(Children.Values, message, take);
+            ActorContext.System(default(SystemName)).AskMany<T>(Children.Values.ToSeq(), message, take);
 
         /// <summary>
         /// Ask parent process for a reply

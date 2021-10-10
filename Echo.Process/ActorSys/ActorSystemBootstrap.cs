@@ -28,6 +28,9 @@ namespace Echo
         public readonly IActorSystem System;
         public readonly SessionSync Sync;
 
+        public Seq<ILocalActorInbox> Asks =>
+            asks;
+
         ActorItem root;
         ActorItem user;
         ActorItem system;
@@ -36,19 +39,18 @@ namespace Echo
         ActorItem scheduler;
         ActorItem inboxShutdown;
         ActorItem sessionMonitor;
-        ActorItem ask;
         ActorItem js;
-        ActorItem reply;
         ActorItem monitor;
+        Seq<ILocalActorInbox> asks;
 
-        public ActorSystemBootstrap(IActorSystem system, Option<ICluster> cluster, ProcessId rootId, IActor rootProcess, IActorInbox rootInbox, ProcessName rootProcessName, ActorSystemConfig config, ProcessSystemConfig settings, SessionSync sync)
+        public ActorSystemBootstrap(IActorSystem system, Option<ICluster> cluster, ProcessId rootId, IActorInbox rootInbox, ProcessName rootProcessName, ActorSystemConfig config, ProcessSystemConfig settings, SessionSync sync)
         {
             System = system;
             Sync = sync;
 
             var parent = new ActorItem(new NullProcess(system.Name), new NullInbox(), ProcessFlags.Default);
 
-            rootProcess = new Actor<ActorSystemBootstrap, Unit>(
+            var rootProcess = new Actor<ActorSystemBootstrap, Unit>(
                 cluster,
                 parent,
                 rootProcessName,
@@ -129,7 +131,10 @@ namespace Echo
 
             inboxShutdown   = ActorCreate<IActorInbox>(system, Config.InboxShutdownProcessName, inbox => inbox.Shutdown(), null, ProcessFlags.Default, 100000);
 
-            reply = ask     = ActorCreate<(long, Dictionary<long, AskActorReq>), object>(system, Config.AskProcessName, AskActor.Inbox, AskActor.Setup, null, ProcessFlags.ListenRemoteAndLocal);
+            for (var i = 0; i < AskActor.Actors; i++)
+            {
+                asks = asks.Add((ILocalActorInbox)ActorCreate<AskActorState, object>(system, $"{Config.AskProcessName}-{i}", AskActor.Inbox, AskActor.Setup, null, ProcessFlags.ListenRemoteAndLocal).Inbox);
+            }
 
             logInfo("Process system startup complete");
 

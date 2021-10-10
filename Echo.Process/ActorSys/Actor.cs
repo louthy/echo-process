@@ -430,20 +430,14 @@ namespace Echo
 
         public Unit Pause()
         {
-            if (astatus == AState.Running)
-            {
-                Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage);
-                Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.ProcessingMessage);
-            }
+            Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage);
+            Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.ProcessingMessage);
             return default;
         }
 
         public Unit UnPause()
         {
-            if (astatus == AState.Running)
-            {
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
-            }
+            Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
             return default;
         }
 
