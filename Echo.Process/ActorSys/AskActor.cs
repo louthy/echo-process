@@ -181,7 +181,7 @@ namespace Echo
 
     internal class AskActorReq
     {
-        static long RequestIndex = 1L;  
+        static long RequestIndex = 0L;  
         
         public readonly long RequestId;
         public readonly long Created;
