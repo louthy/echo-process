@@ -12,19 +12,18 @@ namespace Echo
     {
         static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
 
-        static SystemName Context
+        internal static SystemName Context
         {
             get => context.Value;
             set => context.Value = value;
         }
 
+        
         static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
         static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
-
         static SystemName defaultSystem;
-
         static SystemName[] systemNames = new SystemName[0];
-        static ActorSystem[] systems = new ActorSystem[0];
+        internal static ActorSystem[] systems = new ActorSystem[0];
         static readonly object sync = new object();
 
         public static Unit StartSystem(SystemName system, Option<ICluster> cluster, AppProfile appProfile, ProcessSystemConfig config)
@@ -268,7 +267,7 @@ namespace Echo
             return false;
         }
 
-        static ActorSystem FindSystem(SystemName system)
+        internal static ActorSystem FindSystem(SystemName system)
         {
             foreach (var item in systems)
             {

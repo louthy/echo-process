@@ -3,11 +3,14 @@ using System;
 using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using Echo.Traits;
+using LanguageExt.Effects.Traits;
 using static LanguageExt.Prelude;
 
 namespace Echo
 {
-    public static partial class Process
+    public static partial class Process<RT>
+        where RT : struct, HasCancel<RT>, HasEcho<RT>
     {
         /// <summary>
         /// Publish a message for any listening subscribers
@@ -16,10 +19,8 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <param name="message">Message to publish</param>
-        public static Unit publish<T>(T message) =>
-            InMessageLoop
-                ? ActorContext.Publish(message)
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(publish));
+        public static Aff<RT, Unit> publish<T>(T message) =>
+            Eff(() => Process.publish(message));
 
         /// <summary>
         /// Publish a message for any listening subscribers, delayed.
@@ -31,10 +32,8 @@ namespace Echo
         /// <param name="delayFor">How long to delay sending for</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable publish<T>(T message, TimeSpan delayFor) =>
-            InMessageLoop
-                ? safedelay(() => ActorContext.Publish(message), delayFor)
-                : raiseUseInMsgLoopOnlyException<IDisposable>(nameof(publish));
+        public static Aff<RT, IDisposable> publish<T>(T message, TimeSpan delayFor) =>
+            Eff(() => Process.publish(message, delayFor));
 
         /// <summary>
         /// Publish a message for any listening subscribers, delayed.
@@ -47,10 +46,8 @@ namespace Echo
         /// <param name="delayUntil">When to send</param>
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
-        public static IDisposable publish<T>(T message, DateTime delayUntil) =>
-            InMessageLoop
-                ? safedelay(() => ActorContext.Publish(message), delayUntil)
-                : raiseUseInMsgLoopOnlyException<IDisposable>(nameof(publish));
+        public static Aff<RT, IDisposable> publish<T>(T message, DateTime delayUntil) =>
+            Eff(() => Process.publish(message, delayUntil));
 
         /// <summary>
         /// Subscribes our inbox to another process publish stream.  When it calls 'publish' it will
@@ -61,22 +58,15 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static Unit subscribe(ProcessId pid)
-        {
-            var savedSelf = Self;
-            return InMessageLoop
-                ? ActorContext.Request.Self.Actor.AddSubscription(pid, ActorContext.System(pid).Observe<object>(pid).Subscribe(x => tell(savedSelf, x, pid)))
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribe));
-        }
+        public static Aff<RT, Unit> subscribe(ProcessId pid) =>
+            Eff(() => Process.subscribe(pid));
 
         /// <summary>
         /// Unsubscribe from a process's publications
         /// </summary>
         /// <param name="pid">Process to unsub from</param>
-        public static Unit unsubscribe(ProcessId pid) =>
-            InMessageLoop
-                ? ActorContext.Request.Self.Actor.RemoveSubscription(pid)
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(unsubscribe));
+        public static Aff<RT, Unit> unsubscribe(ProcessId pid) =>
+            Eff(() => Process.unsubscribe(pid));
 
         /// <summary>
         /// Subscribe to the process publish stream.  When a process calls 'publish' it emits
@@ -89,10 +79,8 @@ namespace Echo
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static IDisposable subscribe<T>(ProcessId pid, IObserver<T> observer) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IDisposable>(nameof(subscribe))
-                : observe<T>(pid).Subscribe(observer);
+        public static Aff<RT, IDisposable> subscribe<T>(ProcessId pid, IObserver<T> observer) =>
+            Eff(() => Process.subscribe(pid, observer));
 
         /// <summary>
         /// Subscribe to the process publish stream.  When a process calls 'publish' it emits
@@ -105,10 +93,8 @@ namespace Echo
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext, Action<Exception> onError, Action onComplete) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IDisposable>(nameof(subscribe))
-                : observe<T>(pid).Subscribe(onNext, onError, onComplete);
+        public static Aff<RT, IDisposable> subscribe<T>(ProcessId pid, Action<T> onNext, Action<Exception> onError, Action onComplete) =>
+            Eff(() => Process.subscribe(pid, onNext, onError, onComplete));
 
         /// <summary>
         /// Subscribe to the process publish stream.  When a process calls 'publish' it emits
@@ -120,10 +106,8 @@ namespace Echo
         /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
-        public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext, Action<Exception> onError) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IDisposable>(nameof(subscribe))
-                : observe<T>(pid).Subscribe(onNext, onError, () => { });
+        public static Aff<RT, IDisposable> subscribe<T>(ProcessId pid, Action<T> onNext, Action<Exception> onError) =>
+            Eff(() => Process.subscribe(pid, onNext, onError));
 
         /// <summary>
         /// Subscribe to the process publish stream.  When a process calls 'publish' it emits
@@ -135,10 +119,8 @@ namespace Echo
         /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
-        public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IDisposable>(nameof(subscribe))
-                : observe<T>(pid).Subscribe(onNext, ex => { }, () => { });
+        public static Aff<RT, IDisposable> subscribe<T>(ProcessId pid, Action<T> onNext) =>
+            Eff(() => Process.subscribe(pid, onNext));
 
         /// <summary>
         /// Subscribe to the process publish stream.  When a process calls 'publish' it emits
@@ -151,10 +133,8 @@ namespace Echo
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
-        public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext, Action onComplete) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IDisposable>(nameof(subscribe))
-                : observe<T>(pid).Subscribe(onNext, ex => { }, onComplete);
+        public static Aff<RT, IDisposable> subscribe<T>(ProcessId pid, Action<T> onNext, Action onComplete) =>
+            Eff(() => Process.subscribe(pid, onNext, onComplete));
 
         /// <summary>
         /// Get an IObservable for a process publish stream.  When a process calls 'publish' it emits
@@ -167,10 +147,8 @@ namespace Echo
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IObservable T</returns>
-        public static IObservable<T> observe<T>(ProcessId pid) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IObservable<T>>(nameof(observe))
-                : observeUnsafe<T>(pid);
+        public static Aff<RT, IObservable<T>> observe<T>(ProcessId pid) =>
+            Eff(() => Process.observe<T>(pid));
 
         /// <summary>
         /// Get an IObservable for a process publish stream.  When a process calls 'publish' it emits
@@ -184,8 +162,8 @@ namespace Echo
         /// break the principles of actors.
         /// </remarks>
         /// <returns>IObservable T</returns>
-        public static IObservable<T> observeUnsafe<T>(ProcessId pid) =>
-            ActorContext.System(pid).Observe<T>(pid);
+        public static Aff<RT, IObservable<T>> observeUnsafe<T>(ProcessId pid) =>
+            Eff(() => Process.observeUnsafe<T>(pid));
 
         /// <summary>
         /// Get an IObservable for a process's state stream.  When a process state updates at the end of its
@@ -200,10 +178,8 @@ namespace Echo
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IObservable T</returns>
-        public static IObservable<T> observeState<T>(ProcessId pid) =>
-            InMessageLoop
-                ? raiseDontUseInMessageLoopException<IObservable<T>>(nameof(observeState))
-                : observeStateUnsafe<T>(pid);
+        public static Aff<RT, IObservable<T>> observeState<T>(ProcessId pid) =>
+            Eff(() => Process.observeState<T>(pid));
 
         /// <summary>
         /// Get an IObservable for a process's state stream.  When a process state updates at the end of its
@@ -219,8 +195,8 @@ namespace Echo
         /// break the principles of actors.
         /// </remarks>
         /// <returns>IObservable T</returns>
-        public static IObservable<T> observeStateUnsafe<T>(ProcessId pid) =>
-            ActorContext.System(pid).ObserveState<T>(pid);
+        public static Aff<RT, IObservable<T>> observeStateUnsafe<T>(ProcessId pid) =>
+            Eff(() => Process.observeStateUnsafe<T>(pid));
 
         /// <summary>
         /// Subscribes our inbox to another process state publish stream.  
@@ -233,14 +209,7 @@ namespace Echo
         /// This should be used from within a process' message loop only
         /// </remarks>
         /// <returns></returns>
-        public static Unit subscribeState<T>(ProcessId pid)
-        {
-            var savedSelf = Self;
-            return InMessageLoop
-                ? ActorContext.Request.Self.Actor.AddSubscription(
-                    pid,
-                    ActorContext.System(pid).ObserveState<T>(pid).Subscribe(x => tell(savedSelf, x, pid)))
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(subscribeState));
-        }
+        public static Aff<RT, Unit> subscribeState<T>(ProcessId pid) =>
+            Eff(() => Process.subscribeState<T>(pid));
     }
 }

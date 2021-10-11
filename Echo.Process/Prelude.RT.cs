@@ -9,6 +9,8 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
+using Echo.Traits;
+using LanguageExt.Effects.Traits;
 using static LanguageExt.Prelude;
 
 namespace Echo
@@ -66,27 +68,37 @@ namespace Echo
     ///         tellSelf(unit, TimeSpan.FromMinutes(30));
     /// </para>
     /// </summary>
-    public static partial class Process
+    public static partial class Process<RT>
+        where RT : struct, HasCancel<RT>, HasEcho<RT>
     {
+        internal static Eff<RT, EchoState<RT>> echoState =>
+            Eff<RT, EchoState<RT>>(rt => rt.EchoState);
+
+        /// <summary>
+        /// Run the Aff within a system context
+        /// </summary>
+        public static Aff<RT, A> withSystem<A>(SystemName name, Aff<RT, A> ma) =>
+            localAff<RT, RT, A>(rt => rt.MapEchoState(es => es.WithSystem(name)), ma);
+        
         /// <summary>
         /// Triggers when the Process system shuts down
         /// Either subscribe to the OnNext or OnCompleted
         /// </summary>
         public static IObservable<ShutdownCancellationToken> PreShutdown =>
-            preShutdownSubj;
+            Process.PreShutdown;
 
         /// <summary>
         /// Triggers when the Process system shuts down
         /// Either subscribe to the OnNext or OnCompleted
         /// </summary>
         public static IObservable<SystemName> Shutdown =>
-            shutdownSubj;
+            Process.Shutdown;
 
         /// <summary>
         /// Log of everything that's going on in the Languge Ext process system
         /// </summary>
         public static IObservable<ProcessLogItem> ProcessSystemLog => 
-            log.ObserveOn(TaskPoolScheduler.Default);
+            Process.ProcessSystemLog;
 
         /// <summary>
         /// Current process ID
@@ -94,8 +106,8 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static ProcessId Self =>
-            ActorContext.Self;
+        public static Eff<RT, ProcessId> Self =>
+            echoState.Map(static es => es.Self);
 
         /// <summary>
         /// Parent process ID
@@ -103,47 +115,47 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static ProcessId Parent =>
-            InMessageLoop
-                ? ActorContext.Request.Parent.Actor.Id
-                : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(Parent));
+        public static Eff<RT, ProcessId> Parent =>
+            echoState.Map(static es => es.InMessageLoop
+                                           ? es.Request.Parent.Actor.Id
+                                           : Process.raiseUseInMsgLoopOnlyException<ProcessId>(nameof(Parent)));
 
         /// <summary>
         /// Root process ID
         /// The Root process is the parent of all processes
         /// </summary>
-        public static ProcessId Root(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).Root;
+        public static Eff<RT, ProcessId> Root =>
+            echoState.Map(static es => es.System.Root);
 
         /// <summary>
         /// User process ID
         /// The User process is the default entry process, your first process spawned
         /// will be a child of this process.
         /// </summary>
-        public static ProcessId User(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).User;
+        public static Eff<RT, ProcessId> User =>
+            echoState.Map(static es => es.System.User);
 
         /// <summary>
         /// Dead letters process
         /// Subscribe to it to monitor the failed messages (<see cref="subscribe(ProcessId)"/>)
         /// </summary>
-        public static ProcessId DeadLetters(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).DeadLetters;
+        public static Eff<RT, ProcessId> DeadLetters =>
+            echoState.Map(static es => es.System.DeadLetters);
 
         /// <summary>
         /// Errors process
         /// Subscribe to it to monitor the errors thrown 
         /// </summary>
-        public static ProcessId Errors(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).Errors;
+        public static Eff<RT, ProcessId> Errors  =>
+            echoState.Map(static es => es.System.Errors);
 
         /// <summary>
         /// Sender process ID
         /// Always valid even if there's not a sender (the 'NoSender' process ID will
         /// be provided).
         /// </summary>
-        public static ProcessId Sender =>
-            ActorContext.Request.Sender;
+        public static Eff<RT, ProcessId> Sender =>
+            echoState.Map(static es => es.Request.Sender);
 
         /// <summary>
         /// Get the child processes of the running process
@@ -151,10 +163,10 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static HashMap<string, ProcessId> Children =>
-            InMessageLoop
-                ? ActorContext.Request.Children
-                : raiseUseInMsgLoopOnlyException<HashMap<string,ProcessId>>(nameof(Children));
+        public static Eff<RT, HashMap<string, ProcessId>> Children =>
+            echoState.Map(static es => es.InMessageLoop
+                                           ? es.Request.Children
+                                           : Process.raiseUseInMsgLoopOnlyException<HashMap<string,ProcessId>>(nameof(Children)));
 
         /// <summary>
         /// Get the child processes of the running process
@@ -162,28 +174,28 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process message loop only
         /// </remarks>
-        public static Map<string, ProcessId> ChildrenInOrder =>
-            toMap(Children);
+        public static Eff<RT, Map<string, ProcessId>> ChildrenInOrder =>
+            Children.Map(static hm => hm.ToMap());
 
         /// <summary>
         /// Get the child processes of the process ID provided
         /// </summary>
-        public static HashMap<string, ProcessId> children(ProcessId pid) =>
-            ActorContext.System(pid).GetChildren(pid);
+        public static Aff<RT, HashMap<string, ProcessId>> children(ProcessId pid) =>
+            echoState.Map(es => es.GetSystem(pid).GetChildren(pid));
 
         /// <summary>
         /// Get the child processes of the process ID provided
         /// </summary>
-        public static Map<string, ProcessId> childrenInOrder(ProcessId pid) =>
-            toMap(children(pid));
+        public static Aff<RT, Map<string, ProcessId>> childrenInOrder(ProcessId pid) =>
+            children(pid).Map(static hm => hm.ToMap());
 
         /// <summary>
         /// Get the child processes by name
         /// </summary>
-        public static ProcessId child(ProcessName name) =>
-            InMessageLoop
-                ? Self[name]
-                : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
+        public static Eff<RT, ProcessId> child(ProcessName name) =>
+            echoState.Map(es => es.InMessageLoop
+                                    ? es.Self[name]
+                                    : Process.raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child)));
 
         /// <summary>
         /// Get the child processes by index.
@@ -194,16 +206,16 @@ namespace Echo
         /// call will mostly be used for load balancing, and round-robin type 
         /// behaviour, so feel that's acceptable.  
         /// </remarks>
-        public static ProcessId child(int index) =>
-            InMessageLoop
-                ? ActorContext.Request.Children.Count == 0
-                    ? raise<ProcessId>(new NoChildProcessesException())
-                    : ActorContext.Request
-                                  .Children
-                                  .Values
-                                  .Skip(index % ActorContext.Request.Children.Count)
-                                  .Head()
-                : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
+        public static Eff<RT, ProcessId> child(int index) =>
+            echoState.Map(es => es.InMessageLoop
+                                    ? es.Request.Children.Count == 0
+                                          ? raise<ProcessId>(new NoChildProcessesException())
+                                          : es.Request
+                                              .Children
+                                              .Values
+                                              .Skip(index % ActorContext.Request.Children.Count)
+                                              .Head()
+                                    : Process.raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child)));
 
         /// <summary>
         /// Immediately kills the Process that is running from within its message
@@ -217,10 +229,10 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process' message loop only
         /// </remarks>
-        public static Unit kill() =>
-            InMessageLoop
-                ? raise<Unit>(new ProcessKillException())
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(kill));
+        public static Eff<RT, Unit> kill() =>
+            echoState.Map(es => es.InMessageLoop
+                                    ? raise<Unit>(new ProcessKillException())
+                                    : Process.raiseUseInMsgLoopOnlyException<Unit>(nameof(kill)));
 
         /// <summary>
         /// Shutdown the currently running process.  The shutdown message jumps 
@@ -229,8 +241,8 @@ namespace Echo
         /// state will have its state maintained for future spawns.  If you wish 
         /// for the data to be dropped then call Process.kill()
         /// </summary>
-        public static Unit shutdown() =>
-            shutdown(Self);
+        public static Aff<RT, Unit> shutdown() =>
+            Self.Bind(shutdown);
 
         /// <summary>
         /// Kill a specified running process.
@@ -242,14 +254,14 @@ namespace Echo
         /// If you wish for the data to be maintained for future
         /// spawns then call Process.shutdown(pid);
         /// </summary>
-        public static Unit kill(ProcessId pid) =>
-            ActorContext.System(pid).Kill(pid, false);
+        public static Aff<RT, Unit> kill(ProcessId pid) =>
+            Eff(() => Process.kill(pid));
 
         /// <summary>
         /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
         /// </summary>
-        public static Unit startup(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.StartupProcess(false));
+        public static Aff<RT, Unit> startup(ProcessId pid) =>
+            Eff(() => Process.startup(pid));
 
         /// <summary>
         /// Shutdown a specified running process.
@@ -259,31 +271,27 @@ namespace Echo
         /// for future spawns.  If you wish for the data to be dropped then call
         /// Process.kill(pid)
         /// </summary>
-        public static Unit shutdown(ProcessId pid) =>
-            ActorContext.System(pid).Kill(pid, true);
+        public static Aff<RT, Unit> shutdown(ProcessId pid) =>
+            Eff(() => Process.shutdown(pid));
 
         /// <summary>
         /// Shutdown all processes on the specified process-system
         /// </summary>
-        public static Unit shutdownSystem(SystemName system) =>
-            ActorContext.StopSystem(system);
+        public static Aff<RT, Unit> shutdownSystem(SystemName system) =>
+            Eff(() => Process.shutdownSystem(system));
 
         /// <summary>
         /// Shutdown all processes on all process-systems
         /// </summary>
-        public static Unit shutdownAll()
-        {
-            LocalScheduler.Shutdown();
-
-            return ActorContext.StopAllSystems();
-        }
+        public static Aff<RT, Unit> shutdownAll() =>
+            Eff(Process.shutdownAll);
 
         /// <summary>
         /// Forces a running process to restart.  This will reset its state and drop
         /// any subscribers, or any of its subscriptions.
         /// </summary>
-        public static Unit restart(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.Restart);
+        public static Aff<RT, Unit> restart(ProcessId pid) =>
+            Eff(() => Process.restart(pid));
 
         /// <summary>
         /// Pauses a running process.  Messages will still be accepted into the Process'
@@ -291,8 +299,8 @@ namespace Echo
         /// Process is unpaused: <see cref="unpause(ProcessId)"/>
         /// </summary>
         /// <param name="pid">Process to pause</param>
-        public static Unit pause(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.Pause);
+        public static Aff<RT, Unit> pause(ProcessId pid) =>
+            Eff(() => Process.pause(pid));
 
         /// <summary>
         /// Pauses a running process.  Messages will still be accepted into the Process'
@@ -301,19 +309,16 @@ namespace Echo
         /// delay expires.
         /// </summary>
         /// <param name="pid">Process to pause</param>
-        public static IDisposable pauseFor(ProcessId pid, Time delay)
-        {
-            pause(pid);
-            return (IDisposable)Task.Delay((int)delay.Milliseconds).ContinueWith(_ => unpause(pid));
-        }
+        public static Aff<RT, IDisposable> pauseFor(ProcessId pid, Time delay) =>
+            Eff(() => Process.pauseFor(pid, delay));
 
         /// <summary>
         /// Un-pauses a paused process.  Messages that have built-up in the inbox whilst
         /// the Process was paused will be Processed immediately.
         /// </summary>
         /// <param name="pid">Process to un-pause</param>
-        public static Unit unpause(ProcessId pid) =>
-            ActorContext.System(pid).TellSystem(pid, SystemMessage.Unpause);
+        public static Eff<RT, Unit> unpause(ProcessId pid) =>
+            Eff(() => Process.unpause(pid));
 
         /// <summary>
         /// Find out if a process exists
@@ -327,8 +332,8 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process ID to check</param>
         /// <returns>True if exists</returns>
-        public static bool exists(ProcessId pid) =>
-            ActorContext.System(pid).GetDispatcher(pid).Exists;
+        public static Aff<RT, bool> exists(ProcessId pid) =>
+            Eff(() => Process.exists(pid));
 
         /// <summary>
         /// Find out if a process exists and is alive
@@ -341,26 +346,22 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process ID to check</param>
         /// <returns>True if exists</returns>
-        public static bool ping(ProcessId pid) =>
-            ActorContext.System(pid).GetDispatcher(pid).Ping();
+        public static Aff<RT, bool> ping(ProcessId pid) =>
+            Eff(() => Process.ping(pid));
 
         /// <summary>
         /// Watch another Process in case it terminates
         /// </summary>
         /// <param name="pid">Process to watch</param>
-        public static Unit watch(ProcessId pid) =>
-            InMessageLoop
-                ? ActorContext.Request.Self.Actor.DispatchWatch(pid)
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(watch));
+        public static Aff<RT, Unit> watch(ProcessId pid) =>
+            Eff(() => Process.watch(pid));
 
         /// <summary>
         /// Un-watch another Process that this Process has been watching
         /// </summary>
         /// <param name="pid">Process to watch</param>
-        public static Unit unwatch(ProcessId pid) =>
-            InMessageLoop
-                ? ActorContext.Request.Self.Actor.DispatchUnWatch(pid)
-                : raiseUseInMsgLoopOnlyException<Unit>(nameof(unwatch));
+        public static Aff<RT, Unit> unwatch(ProcessId pid) =>
+            Eff(() => Process.unwatch(pid));
 
         /// <summary>
         /// Watch for the death of the watching process and tell the watcher
@@ -368,24 +369,24 @@ namespace Echo
         /// </summary>
         /// <param name="watcher">Watcher</param>
         /// <param name="watching">Watched</param>
-        public static Unit watch(ProcessId watcher, ProcessId watching) =>
-            ActorContext.System(watcher).GetDispatcher(watcher).DispatchWatch(watching);
+        public static Aff<RT, Unit> watch(ProcessId watcher, ProcessId watching) =>
+            Eff(() => Process.watch(watcher, watching));
 
         /// <summary>
         /// Stop watching for the death of the watching process
         /// </summary>
         /// <param name="watcher">Watcher</param>
         /// <param name="watching">Watched</param>
-        public static Unit unwatch(ProcessId watcher, ProcessId watching) =>
-            ActorContext.System(watcher).GetDispatcher(watcher).DispatchUnWatch(watching);
+        public static Aff<RT, Unit> unwatch(ProcessId watcher, ProcessId watching) =>
+            Eff(() => Process.unwatch(watcher, watching));
 
         /// <summary>
         /// Find the number of items in the Process inbox
         /// </summary>
         /// <param name="pid">Process</param>
         /// <returns>Number of items in the Process inbox</returns>
-        public static int inboxCount(ProcessId pid) =>
-            ActorContext.System(pid).GetDispatcher(pid).GetInboxCount();
+        public static Aff<RT, int> inboxCount(ProcessId pid) =>
+            Eff(() => Process.inboxCount(pid));
 
         /// <summary>
         /// Return True if the message sent is a Tell and not an Ask
@@ -393,22 +394,22 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process' message loop only
         /// </remarks>
-        public static bool isTell =>
-            InMessageLoop
-                ? ActorContext.Request.CurrentRequest == null
-                : raiseUseInMsgLoopOnlyException<bool>(nameof(isTell));
+        public static Eff<RT, bool> isTell =>
+            echoState.Map(es => es.InMessageLoop 
+                                    ? es.Request?.CurrentRequest == null
+                                    : Process.raiseUseInMsgLoopOnlyException<bool>(nameof(isTell)));
 
         /// <summary>
         /// Get a list of cluster nodes that are online
         /// </summary>
-        public static HashMap<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).ClusterState?.Members.ToHashMap() ?? HashMap<ProcessName, ClusterNode>();
+        public static Eff<RT, HashMap<ProcessName, ClusterNode>> ClusterNodes =>
+            echoState.Map(es => es.System.ClusterState?.Members.ToHashMap() ?? HashMap<ProcessName, ClusterNode>());
 
         /// <summary>
         /// List of system names running on this node
         /// </summary>
-        public static Lst<SystemName> Systems =>
-            ActorContext.Systems.Freeze();
+        public static Eff<RT, Seq<SystemName>> Systems =>
+            echoState.Map(es => es.SystemNames.ToSeq());
 
         /// <summary>
         /// Return True if the message sent is an Ask and not a Tell
@@ -416,7 +417,8 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process' message loop only
         /// </remarks>
-        public static bool isAsk => !isTell;
+        public static Eff<RT, bool> isAsk =>
+            isTell.Map(not);
 
         /// <summary>
         /// Resolves a ProcessId into the absolute ProcessIds that it represents
@@ -428,8 +430,8 @@ namespace Echo
         /// </remarks>
         /// <param name="pid"></param>
         /// <returns>Enumerable of resolved ProcessIds - could be zero length</returns>
-        public static IEnumerable<ProcessId> resolve(ProcessId pid) =>
-            ActorContext.System(pid).ResolveProcessIdSelection(pid);
+        public static Eff<RT, IEnumerable<ProcessId>> resolve(ProcessId pid) =>
+            Eff(() => ActorContext.System(pid).ResolveProcessIdSelection(pid));
 
         /// <summary>
         /// Get the types of messages that the provided ProcessId accepts.  Returns
@@ -438,17 +440,13 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process ID to query</param>
         /// <returns>List of types</returns>
-        public static IEnumerable<Type> validMessageTypes(ProcessId pid) =>
-            ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes();
+        public static Aff<RT, IEnumerable<Type>> validMessageTypes(ProcessId pid) =>
+            Eff(() => ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes());
 
         /// <summary>
         /// Cancel an already scheduled message
         /// </summary>
-        public static Unit cancelScheduled(ProcessId pid, string key)
-        {
-            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
-            LocalScheduler.Cancel(pid, key);
-            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.RemoveFromSchedule(inboxKey, key));
-        }
+        public static Aff<RT, Unit> cancelScheduled(ProcessId pid, string key) =>
+            Eff(() => Process.cancelScheduled(pid, key));
     }
 }
