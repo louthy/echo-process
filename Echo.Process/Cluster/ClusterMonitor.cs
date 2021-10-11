@@ -121,10 +121,11 @@ namespace Echo
                     try
                     {
                         var cutOff = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff);
-                        c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role));
 
                         state.Members.Swap(
                             oldState => {
+                                c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role));
+                                
                                 var newState = c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s))
                                                 .Where(m => m.LastHeartbeat > cutOff);
 
