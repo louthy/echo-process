@@ -70,7 +70,7 @@ namespace Echo
             mstatus    = MState.Paused;
             setupFn    = setup ?? throw new ArgumentNullException(nameof(setup));
             actorFn    = actor ?? throw new ArgumentNullException(nameof(actor));
-            shutdownFn = shutdown ?? throw new ArgumentNullException(nameof(shutdown));
+            shutdownFn = shutdown ?? (_ => unit.AsValueTask());
             shutdownFn = async (S s) =>
             {
                 try
@@ -298,8 +298,6 @@ namespace Echo
                 {
                     state = await setupFn(this).ConfigureAwait(false);
                 }
-
-                ActorContext.Request.RunOps();
             }
             catch (Exception e)
             {
@@ -644,14 +642,10 @@ namespace Echo
                     LastFailure: DateTime.MaxValue,
                     BackoffAmount: 0 * seconds
                 );
-
-                ActorContext.Request.RunOps();
             }
             catch (Exception e)
             {
-                ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
                 replyError(e);
-                ActorContext.Request.RunOps();
                 return await DefaultErrorHandler(request, e).ConfigureAwait(false);
             }
             finally
@@ -728,8 +722,6 @@ namespace Echo
                     LastFailure: DateTime.MaxValue,
                     BackoffAmount: 0 * seconds
                     );
-
-                ActorContext.Request.RunOps();
             }
             catch (Exception e)
             {
@@ -749,9 +741,6 @@ namespace Echo
 
         async ValueTask<InboxDirective> DefaultErrorHandler(object message, Exception e)
         {
-            // Wipe all transactional outputs because of the error
-            ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
-
             var directive = await RunStrategy(
                 Id,
                 Parent.Actor.Id,
@@ -762,8 +751,6 @@ namespace Echo
                 Parent.Actor.Strategy).ConfigureAwait(false);
             if (!(e is ProcessKillException)) tell(sys.Errors, e);
 
-            // Run any transactional outputs caused by the strategy computation
-            ActorContext.Request.RunOps();
             return directive;
         }
 
@@ -850,8 +837,6 @@ namespace Echo
                     LastFailure: DateTime.MaxValue,
                     BackoffAmount: 0 * seconds
                 );
-
-                ActorContext.Request.RunOps();
             }
             catch (Exception e)
             {

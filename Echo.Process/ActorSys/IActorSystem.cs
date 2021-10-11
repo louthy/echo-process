@@ -58,7 +58,7 @@ namespace Echo
         ProcessSystemConfig Settings { get; }
 
         /// <summary>
-        /// Get an IActorDisptach for a Process - this works out how to
+        /// Get an IActorDispatch for a Process - this works out how to
         /// communicate with other processes (remote, local, JS, etc.)
         /// </summary>
         IActorDispatch GetDispatcher(ProcessId pid);

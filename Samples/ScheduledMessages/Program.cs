@@ -1,12 +1,13 @@
 ﻿using Echo;
+using System;
+using System.Linq;
+using LanguageExt;
 using static Echo.Process;
 using static Echo.ProcessConfig;
-using LanguageExt;
 using static LanguageExt.Prelude;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using LanguageExt.ClassInstances;
+using static System.Console;
 
 namespace ScheduledMessages
 {
@@ -18,6 +19,7 @@ namespace ScheduledMessages
         {
             RedisCluster.register();
             initialise("app", "schedule-test", "schedule-test1", "localhost", "0");
+            Process.ProcessSystemLog.Subscribe(WriteLine);
 
             RunInbox();
             //RunInboxAppendNum();
