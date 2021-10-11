@@ -1,12 +1,13 @@
 ﻿using Echo;
+using System;
+using System.Linq;
+using LanguageExt;
 using static Echo.Process;
 using static Echo.ProcessConfig;
-using LanguageExt;
 using static LanguageExt.Prelude;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using LanguageExt.ClassInstances;
+using static System.Console;
 
 namespace ScheduledMessages
 {
@@ -18,6 +19,7 @@ namespace ScheduledMessages
         {
             RedisCluster.register();
             initialise("app", "schedule-test", "schedule-test1", "localhost", "0");
+            Process.ProcessSystemLog.Subscribe(WriteLine);
 
             RunInbox();
             //RunInboxAppendNum();
@@ -82,18 +84,18 @@ namespace ScheduledMessages
         {
             Console.WriteLine(x);
             //tellSelf(x + 1, Schedule.Ephemeral(250 * ms, scheduler));
-            tellSelf(x + 1, Schedule.Persistent(250 * ms, scheduler));
+            tellSelf(x + 1, Echo.Schedule.Persistent(250 * ms, scheduler));
         }
 
         static void InboxAppend(Lst<int> many)
         {
             Console.WriteLine(String.Join(", ", many.Map(toString)));
 
-            tellSelf(List(many.Count + 1), Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
-            tellSelf(List(many.Count + 2), Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
-            tellSelf(List(many.Count + 3), Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
-            tellSelf(List(many.Count + 4), Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
-            tellSelf(List(many.Count + 5), Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
+            tellSelf(List(many.Count + 1), Echo.Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
+            tellSelf(List(many.Count + 2), Echo.Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
+            tellSelf(List(many.Count + 3), Echo.Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
+            tellSelf(List(many.Count + 4), Echo.Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
+            tellSelf(List(many.Count + 5), Echo.Schedule.EphemeralAppend<MLst<int>, Lst<int>>(2 * s, scheduler));
         }
 
         static void InboxAppendNum(int num)
@@ -102,11 +104,11 @@ namespace ScheduledMessages
 
             if (num > 5)
             {
-                tellSelf(num, Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
-                tellSelf(num, Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
-                tellSelf(num, Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
-                tellSelf(num, Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
-                tellSelf(num, Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
+                tellSelf(num, Echo.Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
+                tellSelf(num, Echo.Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
+                tellSelf(num, Echo.Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
+                tellSelf(num, Echo.Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
+                tellSelf(num, Echo.Schedule.PersistentAppend<TInt, int>(1 * s, scheduler));
             }
         }
     }

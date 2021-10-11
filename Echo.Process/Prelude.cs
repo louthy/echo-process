@@ -65,7 +65,6 @@ namespace Echo
     /// <para>
     ///         tellSelf(unit, TimeSpan.FromMinutes(30));
     /// </para>
-    /// <para>
     /// </summary>
     public static partial class Process
     {
@@ -207,19 +206,6 @@ namespace Echo
                 : raiseUseInMsgLoopOnlyException<ProcessId>(nameof(child));
 
         /// <summary>
-        /// Gets a CancellationToken that is in state Cancel when actor will shutdown.
-        /// This can be used in message loop to e.g. avoid long running message loop blocking actor shutdown.
-        /// </summary>
-        /// <remarks>
-        /// This should be used from within a process' message loop only
-        /// </remarks>
-        public static CancellationToken SelfProcessCancellationToken =>
-            InMessageLoop 
-                ? ActorContext.SelfProcess.Actor.CancellationTokenSource.Token
-                : raiseUseInMsgLoopOnlyException<CancellationToken>(nameof(SelfProcessCancellationToken));
-
-
-        /// <summary>
         /// Immediately kills the Process that is running from within its message
         /// loop.  It does this by throwing a ProcessKillException which is caught
         /// and triggers the shutdown of the Process.  Any Process that has a 
@@ -287,7 +273,7 @@ namespace Echo
         /// </summary>
         public static Unit shutdownAll()
         {
-            ProcessConfig.ShutdownLocalScheduler();
+            LocalScheduler.Shutdown();
 
             return ActorContext.StopAllSystems();
         }
@@ -416,7 +402,7 @@ namespace Echo
         /// Get a list of cluster nodes that are online
         /// </summary>
         public static HashMap<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
-            ActorContext.System(system).ClusterState?.Members ?? HashMap<ProcessName, ClusterNode>();
+            ActorContext.System(system).ClusterState?.Members.ToHashMap() ?? HashMap<ProcessName, ClusterNode>();
 
         /// <summary>
         /// List of system names running on this node
@@ -456,28 +442,12 @@ namespace Echo
             ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes();
 
         /// <summary>
-        /// Re-schedule an already scheduled message
-        /// </summary>
-        public static Unit reschedule(ProcessId pid, string key, DateTime when)
-        {
-            var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
-            LocalScheduler.Reschedule(pid, key, when);
-            return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.Reschedule(inboxKey, key, when));
-        }
-
-        /// <summary>
-        /// Re-schedule an already scheduled message
-        /// </summary>
-        public static Unit reschedule(ProcessId pid, string key, TimeSpan when) =>
-            reschedule(pid, key, DateTime.Now.Add(when));
-
-        /// <summary>
         /// Cancel an already scheduled message
         /// </summary>
         public static Unit cancelScheduled(ProcessId pid, string key)
         {
             var inboxKey = ActorInboxCommon.ClusterScheduleKey(pid);
-            LocalScheduler.RemoveExistingScheduledMessage(pid, key);
+            LocalScheduler.Cancel(pid, key);
             return tell(pid.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.RemoveFromSchedule(inboxKey, key));
         }
     }

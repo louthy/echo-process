@@ -19,10 +19,13 @@ namespace Echo
         /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobin<S, T>(
             ProcessName Name,
@@ -70,13 +73,12 @@ namespace Echo
         /// Spawns a new process with that routes each message to the Workers
         /// in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <param name="Name">Delegator process name</param>
-        /// <param name="Count">Number of worker processes</param>
-        /// <param name="Inbox">Worker message handler</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
-        /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobin<T>(
             ProcessName Name,
@@ -112,11 +114,16 @@ namespace Echo
         /// </summary>
         /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
+        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="Map">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMap<S, T, U>(
             ProcessName Name,
@@ -166,13 +173,14 @@ namespace Echo
         /// Spawns a new process with that routes each message is mapped and 
         /// sent to the Workers in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
+        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
-        /// <param name="Count">Number of worker processes</param>
-        /// <param name="Inbox">Worker message handler</param>
+        /// <param name="Map">Message mapping function</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
-        /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMap<T, U>(
             ProcessName Name,
@@ -209,14 +217,18 @@ namespace Echo
         /// from T to IEnumerable U before each resulting U is passed to the worker
         /// processes in a round robin fashion.
         /// </summary>
+        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="MapMany">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMapMany<S, T, U>(
             ProcessName Name,
@@ -284,11 +296,11 @@ namespace Echo
         /// <typeparam name="T">Message type</typeparam>
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
-        /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
-        /// <param name="Inbox">Worker message handler</param>
+        /// <param name="MapMany">Message mapping function</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
-        /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMapMany<T, U>(
             ProcessName Name,
@@ -331,13 +343,14 @@ namespace Echo
         /// Spawns a new process with Count worker processes, each message is sent to one worker
         /// process in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobin<T>(
             ProcessName Name,
@@ -354,13 +367,16 @@ namespace Echo
         /// Spawns a new process with Count worker processes, each message is mapped
         /// and sent to one worker process in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
+        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="Map">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMap<T, U>(
             ProcessName Name,
@@ -383,10 +399,12 @@ namespace Echo
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
+        /// <param name="MapMany">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId roundRobinMapMany<T, U>(
             ProcessName Name,
@@ -396,8 +414,7 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-            string WorkerName = "worker"
-            ) =>
+            string WorkerName = "worker") =>
             roundRobinMapMany(Name, Count, () => unit, (_, umsg) => { Inbox(umsg); return unit; }, MapMany, Flags, Strategy, MaxMailboxSize, WorkerName);
 
     }

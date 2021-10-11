@@ -366,4 +366,15 @@ namespace Echo
         public override string ToString() =>
             $"{nameof(ProcessSystemException)}: {Message}{Environment.NewLine} ---> {InnerException}{Environment.NewLine}   --- End of inner exception ---{Environment.NewLine}{StackTrace}";
     }
+
+    public class ProcessShutdownException : Exception
+    {
+        public readonly ProcessId ProcessId;
+
+        public ProcessShutdownException(ProcessId ProcessId) =>
+            this.ProcessId = ProcessId;
+
+        public override string Message =>
+            $"Process shutdown requested: {ProcessId}";
+    }
 }

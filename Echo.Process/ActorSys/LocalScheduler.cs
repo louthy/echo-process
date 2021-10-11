@@ -1,22 +1,26 @@
-﻿using LanguageExt;
+﻿using System;
+using System.Threading;
+using LanguageExt;
 using static LanguageExt.Prelude;
 using static Echo.Process;
-using System;
-using System.Linq;
-using System.Reactive.Disposables;
-using System.Threading;
-using System.Reactive.Linq;
 
 namespace Echo
 {
+    /// <summary>
+    /// Local in-memory scheduler
+    /// </summary>
     internal static class LocalScheduler
     {
-        static object sync = new object();
-        // using Map for 'actions' as we rely on order
-        static Map<long, Seq<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)>> actions;
-        static HashMap<string, long> keys;
-        static Que<(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> inbound;
-
+        static readonly AtomHashMap<string, IDisposable> scheduled = AtomHashMap<string, IDisposable>();  
+        
+        /// <summary>
+        /// Push an item onto the local schedule.  Schedule.Immediate items will be run synchronously
+        /// </summary>
+        /// <param name="schedule">Schedule</param>
+        /// <param name="pid">Process that's scheduling an action</param>
+        /// <param name="action">The action to run</param>
+        /// <param name="message">The message to pass to the action</param>
+        /// <exception cref="NotSupportedException">Schedule.Persistent not supported locally</exception>
         public static Unit Push(Schedule schedule, ProcessId pid, Func<object, Unit> action, object message)
         {
             if (schedule == Schedule.Immediate)
@@ -32,171 +36,107 @@ namespace Echo
                 }
                 else
                 {
-                    schedule = String.IsNullOrEmpty(schedule.Key)
-                        ? schedule.SetKey(Guid.NewGuid().ToString())
-                        : schedule;
-
-                    var savedContext = ActorContext.Request;
-                    var savedSession = ActorContext.SessionId;
-
-                    lock (sync)
+                    var due = (long)(schedule.Due.ToUniversalTime() - DateTime.UtcNow).TotalMilliseconds;
+                    if (due < 1)
                     {
-                        inbound = inbound.Enqueue((schedule, pid, action, message, savedContext, savedSession));
+                        action(message);
+                        return unit;
                     }
 
+                    schedule = String.IsNullOrEmpty(schedule.Key)
+                                   ? schedule.SetKey(Guid.NewGuid().ToString())
+                                   : schedule;
+
+                    scheduled.AddOrUpdate(MakeKey(pid, schedule),
+                                          Some: exists => {
+                                                    exists.Dispose();
+                                                    return StartTimer(MakeKey(pid, schedule), action, message, due);
+                                                },
+                                          None: () => StartTimer(MakeKey(pid, schedule), action, message, due));
                     return unit;
                 }
             }
         }
 
-        static void Clear()
+        /// <summary>
+        /// Cancel a scheduled message
+        /// </summary>
+        public static Unit Cancel(ProcessId pid, string key) =>
+            scheduled.Swap(sch => {
+                               var skey = MakeKey(pid, key);
+                               if (sch.Find(skey).Case is IDisposable d) d.Dispose();
+                               return sch.Remove(skey);
+                           });
+
+        /// <summary>
+        /// Shutdown
+        /// </summary>
+        /// <returns></returns>
+        public static Unit Shutdown() =>
+            scheduled.Swap(schs => {
+                               schs.Iter(s => s.Dispose());
+                               return Empty;
+                            });
+
+        /// <summary>
+        /// Start the scheduled item
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="action"></param>
+        /// <param name="message"></param>
+        /// <param name="due"></param>
+        static IDisposable StartTimer(string key, Func<object, Unit> action, object message, long due)
         {
-            lock (sync)
+            var savedContext = ActorContext.Request;
+            var savedSession = ActorContext.SessionId;
+            
+            void onEvent(object _)
             {
-                inbound = default;
-                actions = default;
-                keys = default;
+                scheduled.Remove(key);
+                RunAction(savedContext, savedSession, action, message);
             }
+
+            return new Timer(onEvent, null, due, -1);
         }
 
-        internal static Unit Reschedule(ProcessId pid, string key, DateTime when)
-        {
-            lock(sync)
-            {
-                var ckey = pid.Path + "|" + key;
-                return FindExistingScheduledMessage(key).Iter(existing =>
-                {
-                    RemoveExistingScheduledMessage(key);
-
-                    actions = actions.AddOrUpdate(
-                        when.Ticks,
-                        Some: seq => (key, existing.action, existing.message, existing.context, existing.sessionId).Cons(seq),
-                        None: () => Seq1((key, existing.action, existing.message, existing.context, existing.sessionId)));
-
-                    keys = keys.AddOrUpdate(key, when.Ticks);
-                });
-            }
-        }
-
-        public static IDisposable Run() =>
-            new CompositeDisposable(Disposable.Create(Clear), Observable.Interval(TimeSpan.FromMilliseconds(10)).Subscribe(Process));
-
-        static void Process(long time)
+        /// <summary>
+        /// Run the scheduled action in its original context
+        /// </summary>
+        static Unit RunAction(ActorRequestContext context, Option<SessionId> sessionId, Func<object, Unit> action, object message)
         {
             try
             {
-                ProcessInboundQueue();
-                ProcessActions();
+                return context == null
+                           ? action(message)
+                           : ActorContext.System(context.Self.Actor.Id).WithContext(
+                               context.Self,
+                               context.Parent,
+                               context.Sender,
+                               context.CurrentRequest,
+                               context.CurrentMsg,
+                               sessionId,
+                               () => {
+                                   action(message);
+                                   return unit;
+                               });
             }
             catch (Exception e)
             {
                 logErr(e);
+                return default;
             }
         }
 
-        static void ProcessInboundQueue()
-        {
-            var now = DateTime.UtcNow.Ticks;
-            while (inbound.Count > 0 && DateTime.UtcNow.Ticks - now < TimeSpan.TicksPerMillisecond)
-            {
-                var (schedule, pid, action, message, context, sessionId) = inbound.Peek();
+        /// <summary>
+        /// Make a namespaced key
+        /// </summary>
+        static string MakeKey(ProcessId pid, Schedule schedule) =>
+            MakeKey(pid, schedule.Key);
 
-                var key = pid.Path + "|" + schedule.Key;
-                var existing = FindExistingScheduledMessage(key);
-
-                RemoveExistingScheduledMessage(key);
-
-                message = schedule.Fold(existing.Map(x => x.message).IfNoneUnsafe(schedule.Zero), message);
-
-                actions = actions.AddOrUpdate(
-                    schedule.Due.Ticks,
-                    Some: seq => (key, action, message, context, sessionId).Cons(seq),
-                    None: () => Seq1((key, action, message, context, sessionId)));
-
-
-                keys = keys.AddOrUpdate(key, schedule.Due.Ticks);
-
-                lock (sync)
-                {
-                    inbound = inbound.Dequeue();
-                }
-            }
-        }
-
-        internal static void RemoveExistingScheduledMessage(ProcessId pid, string key)
-        {
-            lock (sync)
-            {
-                var ckey = pid.Path + "|" + key;
-                keys.Find(ckey).Match(
-                    Some: ticks =>
-                    {
-                        actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != ckey));
-                    },
-                    None: () => { });
-            }
-        }
-
-        internal static void RemoveExistingScheduledMessage(string key)
-        {
-            keys.Find(key).Match(
-                Some: ticks =>
-                {
-                    actions = actions.TrySetItem(ticks, Some: seq => seq.Filter(tup => tup.key != key));
-                },
-                None: () => { });
-        }
-
-        private static Option<(string key, Func<object, Unit> action, object message, ActorRequestContext context, Option<SessionId> sessionId)> FindExistingScheduledMessage(string key) =>
-            from ticks in keys.Find(key)
-            from seq in actions.Find(ticks)
-            from res in (from tup in seq
-                         where tup.key == key
-                         select tup).HeadOrNone()
-            select res;
-
-        static void ProcessActions()
-        {
-            var now = DateTime.UtcNow.Ticks;
-            var ticksToProcess = actions.Keys.TakeWhile(t => t < now).ToList();
-
-            foreach(var tick in ticksToProcess)
-            {
-                foreach(var item in actions[tick])
-                {
-                    try
-                    {
-                        if (item.context == null)
-                        {
-                            item.action(item.message);
-                        }
-                        else
-                        {
-                            ActorContext.System(item.context.Self.Actor.Id).WithContext(
-                                         item.context.Self,
-                                         item.context.Parent,
-                                         item.context.Sender,
-                                         item.context.CurrentRequest,
-                                         item.context.CurrentMsg,
-                                         item.sessionId,
-                                         () =>
-                                         {
-                                             item.action(item.message);
-
-                                             // Run the operations that affect the settings and sending of tells
-                                             // in the order which they occured in the actor
-                                             ActorContext.Request?.Ops?.Run();
-                                         });
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        logErr(e);
-                    }
-                    keys = keys.Remove(item.Item1);
-                }
-                actions = actions.Remove(tick);
-            }
-        }
+        /// <summary>
+        /// Make a namespaced key
+        /// </summary>
+        static string MakeKey(ProcessId pid, string key) =>
+            $"{pid.Path}|{key}";
     }
 }

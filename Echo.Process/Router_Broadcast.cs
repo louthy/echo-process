@@ -21,8 +21,11 @@ namespace Echo
         /// <param name="Name">Delegator process name</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcast<S, T>(
             ProcessName Name,
@@ -57,10 +60,12 @@ namespace Echo
         /// Spawns a new process with that routes each message to the Workers
         /// in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcast<T>(
             ProcessName Name,
@@ -91,12 +96,16 @@ namespace Echo
         /// </summary>
         /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
+        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Map">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMap<S, T, U>(
             ProcessName Name,
@@ -136,13 +145,14 @@ namespace Echo
         /// Spawns a new process with that routes each message to all workers
         /// Each message is mapped before being broadcast.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Map">Message mapping function</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
-        /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMap<T, U>(
             ProcessName Name,
@@ -176,14 +186,18 @@ namespace Echo
         /// from T to IEnumerable U before each resulting Us are passed all of the 
         /// worker processes.
         /// </summary>
+        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="MapMany">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
+        /// <param name="Setup">Setup effect</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMapMany<S, T, U>(
             ProcessName Name,
@@ -227,11 +241,11 @@ namespace Echo
         /// <typeparam name="T">Message type</typeparam>
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
-        /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
-        /// <param name="Inbox">Worker message handler</param>
+        /// <param name="MapMany">Message mapping function</param>
+        /// <param name="Workers">Worker processes</param>
+        /// <param name="Options">Router options</param>
         /// <param name="Flags">Process flags</param>
-        /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMapMany<T, U>(
             ProcessName Name,
@@ -261,13 +275,14 @@ namespace Echo
         /// Spawns a new process with Count worker processes, each message is sent to one worker
         /// process in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcast<T>(
             ProcessName Name,
@@ -284,13 +299,16 @@ namespace Echo
         /// Spawns a new process with Count worker processes, each message is mapped
         /// and sent to one worker process in a round robin fashion.
         /// </summary>
-        /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
+        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
+        /// <param name="Map">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMap<T, U>(
             ProcessName Name,
@@ -313,10 +331,12 @@ namespace Echo
         /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Count">Number of worker processes</param>
-        /// <param name="map">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
+        /// <param name="MapMany">Maps the message from T to IEnumerable U before each one is passed to the workers</param>
         /// <param name="Inbox">Worker message handler</param>
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
+        /// <param name="MaxMailboxSize">Max mailbox size</param>
+        /// <param name="WorkerName">Name of the worker</param>
         /// <returns>Process ID of the delegator process</returns>
         public static ProcessId broadcastMapMany<T, U>(
             ProcessName Name,

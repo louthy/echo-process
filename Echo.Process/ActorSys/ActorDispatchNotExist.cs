@@ -16,8 +16,10 @@ namespace Echo
             ProcessId = pid;
         }
 
-        private T Raise<T>(ProcessId sender) =>
-            raise<T>(new ProcessException($"Doesn't exist ({ProcessId})", sender.Path, sender.Path, null));
+        Unit Raise(ProcessId sender) =>
+            ActorContext.IsSystemActive(sender)
+                ? raise<Unit>(new ProcessException($"Doesn't exist ({ProcessId})", sender.Path, sender.Path, null))
+                : default;
 
         public HashMap<string, ProcessId> GetChildren() =>
             HashMap<string, ProcessId>();
@@ -29,19 +31,19 @@ namespace Echo
             Observable.Empty<T>();
 
         public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
-            Raise<Unit>(sender);
+            Raise(sender);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
             unit;
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            Raise<Unit>(sender);
+            Raise(sender);
 
         public Unit Ask(object message, ProcessId sender) =>
-            Raise<Unit>(sender);
+            Raise(sender);
 
         public Unit Publish(object message) =>
-            Raise<Unit>(ProcessId.None);
+            Raise(ProcessId.None);
 
         public Either<string, bool> CanAccept<T>() =>
             false;
@@ -59,13 +61,13 @@ namespace Echo
             -1;
 
         public Unit Watch(ProcessId pid) =>
-            Raise<Unit>(ProcessId.None);
+            Raise(ProcessId.None);
 
         public Unit UnWatch(ProcessId pid) =>
             unit;
 
         public Unit DispatchWatch(ProcessId pid) =>
-            Raise<Unit>(ProcessId.None);
+            Raise(ProcessId.None);
 
         public Unit DispatchUnWatch(ProcessId pid) =>
             unit;

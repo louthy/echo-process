@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using static Echo.Process;
 
 namespace Echo
@@ -13,11 +14,9 @@ namespace Echo
         public readonly ILocalActorInbox Inbox;
         public readonly IActor Actor;
         public readonly Option<SessionId> SessionId;
-        readonly bool transactionalIO;
 
-        public ActorDispatchLocal(ActorItem actor, bool transactionalIO, Option<SessionId> sessionId)
+        public ActorDispatchLocal(ActorItem actor, Option<SessionId> sessionId)
         {
-            this.transactionalIO = transactionalIO;
             SessionId = sessionId;
             Inbox = actor.Inbox as ILocalActorInbox;
             if (Inbox == null) throw new ArgumentException("Invalid (not local) ActorItem passed to LocalActorDispatch.");
@@ -47,32 +46,25 @@ namespace Echo
         }
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Inbox.TellSystem(message))
-                : Inbox.TellSystem(message);
+            Inbox.TellSystem(message);
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender)
         {
             var sessionId = ActorContext.SessionId;
-            return transactionalIO
-                ? ProcessOp.IO(() => Inbox.TellUserControl(message, sessionId))
-                : Inbox.TellUserControl(message, sessionId);
+            return Inbox.TellUserControl(message, sessionId);
         }
 
         public Unit Ask(object message, ProcessId sender) =>
             Inbox.Ask(message, sender, ActorContext.SessionId);
 
         public Unit Kill() =>
-            transactionalIO
-                ? ProcessOp.IO(() => ShutdownProcess(false))
-                : ShutdownProcess(false);
+            TellSystem(new ShutdownProcessMessage(false), ProcessId.NoSender);
 
         public Unit Shutdown() =>
-            transactionalIO
-                ? ProcessOp.IO(() => ShutdownProcess(true))
-                : ShutdownProcess(true);
+            TellSystem(new ShutdownProcessMessage(false), ProcessId.NoSender);
 
-        Unit ShutdownProcess(bool maintainState) =>
+        ValueTask<Unit> ShutdownProcess(bool maintainState) =>
+            
             ActorContext.System(Actor.Id).WithContext(
                 new ActorItem(
                     Actor,
@@ -84,39 +76,29 @@ namespace Echo
                 null,
                 SystemMessage.ShutdownProcess(maintainState),
                 None,
-                () => Actor.ShutdownProcess(maintainState)
+                () => Actor.Shutdown(maintainState)
             );
 
         public HashMap<string, ProcessId> GetChildren() =>
             Actor.Children.Map(a => a.Actor.Id);
 
         public Unit Publish(object message) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Actor.Publish(message))
-                : Actor.Publish(message);
+            Actor.Publish(message);
 
         public int GetInboxCount() =>
             Inbox.Count;
 
         public Unit Watch(ProcessId pid) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Actor.AddWatcher(pid))
-                : Actor.AddWatcher(pid);
+            Actor.AddWatcher(pid);
 
         public Unit UnWatch(ProcessId pid) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Actor.RemoveWatcher(pid))
-                : Actor.RemoveWatcher(pid);
+            Actor.RemoveWatcher(pid);
 
         public Unit DispatchWatch(ProcessId watching) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Actor.DispatchWatch(watching))
-                : Actor.DispatchWatch(watching);
+            Actor.DispatchWatch(watching);
 
         public Unit DispatchUnWatch(ProcessId watching) =>
-            transactionalIO
-                ? ProcessOp.IO(() => Actor.DispatchUnWatch(watching))
-                : Actor.DispatchUnWatch(watching);
+            Actor.DispatchUnWatch(watching);
 
         public bool IsLocal => 
             true;

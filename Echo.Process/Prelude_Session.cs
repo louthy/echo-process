@@ -8,6 +8,7 @@ using LanguageExt.UnitsOfMeasure;
 using System.Security.Cryptography;
 using Echo.Session;
 using System.Reactive.Subjects;
+using System.Threading.Tasks;
 using LanguageExt;
 
 namespace Echo
@@ -231,6 +232,7 @@ namespace Echo
         public static bool hasSession() =>
             ActorContext.SessionId.IsSome;
 
+
         /// <summary>
         /// Acquires a session for the duration of invocation of the 
         /// provided function. NOTE: This does not create a session, or
@@ -239,18 +241,29 @@ namespace Echo
         /// <param name="sid">Session ID</param>
         /// <param name="f">Function to invoke</param>
         /// <returns>Result of the function</returns>
-        public static R withSession<R>(SessionId sid, Func<R> f)
+        public static R withSession<R>(SessionId sid, Func<R> f) =>
+            withSessionAsync(sid, () => f().AsValueTask()).Result;
+        
+        /// <summary>
+        /// Acquires a session for the duration of invocation of the 
+        /// provided function. NOTE: This does not create a session, or
+        /// check that a session exists.  
+        /// </summary>
+        /// <param name="sid">Session ID</param>
+        /// <param name="f">Function to invoke</param>
+        /// <returns>Result of the function</returns>
+        public static async ValueTask<R> withSessionAsync<R>(SessionId sid, Func<ValueTask<R>> f)
         {
             if (InMessageLoop)
             {
-                return ActorContext.Request.System.WithContext(
+                return await ActorContext.Request.System.WithContext(
                     ActorContext.Request.Self,
                     ActorContext.Request.Self.Actor.Parent,
                     Sender,
                     ActorContext.Request.CurrentRequest,
                     ActorContext.Request.CurrentMsg,
                     Some(sid),
-                    f);
+                    f).ConfigureAwait(false);
             }
             else
             {
@@ -258,7 +271,7 @@ namespace Echo
                 try
                 {
                     ActorContext.SessionId = sid;
-                    return f();
+                    return await f().ConfigureAwait(false);
                 }
                 finally
                 {

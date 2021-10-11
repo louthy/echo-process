@@ -14,22 +14,6 @@ namespace Echo
     public static class ProcessConfig
     {
         static object sync = new object();
-        static IDisposable localScheduler;
-
-        static void InitLocalScheduler()
-        {
-            if(localScheduler != null)
-            {
-                localScheduler.Dispose();
-            }
-            localScheduler = LocalScheduler.Run();
-        }
-
-        internal static void ShutdownLocalScheduler()
-        {
-            localScheduler.Dispose();
-            localScheduler = null;
-        }
 
 #if !NETSTANDARD
 
@@ -355,8 +339,6 @@ namespace Echo
         {
             lock (sync)
             {
-                InitLocalScheduler();
-
                 config.Cluster.Match(
                     Some: _ =>
                     {

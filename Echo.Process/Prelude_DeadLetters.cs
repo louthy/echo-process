@@ -11,7 +11,7 @@ namespace Echo
     {
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="message">Dead letter message</param>
         /// <param name="reason">Reason for the dead-letter</param>
@@ -27,7 +27,7 @@ namespace Echo
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="message">Dead letter message</param>
         /// <param name="ex">Exception that caused the dead-letter</param>
@@ -43,7 +43,7 @@ namespace Echo
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="message">Dead letter message</param>
         /// <param name="ex">Exception that caused the dead-letter</param>
@@ -61,7 +61,7 @@ namespace Echo
 
         /// <summary>
         /// Forward the current message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="reason">Reason for the dead-letter</param>
         public static Unit dead(string reason, SystemName system = default(SystemName)) =>
@@ -76,7 +76,7 @@ namespace Echo
 
         /// <summary>
         /// Forward the current message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="ex">Exception that caused the dead-letter</param>
         public static Unit dead(Exception ex, SystemName system = default(SystemName)) =>
@@ -91,7 +91,7 @@ namespace Echo
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
-        /// structre)
+        /// structure)
         /// </summary>
         /// <param name="ex">Exception that caused the dead-letter</param>
         /// <param name="reason">Reason for the dead-letter</param>

@@ -56,6 +56,7 @@ namespace Echo.Tests
             }
         }
 
+        /*
         public class StrategyRestartDelayIssue : IClassFixture<ProcessFixture>
         {
             [Fact(Timeout = 10000)]
@@ -121,6 +122,6 @@ namespace Echo.Tests
                 }
             }
 
-        }
+        }*/
     }
 }

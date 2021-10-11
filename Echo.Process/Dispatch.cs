@@ -11,8 +11,8 @@ namespace Echo
     {
         readonly static object sync = new object();
 
-        static Map<ProcessName, Func<ProcessId, IEnumerable<ProcessId>>> dispatchers = 
-            Map<ProcessName, Func<ProcessId, IEnumerable<ProcessId>>>();
+        static readonly AtomHashMap<ProcessName, Func<ProcessId, IEnumerable<ProcessId>>> dispatchers = 
+            AtomHashMap<ProcessName, Func<ProcessId, IEnumerable<ProcessId>>>();
 
         /// <summary>
         /// Registers a dispatcher for a role
@@ -27,10 +27,7 @@ namespace Echo
         /// be passed to the selector function whenever the dispatcher based ProcessId is used</returns>
         public static ProcessId register(ProcessName name, Func<ProcessId, IEnumerable<ProcessId>> selector)
         {
-            lock (sync)
-            {
-                dispatchers = dispatchers.AddOrUpdate(name, selector);
-            }
+            dispatchers.AddOrUpdate(name, selector);
             return ProcessId.Top["disp"][name];
         }
 
@@ -40,10 +37,7 @@ namespace Echo
         /// <param name="name">Name of the dispatcher to remove</param>
         public static Unit deregister(ProcessName name)
         {
-            lock (sync)
-            {
-                dispatchers = dispatchers.Remove(name);
-            }
+            dispatchers.Remove(name);
             return unit;
         }
 
@@ -223,16 +217,12 @@ namespace Echo
             });
 
             // Round-robin
-            object sync = new object();
-            Map<string, int> roundRobinState = Map<string, int>();
+            AtomHashMap<string, int> roundRobinState = AtomHashMap<string, int>();
             RoundRobin = register(roundRobin, leaf => {
                 var key = leaf.ToString();
                 var workers = processes(leaf).ToArray();
                 int index = 0;
-                lock (sync)
-                {
-                    roundRobinState = roundRobinState.AddOrUpdate(key, x => { index = x % workers.Length; return x + 1; }, 0);
-                }
+                roundRobinState.AddOrUpdate(key, x => { index = x % workers.Length; return x + 1; }, 0);
                 return new ProcessId[1] { workers[index] };
             });
         }
