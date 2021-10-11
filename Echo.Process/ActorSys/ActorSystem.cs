@@ -440,23 +440,31 @@ namespace Echo
                     maxMailboxSize, 
                     lazy);
 
-        public ProcessId ActorCreateAsync<S, T>(
+        public ProcessId ActorCreateAsync<T>(
             ActorItem parent,
             ProcessName name,
             Func<T, ValueTask> actorFn,
-            Func<S, ValueTask<Unit>> shutdownFn,
-            Func<S, ProcessId, ValueTask<S>> termFn,
+            Func<ValueTask> shutdownFn,
+            Func<ProcessId, ValueTask> termFn,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
             bool lazy
             ) =>
-            ActorCreateAsync<S, T>(parent, 
+            ActorCreateAsync<Unit, T>(parent, 
                                    name, 
-                                   async (s, t) => { await actorFn(t).ConfigureAwait(false); return default(S); }, 
-                                   () => default(S).AsValueTask(), 
-                                   shutdownFn ?? NoShutdownAsync<S>(), 
-                                   termFn, 
+                                   async (_, t) => { await actorFn(t).ConfigureAwait(false); return default; }, 
+                                   () => default(Unit).AsValueTask(),
+                                   (async _ => {
+                                       if (shutdownFn == null) return unit;
+                                       await shutdownFn().ConfigureAwait(false);
+                                       return unit;
+                                   }),
+                                   async (_, pid) => {
+                                       if (termFn == null) return unit;
+                                       await termFn(pid).ConfigureAwait(false);
+                                       return unit;
+                                   }, 
                                    strategy, 
                                    flags, 
                                    maxMailboxSize, 
@@ -471,8 +479,7 @@ namespace Echo
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             int maxMailboxSize,
-            bool lazy
-        ) =>
+            bool lazy) =>
             ActorCreateAsync<S, T>(parent, 
                                    name, 
                                    (s, t) => { actorFn(t); return default(S).AsValueTask(); }, 
