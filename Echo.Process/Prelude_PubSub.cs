@@ -85,7 +85,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
@@ -101,7 +101,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
@@ -117,7 +117,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext, Action<Exception> onError) =>
@@ -132,7 +132,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         public static IDisposable subscribe<T>(ProcessId pid, Action<T> onNext) =>
@@ -147,7 +147,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IDisposable, call IDispose to end the subscription</returns>
@@ -163,7 +163,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IObservable T</returns>
@@ -179,7 +179,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, that's why this 
+        /// Because this call is asynchronous it could allow access to the message loop, that's why this 
         /// function is labelled `Unsafe`.  Careful disposing and capture of free variables is required to not
         /// break the principles of actors.
         /// </remarks>
@@ -196,7 +196,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, therefore
+        /// Because this call is asynchronous it could allow access to the message loop, therefore
         /// you can't call it from within a process message loop.
         /// </remarks>
         /// <returns>IObservable T</returns>
@@ -214,7 +214,7 @@ namespace Echo
         /// <remarks>
         /// The process can publish any number of types, any published messages not of type T will be ignored.
         /// 
-        /// Because this call is asychronous it could allow access to the message loop, that's why this 
+        /// Because this call is asynchronous it could allow access to the message loop, that's why this 
         /// function is labelled `Unsafe`.  Careful disposing and capture of free variables is required to not
         /// break the principles of actors.
         /// </remarks>

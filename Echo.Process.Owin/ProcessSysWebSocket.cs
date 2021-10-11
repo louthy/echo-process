@@ -37,7 +37,10 @@ namespace Echo
         }
 
         public override async Task OnMessageReceived(ArraySegment<byte> message, WebSocketMessageType type) =>
-            await Req.Parse(Encoding.UTF8.GetString(message.Array, message.Offset, message.Count), Context.Request.RemoteIpAddress, ProcessHub.Connections).MatchAsync(
+            await Req.Parse(
+                Encoding.UTF8.GetString(message.Array ?? new byte[0], message.Offset, message.Count), 
+                Context.Request.RemoteIpAddress, 
+                ProcessHub.Connections).MatchAsync(
                 RightAsync: async msg =>
                 {
                     switch (msg)

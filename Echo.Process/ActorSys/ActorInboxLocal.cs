@@ -1,5 +1,4 @@
-﻿//using Microsoft.FSharp.Control;
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Reflection;
@@ -9,69 +8,56 @@ using Newtonsoft.Json;
 using Echo.ActorSys;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using LanguageExt;
 
 namespace Echo
 {
-    class ActorInboxLocal<S, T> : IActorInbox, ILocalActorInbox
+    class ActorInboxLocal<S, T> : ILocalActorInbox
     {
-        PausableBlockingQueue<UserControlMessage> userInbox;
-        PausableBlockingQueue<SystemMessage> sysInbox;
+        const int MaxSysInboxSize = 100;
+        
+        readonly ConcurrentQueue<UserControlMessage> userInboxQueue = new();
+        readonly ConcurrentQueue<SystemMessage> sysInboxQueue = new();
 
         Actor<S, T> actor;
+        IActorSystem system;
         ActorItem parent;
         Option<ICluster> cluster;
         int maxMailboxSize;
+        bool shutdownRequested = false;
+        volatile int paused = 1;
+        volatile int drainingUserQueue = 0;
+        volatile int drainingSystemQueue = 0;
 
-        public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
+        /// <summary>
+        /// Start up the inbox
+        /// </summary>
+        public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
-            if (Active)
-            {
-                Shutdown();
-            }
             this.cluster = cluster;
-            this.parent = parent;
-            this.actor = (Actor<S, T>)process;
+            this.parent  = parent;
+            this.actor   = (Actor<S, T>)process;
+            this.system  = system; 
             this.maxMailboxSize = maxMailboxSize == -1
-                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
-                : maxMailboxSize;
+                                      ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
+                                      : maxMailboxSize;
 
-            userInbox = new PausableBlockingQueue<UserControlMessage>(this.maxMailboxSize);
-            sysInbox = new PausableBlockingQueue<SystemMessage>(this.maxMailboxSize);
-
-            var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
-            userInbox.ReceiveAsync(obj, (state, msg) => process.CancellationTokenSource.IsCancellationRequested ? InboxDirective.Shutdown : ActorInboxCommon.UserMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
-            sysInbox.ReceiveAsync(obj, (state, msg) => ActorInboxCommon.SystemMessageInbox(state.Actor, state.Inbox, msg, state.Parent));
-
+            Unpause();
+            DrainUserQueue();
+            DrainSystemQueue();
             return unit;
         }
 
-        class ThreadObj
-        {
-            public Actor<S, T> Actor;
-            public ActorInboxLocal<S, T> Inbox;
-            public ActorItem Parent;
-        }
+        /// <summary>
+        /// Shut down the inbox
+        /// </summary>
+        public Unit Shutdown() =>
+            ignore(shutdownRequested = true);
 
-        public Unit Shutdown()
-        {
-            userInbox?.Cancel();
-            sysInbox?.Cancel();
-            userInbox = null;
-            sysInbox = null;
-
-            return unit;
-        }
-
-        public IEnumerable<Type> GetValidMessageTypes() =>
-            new[] { typeof(T) };
-
-        string ClusterKey => actor.Id.Path + "-inbox";
-        string ClusterNotifyKey => actor.Id.Path + "-inbox-notify";
-
-        public bool Active => 
-            userInbox != null;
-
+        /// <summary>
+        /// Get the sender or NoSender if invalid
+        /// </summary>
         ProcessId GetSender(ProcessId sender) =>
             sender = sender.IsValid
                 ? sender
@@ -79,131 +65,224 @@ namespace Echo
                     ? Self
                     : ProcessId.NoSender;
 
-        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId)
-        {
-            if (message == null) throw new ArgumentNullException(nameof(message));
-            if (userInbox != null)
-            {
-                try
-                {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
-                                           .IfSome(msg => userInbox?.Post(msg));
-                }
-                catch (QueueFullException)
-                {
-                    throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
-                }
-            }
-            return unit;
-        }
+        /// <summary>
+        /// Posts a user ask into the user queue (non-blocking)
+        /// </summary>
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
 
-        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId)
-        {
-            if (message == null) throw new ArgumentNullException(nameof(message));
-            if (userInbox != null)
-            {
-                try
-                {
-                    return ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId)
-                                           .IfSome(msg => userInbox?.Post(msg));
-                }
-                catch(QueueFullException)
-                {
-                    throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
-                }
-            }
-            return unit;
-        }
-
+        /// <summary>
+        /// Posts a user tell into the user queue (non-blocking)
+        /// </summary>
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
+        
+        /// <summary>
+        /// Posts a user-control message into the user queue (non-blocking)
+        /// </summary>
         public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
-            if (userInbox != null)
-            {
-                try
-                {
-                    message.SessionId = message.SessionId ?? sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
-                    userInbox?.Post(message);
-                }
-                catch (QueueFullException)
-                {
-                    throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
-                }
-            }
-            return unit;
+            if (userInboxQueue.Count >= maxMailboxSize) throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
+            if (shutdownRequested) throw new ProcessShutdownException(actor.Id);
+            message.SessionId ??= sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
+            userInboxQueue.Enqueue(message);
+            return DrainUserQueue();
         }
 
+        /// <summary>
+        /// Posts a message into the system queue (non-blocking)
+        /// </summary>
         public Unit TellSystem(SystemMessage message)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
-            if (sysInbox != null)
+            if (sysInboxQueue.Count >= MaxSysInboxSize) throw new ProcessInboxFullException(actor.Id, MaxSysInboxSize, "system");
+            if (shutdownRequested) throw new ProcessShutdownException(actor.Id);
+            sysInboxQueue.Enqueue(message);
+            return DrainSystemQueue();
+        }
+
+        /// <summary>
+        /// If the draining of the queue isn't running, fire it off asynchronously
+        /// </summary>
+        Unit DrainUserQueue()
+        {
+            if (userInboxQueue.Count > 0 &&
+                !shutdownRequested && 
+                !IsPaused &&
+                system.IsActive && 
+                Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
-                try
-                {
-                    sysInbox?.Post(message);
-                }
-                catch (QueueFullException)
-                {
-                    throw new ProcessInboxFullException(actor.Id, MailboxSize, "system");
-                }
+                Task.Run(DrainUserQueueAsync);
             }
             return unit;
         }
 
+        /// <summary>
+        /// If the draining of the queue isn't running, fire it off asynchronously
+        /// </summary>
+        Unit DrainSystemQueue()
+        {
+            if (sysInboxQueue.Count > 0 &&
+                system.IsActive && 
+                Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+            {
+                Task.Run(DrainSystemQueueAsync);
+            }
+            return unit;
+        }
+
+        /// <summary>
+        /// Walk the user message queue and process them one by one.  Return when we're done
+        /// </summary>
+        async ValueTask<Unit> DrainUserQueueAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    if (system.IsActive && !shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
+                    {
+                        try
+                        {
+                            switch (await ActorInboxCommon.UserMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
+                            {
+                                case InboxDirective.Default:
+                                    userInboxQueue.TryDequeue(out _);
+                                    break;
+                                
+                                case InboxDirective.Pause:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Pause();
+                                    return unit;
+                                
+                                case InboxDirective.PushToFrontOfQueue: 
+                                    break;
+                                
+                                case InboxDirective.Shutdown:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Shutdown();
+                                    return unit;
+                                
+                                default: 
+                                    throw new InvalidOperationException("unknown directive");
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            userInboxQueue.TryDequeue(out _);
+                            logSysErr(e);
+                        }
+                    }
+                    else
+                    {
+                        return unit;
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
+                DrainUserQueue();
+            }
+        }
+        
+        /// <summary>
+        /// Walk the system message queue and process them one by one.  Return when we're done
+        /// </summary>
+        async ValueTask<Unit> DrainSystemQueueAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    if (system.IsActive && !shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
+                    {
+                        try
+                        {
+                            switch (await ActorInboxCommon.SystemMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
+                            {
+                                case InboxDirective.Pause:
+                                    Pause();
+                                    return unit;
+                                case InboxDirective.Shutdown:
+                                    Shutdown();
+                                    return unit;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            logSysErr(e);
+                        }
+                    }
+                    else
+                    {
+                        return unit;
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.CompareExchange(ref drainingSystemQueue, 0, 1);
+                if (sysInboxQueue.Count > 0)
+                {
+                    DrainSystemQueue();
+                }
+            }
+        }        
+
+        /// <summary>
+        /// Mailbox size
+        /// </summary>
         int MailboxSize => 
             maxMailboxSize < 0
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
                 : maxMailboxSize;
 
-        public bool IsPaused
-        {
-            get
-            {
-                return userInbox?.IsPaused ?? false;
-            }
-            private set
-            {
-                if (value)
-                {
-                    userInbox?.Pause();
-                }
-                else
-                {
-                    userInbox?.UnPause();
-                }
-            }
-        }
+        /// <summary>
+        /// True if paused
+        /// </summary>
+        public bool IsPaused =>
+            paused == 1;
 
+        /// <summary>
+        /// Pause the queue
+        /// </summary>
+        /// <returns></returns>
         public Unit Pause()
         {
-            IsPaused = true;
+            if (Interlocked.CompareExchange(ref paused, 1, 0) == 0)
+            {
+                actor.Pause();
+            }
             return unit;
         }
 
+        /// <summary>
+        /// Unpause the queue
+        /// </summary>
+        /// <returns></returns>
         public Unit Unpause()
         {
-            IsPaused = false;
-
-            // Wake up the user inbox to process any messages that have
-            // been waiting patiently.
-            TellUserControl(UserControlMessage.Null, None);
-
+            if (Interlocked.CompareExchange(ref paused, 0, 1) == 1)
+            {
+                actor.UnPause();
+                DrainUserQueue();
+            }
             return unit;
-        }
-
-        public void Dispose()
-        {
-            userInbox?.Cancel();
-            sysInbox?.Cancel();
-            userInbox = null;
-            sysInbox = null;
         }
 
         /// <summary>
         /// Number of unprocessed items
         /// </summary>
         public int Count =>
-            userInbox?.Count ?? 0;
+            userInboxQueue.Count;
+
+        public IEnumerable<Type> GetValidMessageTypes() =>
+            new[] { typeof(T) };
+
+        string ClusterKey => actor.Id.Path + "-inbox";
+        string ClusterNotifyKey => actor.Id.Path + "-inbox-notify";
 
         public Either<string, bool> HasStateTypeOf<TState>() =>
             TypeHelper.HasStateTypeOf(

@@ -303,6 +303,6 @@ public static class ProcessIdExtensions
     /// <param name="message">Message to send</param>
     /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
     /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
-    public static Unit Tell<T>(this ProcessId pid, T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+    public static Unit Tell<T>(this ProcessId pid, T message, Echo.Schedule schedule, ProcessId sender = default(ProcessId)) =>
         tell(pid, message, schedule, sender);
 }
