@@ -22,6 +22,7 @@ namespace Echo
         /// </summary>
         internal static Unit logInfo(object message)
         {
+            return default;
         }
 #endif 
 
