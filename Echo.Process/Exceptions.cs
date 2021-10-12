@@ -205,6 +205,39 @@ namespace Echo
             Sender = sender;
         }
     }
+    
+    
+    /// <summary>
+    /// A process doesn't exist
+    /// </summary>
+    public class ProcessDoesNotExistException : ProcessException
+    {
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        [JsonConstructor]
+        public ProcessDoesNotExistException(string who, string self, string sender, Exception innerException)
+            : base($"Doesn't exist {who}", self, sender, innerException)
+        {
+        }
+
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        [JsonConstructor]
+        public ProcessDoesNotExistException(ProcessId who, string self, string sender, Exception innerException)
+            : base($"Doesn't exist {who}", self, sender, innerException)
+        {
+        }
+
+        /// <summary>
+        /// Ctor
+        /// </summary>
+        public ProcessDoesNotExistException(string who, string self, string sender)
+            : base($"Doesn't exist {who}", self, sender)
+        {
+        }
+    }
 
     /// <summary>
     /// A process threw an exception in its setup function
