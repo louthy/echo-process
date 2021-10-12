@@ -190,7 +190,7 @@ namespace Echo
             Nodes(leaf).Values.Map(node => ProcessId.Top[node.NodeName].Append(leaf.Skip(1)));
 
         public static HashMap<ProcessName, ClusterNode> Nodes(ProcessId leaf, SystemName system = default(SystemName)) =>
-            ClusterNodes(system).Filter(node => node.Role == leaf.Take(1).Name);
+            ClusterNodes24(system).Filter(node => node.Role == leaf.Take(1).Name);
 
         static readonly ProcessId nextRoot;
         static readonly ProcessId prevRoot;

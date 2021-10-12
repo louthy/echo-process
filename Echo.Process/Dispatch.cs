@@ -205,7 +205,7 @@ namespace Echo
             // Least busy
             LeastBusy = register(leastBusy, leaf =>
                             processes(leaf)
-                                .Map(pid => Tuple(inboxCount(pid), pid))
+                                .Map(pid => (inboxCount(pid), pid))
                                 .OrderBy(tup => tup.Item1)
                                 .Map(tup => tup.Item2)
                                 .Take(1));
