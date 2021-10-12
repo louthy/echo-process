@@ -148,7 +148,7 @@ namespace Echo
             {
                 return ActorContext.System(default(SystemName)).AskMany<T>(Children.Values.ToSeq(), message, take).ToSeq();
             }
-            catch (ProcessDoesNotExistException e)
+            catch (Exception e)
             {
                 dead(message, e, "askChildren: child has probably died since calling Children");
                 return Empty;
@@ -228,7 +228,7 @@ namespace Echo
             {
                 return ask<T>(child(index), message);
             }
-            catch (ProcessDoesNotExistException e)
+            catch (Exception e)
             {
                 dead(message, e, "askChild: child has probably died since calling Children");
                 return (Error)e;

@@ -4,7 +4,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <PackageVersion>2.1.10-beta</PackageVersion>
+    <PackageVersion>2.1.11-beta</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>

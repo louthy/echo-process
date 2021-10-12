@@ -39,7 +39,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("fwd", e);
+                return dead(message, e);
             }
         }
 
@@ -51,13 +51,11 @@ namespace Echo
         {
             try
             {
-                return ActorContext.Request.CurrentRequest == null
-                           ? tell(pid, ActorContext.Request.CurrentMsg, Sender)
-                           : tell(pid, ActorContext.Request.CurrentRequest, Sender);
+                return tell(pid, ActorContext.Request.CurrentRequest ?? ActorContext.Request.CurrentMsg, Sender);
             }
             catch (Exception e)
             {
-                return dead("fwd", e);
+                return dead(ActorContext.Request.CurrentRequest ?? ActorContext.Request.CurrentMsg, e);
             }
         }
 

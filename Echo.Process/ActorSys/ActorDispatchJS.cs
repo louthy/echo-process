@@ -12,14 +12,16 @@ namespace Echo
         public readonly ProcessId ProcessId;
         public readonly ClientConnectionId Id;
         public readonly Option<SessionId> SessionId;
+        public readonly long ConversationId;
 
         public ActorDispatchJS(ProcessId pid, Option<SessionId> sessionId)
         {
             Id = ClientConnectionId.New(pid.Skip(2).Take(1).Name.Value);
-            ProcessHub.Connections.Find(Id).IfNone(() => { throw new ClientDisconnectedException(Id); });
+            if(ProcessHub.Connections.Find(Id).IsNone) throw new ClientDisconnectedException(Id);
             
-            ProcessId = pid;
-            SessionId = sessionId;
+            ProcessId      = pid;
+            SessionId      = sessionId;
+            ConversationId = ActorContext.NextOrCurrentConversationId();
         }
 
         public HashMap<string, ProcessId> GetChildren()
@@ -52,16 +54,17 @@ namespace Echo
             ProcessHub.Connections.Find(Id).Iter(c => c.Tell(
                 new ClientMessageDTO
                 {
-                    tag = inbox,
-                    type = type.ToString().ToLower(),
-                    connectionId = (string)Id,
-                    content = message,
-                    contentType = message.GetType().AssemblyQualifiedName,
-                    sender = sender.Path,
-                    replyTo = sender.Path,
-                    requestId = 0,
-                    sessionId = SessionId.Map(x => x.ToString()).IfNone(""),
-                    to = ProcessId.Skip(3).Path
+                    tag            = inbox,
+                    type           = type.ToString().ToLower(),
+                    connectionId   = (string)Id,
+                    content        = message,
+                    contentType    = message.GetType().AssemblyQualifiedName,
+                    sender         = sender.Path,
+                    replyTo        = sender.Path,
+                    requestId      = 0,
+                    sessionId      = SessionId.Map(x => x.ToString()).IfNoneUnsafe(() => null),
+                    conversationId = ConversationId,
+                    to             = ProcessId.Skip(3).Path
                 }));
 
         public Unit Ask(object message, ProcessId sender)
@@ -71,16 +74,17 @@ namespace Echo
             return ProcessHub.Connections.Find(Id).Iter(c => c.Tell(
                 new ClientMessageDTO
                 {
-                    tag = "ask",
-                    type = Message.Type.User.ToString().ToLower(),
-                    connectionId = (string)Id,
-                    content = req.Message,
-                    contentType = req.Message.GetType().AssemblyQualifiedName,
-                    sender = sender.Path,
-                    replyTo = sender.Path,
-                    requestId = req.RequestId,
-                    sessionId = SessionId.Map(x => x.ToString()).IfNone(""),
-                    to = ProcessId.Skip(3).Path
+                    tag            = "ask",
+                    type           = Message.Type.User.ToString().ToLower(),
+                    connectionId   = (string)Id,
+                    content        = req.Message,
+                    contentType    = req.Message.GetType().AssemblyQualifiedName,
+                    sender         = sender.Path,
+                    replyTo        = sender.Path,
+                    requestId      = req.RequestId,
+                    sessionId      = SessionId.Map(x => x.ToString()).IfNoneUnsafe(() => null),
+                    conversationId = ConversationId,
+                    to             = ProcessId.Skip(3).Path
                 }));
         }
 

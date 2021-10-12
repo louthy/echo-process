@@ -37,7 +37,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("tell", e);
+                return dead(message, e);
             }
         }
 
@@ -55,7 +55,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("tell", e);
+                return dead(message, e);
             }
         }
 
@@ -76,7 +76,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("tell", e);
+                return dead(message, e);
             }
         }
 
@@ -97,7 +97,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("tell", e);
+                return dead(message, e);
             }
         }
 
@@ -122,7 +122,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                return dead("tell", e);
+                return dead(message, e);
             }
         }
 

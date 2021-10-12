@@ -16,13 +16,13 @@ namespace Echo
         public Unit Tell(object message, ProcessId sender) =>
             unit;
 
-        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId) =>
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
             unit;
 
-        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId) =>
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
             unit;
 
-        public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId) =>
+        public Unit TellUserControl(UserControlMessage message) =>
             unit;
 
         public Unit TellSystem(SystemMessage message) => unit;
@@ -42,7 +42,6 @@ namespace Echo
         public IEnumerable<Type> GetValidMessageTypes() =>
             new Type [0];
 
-        public Unit TellUserControl(UserControlMessage message) => unit;
         public Unit Pause() => unit;
         public Unit Unpause() => unit;
         public bool IsPaused => false;

@@ -10,6 +10,7 @@ namespace Echo
 {
     static class ActorContext
     {
+        static long uniqueConversationId;
         static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
 
         internal static SystemName Context
@@ -18,13 +19,20 @@ namespace Echo
             set => context.Value = value;
         }
 
-        
+
+        static readonly AsyncLocal<long> conversationId;
         static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
         static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
         static SystemName defaultSystem;
         static SystemName[] systemNames = new SystemName[0];
         internal static ActorSystem[] systems = new ActorSystem[0];
         static readonly object sync = new object();
+
+        static ActorContext()
+        {
+            uniqueConversationId = Math.Abs(Guid.NewGuid().GetHashCode());
+            conversationId       = new AsyncLocal<long> {Value = uniqueConversationId};
+        }
 
         public static Unit StartSystem(SystemName system, Option<ICluster> cluster, AppProfile appProfile, ProcessSystemConfig config)
         {
@@ -62,6 +70,17 @@ namespace Echo
                 }
                 return unit;
             }
+        }
+
+        public static long NextOrCurrentConversationId() =>
+            request.Value == null
+                ? conversationId.Value = Interlocked.Increment(ref uniqueConversationId)
+                : conversationId.Value;
+
+        public static long ConversationId
+        {
+            get => conversationId.Value;
+            set => conversationId.Value = value;
         }
 
         public static bool InMessageLoop =>
