@@ -1,4 +1,5 @@
-﻿using LanguageExt.ClassInstances;
+﻿using System;
+using LanguageExt.ClassInstances;
 using System.Collections.Generic;
 using System.Linq;
 using static LanguageExt.Prelude;
@@ -191,10 +192,22 @@ namespace Echo
 
         public static HashMap<ProcessName, ClusterNode> Nodes(ProcessId leaf, SystemName system = default(SystemName))
         {
+            // Look for online nodes
             var nodes = ClusterNodes(system).Filter(node => node.Role == leaf.Take(1).Name);
-            return nodes.Count == 0
-                   ? ClusterNodes24(system).Filter(node => node.Role == leaf.Take(1).Name)
-                   : nodes;
+            if (nodes.Count != 0) return nodes;
+
+            // There aren't any online nodes.  So look for nodes that were online recently, backing off one hour at a
+            // time until we find something.  After 24 hours, give up, because they've been down for too long and are
+            // probably not coming back.
+            
+            var now     = DateTime.UtcNow;
+            var nodes24 = ClusterNodes24(system);
+            for (var i = -1; i >= -24; i--)
+            {
+                nodes = nodes24.Filter(node => node.LastHeartbeat > now.AddHours(i));
+                if (nodes.Count != 0) return nodes;
+            }
+            return Empty;
         }
 
         static readonly ProcessId nextRoot;
@@ -284,16 +297,12 @@ namespace Echo
                 });
 
             // Round-robin
-            object sync = new object();
-            HashMap<string, int> roundRobinState = HashMap<string, int>();
+            var roundRobinState = AtomHashMap<string, int>();
             RoundRobin = Dispatch.register(roundRobin, leaf => {
                 var key = leaf.ToString();
                 var workers = NodeIds(leaf).ToArray();
                 int index = 0;
-                lock (sync)
-                {
-                    roundRobinState = roundRobinState.AddOrUpdate(key, x => { index = x % workers.Length; return x + 1; }, 0);
-                }
+                roundRobinState.AddOrUpdate(key, x => { index = x % workers.Length; return x + 1; }, 0);
                 return new ProcessId[1] { workers[index] };
             });
         }
