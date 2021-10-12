@@ -18,8 +18,8 @@ namespace Echo
         /// </summary>
         /// <param name="message">Dead letter message</param>
         /// <param name="reason">Reason for the dead-letter</param>
-        public static Aff<RT, Unit> dead(object message, string reason, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(message, reason, system));
+        public static Aff<RT, Unit> dead(object message, string reason) =>
+            CurrentSystem.Map(sn => Process.dead(message, reason, sn));
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
@@ -27,8 +27,8 @@ namespace Echo
         /// </summary>
         /// <param name="message">Dead letter message</param>
         /// <param name="ex">Exception that caused the dead-letter</param>
-        public static Aff<RT, Unit> dead(object message, Exception ex, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(message, ex, system));
+        public static Aff<RT, Unit> dead(object message, Exception ex) =>
+            CurrentSystem.Map(sn => Process.dead(message, ex, sn));
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
@@ -37,24 +37,24 @@ namespace Echo
         /// <param name="message">Dead letter message</param>
         /// <param name="ex">Exception that caused the dead-letter</param>
         /// <param name="reason">Reason for the dead-letter</param>
-        public static Aff<RT, Unit> dead(object message, Exception ex, string reason, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(message, ex, reason, system));
+        public static Aff<RT, Unit> dead(object message, Exception ex, string reason) =>
+            CurrentSystem.Map(sn => Process.dead(message, ex, reason, sn));
 
         /// <summary>
         /// Forward the current message to dead-letters (and wrap it in a contextual dead-letter
         /// structure)
         /// </summary>
         /// <param name="reason">Reason for the dead-letter</param>
-        public static Aff<RT, Unit> dead(string reason, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(reason, system));
+        public static Aff<RT, Unit> dead(string reason) =>
+            CurrentSystem.Map(sn => Process.dead(reason, sn));
 
         /// <summary>
         /// Forward the current message to dead-letters (and wrap it in a contextual dead-letter
         /// structure)
         /// </summary>
         /// <param name="ex">Exception that caused the dead-letter</param>
-        public static Aff<RT, Unit> dead(Exception ex, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(ex, system));
+        public static Aff<RT, Unit> dead(Exception ex) =>
+            CurrentSystem.Map(sn => Process.dead(ex, sn));
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter
@@ -62,7 +62,7 @@ namespace Echo
         /// </summary>
         /// <param name="ex">Exception that caused the dead-letter</param>
         /// <param name="reason">Reason for the dead-letter</param>
-        public static Aff<RT, Unit> dead(Exception ex, string reason, SystemName system = default(SystemName)) =>
-            Eff(() => Process.dead(ex, reason, system));
+        public static Aff<RT, Unit> dead(Exception ex, string reason) =>
+            CurrentSystem.Map(sn => Process.dead(ex, reason, sn));
     }
 }

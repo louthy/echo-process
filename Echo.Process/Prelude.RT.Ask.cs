@@ -41,9 +41,28 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process to ask</param>
         /// <param name="message">Message to send</param>
+        /// <param name="sender">Sender process</param>
+        /// <returns>The response to the request</returns>
+        public static Aff<RT, T> ask<T>(Eff<RT, ProcessId> pid, object message, ProcessId sender) =>
+            pid.Bind(p => ask<T>(p, message, sender));
+
+        /// <summary>
+        /// Ask a process for a reply
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> ask<T>(ProcessId pid, object message) =>
             Eff(() => Process.ask<T>(pid, message));
+
+        /// <summary>
+        /// Ask a process for a reply
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>The response to the request</returns>
+        public static Aff<RT, T> ask<T>(Eff<RT, ProcessId> pid, object message) =>
+            pid.Bind(p => ask<T>(p, message));
 
         /// <summary>
         /// Ask a process for a reply (if the process is running).  If the process isn't running
@@ -62,9 +81,30 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process to ask</param>
         /// <param name="message">Message to send</param>
+        /// <param name="sender">Sender process</param>
+        /// <returns>The response to the request or None if the process isn't running</returns>
+        public static Aff<RT, Option<T>> askIfAlive<T>(Eff<RT, ProcessId> pid, object message, ProcessId sender) =>
+            pid.Bind(p => askIfAlive<T>(p, message, sender));
+
+        /// <summary>
+        /// Ask a process for a reply (if the process is running).  If the process isn't running
+        /// then None is returned
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
         /// <returns>The response to the request or None if the process isn't running</returns>
         public static Aff<RT, Option<T>> askIfAlive<T>(ProcessId pid, object message) =>
             Eff(() => Process.askIfAlive<T>(pid, message));
+
+        /// <summary>
+        /// Ask a process for a reply (if the process is running).  If the process isn't running
+        /// then None is returned
+        /// </summary>
+        /// <param name="pid">Process to ask</param>
+        /// <param name="message">Message to send</param>
+        /// <returns>The response to the request or None if the process isn't running</returns>
+        public static Aff<RT, Option<T>> askIfAlive<T>(Eff<RT, ProcessId> pid, object message) =>
+            pid.Bind(p => askIfAlive<T>(p, message));
 
         /// <summary>
         /// Ask children the same message

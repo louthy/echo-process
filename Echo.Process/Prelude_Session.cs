@@ -49,6 +49,7 @@ namespace Echo
         /// within a Process, use the variant where you specify the SystemName to use it
         /// from outside
         /// </summary>
+        /// <param name="sid">Session ID</param>
         /// <param name="timeout">Session timeout</param>
         /// <returns>sid</returns>
         public static SessionId sessionStart(SessionId sid, Time timeout) =>

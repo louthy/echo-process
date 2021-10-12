@@ -106,7 +106,7 @@ namespace Echo
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
-            pid.Bind(p => tell(pid, message, delayFor, sender));
+            pid.Bind(p => tell(p, message, delayFor, sender));
 
         /// <summary>
         /// Send a message at a specified time in the future
@@ -138,7 +138,7 @@ namespace Echo
         /// <param name="delayUntil">Date and time to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
-            pid.Bind(p =>tell(pid, message, delayUntil, sender));
+            pid.Bind(p =>tell(p, message, delayUntil, sender));
 
         /// <summary>
         /// Tell children the same message
