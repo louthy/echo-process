@@ -118,8 +118,8 @@ namespace Echo
         /// <param name="name">Name to register under</param>
         /// <returns>A ProcessId that allows dispatching to the process via the name.  The result
         /// would look like /disp/reg/name</returns>
-        public static Aff<RT, ProcessId> register(ProcessName name, SystemName system = default(SystemName)) =>
-            Eff(() => Process.register(name, system));
+        public static Aff<RT, ProcessId> register(ProcessName name) =>
+            CurrentSystem.Map(sn => Process.register(name, sn));
 
         /// <summary>
         /// Register a named process (a kind of DNS for Processes).  
@@ -185,7 +185,7 @@ namespace Echo
         /// use Process.deregisterById(pid)
         /// </remarks>
         /// <param name="name">Name of the process to deregister</param>
-        public static Aff<RT, Unit> deregisterByName(ProcessName name, SystemName system = default(SystemName)) =>
-            Eff(() => Process.deregisterByName(name, system));
+        public static Aff<RT, Unit> deregisterByName(ProcessName name) =>
+            CurrentSystem.Map(sn => Process.deregisterByName(name, sn));
     }
 }

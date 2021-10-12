@@ -15,8 +15,8 @@ namespace Echo
         /// <param name="role">Role to limit search to</param>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Registered names</returns>
-        public static Aff<RT, IEnumerable<ProcessName>> queryRegistered(ProcessName role, string keyQuery, SystemName system = default(SystemName)) =>
-            Eff(() => Process.queryRegistered(role, keyQuery, system));
+        public static Aff<RT, IEnumerable<ProcessName>> queryRegistered(ProcessName role, string keyQuery) =>
+            CurrentSystem.Map(sn => Process.queryRegistered(role, keyQuery, sn));
 
         /// <summary>
         /// Finds all *persistent* processes based on the search pattern provided.  Note the returned
@@ -25,8 +25,8 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Matching ProcessIds</returns>
-        public static Aff<RT, IEnumerable<ProcessId>> queryProcesses(string keyQuery, SystemName system = default(SystemName)) =>
-            Eff(() => Process.queryProcesses(keyQuery, system));
+        public static Aff<RT, IEnumerable<ProcessId>> queryProcesses(string keyQuery) =>
+            CurrentSystem.Map(sn => Process.queryProcesses(keyQuery, sn));
 
         /// <summary>
         /// Finds all *persistent* processes based on the search pattern provided and then returns the
@@ -34,7 +34,7 @@ namespace Echo
         /// </summary>
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
-        public static Aff<RT, HashMap<ProcessId, ProcessMetaData>> queryProcessMetaData(string keyQuery, SystemName system = default(SystemName)) =>
-            Eff(() => Process.queryProcessMetaData(keyQuery, system));
+        public static Aff<RT, HashMap<ProcessId, ProcessMetaData>> queryProcessMetaData(string keyQuery) =>
+            CurrentSystem.Map(sn => Process.queryProcessMetaData(keyQuery, sn));
     }
 }
