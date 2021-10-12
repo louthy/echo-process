@@ -87,7 +87,17 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Unit tellChildren<T>(T message, ProcessId sender = default(ProcessId)) =>
-            Children.Iter(child => tell(child, message, sender));
+            Children.Iter(child => {
+                              try
+                              {
+                                  tell(child, message, sender);
+                              }
+                              catch
+                              {
+                                  // Children may change as we're telling, so ignore failures
+                                  return;
+                              }
+                          });
 
         /// <summary>
         /// Tell children the same message
@@ -95,7 +105,17 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         internal static Unit tellSystemChildren<T>(T message, ProcessId sender = default(ProcessId)) =>
-            Children.Iter(child => tellSystem(child, message, sender));
+            Children.Iter(child => {
+                              try
+                              {
+                                  tellSystem(child, message, sender);
+                              }
+                              catch
+                              {
+                                  // Children may change as we're telling, so ignore failures
+                                  return;
+                              }
+                          });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -106,7 +126,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
-            Children.Values.Iter(child => tell(child, message, schedule, sender));
+            Children.Values.Iter(child => {
+                                     try
+                                     {
+                                         tell(child, message, schedule, sender);
+                                     }
+                                     catch
+                                     {
+                                         // Children may change as we're telling, so ignore failures
+                                         return;
+                                     }
+                                 });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -117,7 +147,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
-            Children.Values.Iter(child => tell(child, message, delayFor, sender));
+            Children.Values.Iter(child => {
+                                     try
+                                     {
+                                         tell(child, message, delayFor, sender);
+                                     }
+                                     catch
+                                     {
+                                         // Children may change as we're telling, so ignore failures
+                                         return;
+                                     }
+                                 });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -131,7 +171,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
-            Children.Values.Iter(child => tell(child, message, delayUntil, sender));
+            Children.Values.Iter(child => {
+                                     try
+                                     {
+                                         tell(child, message, delayUntil, sender);
+                                     }
+                                     catch
+                                     {
+                                         // Children may change as we're telling, so ignore failures
+                                         return;
+                                     }
+                                 });
 
         /// <summary>
         /// Tell children the same message
@@ -141,7 +191,17 @@ namespace Echo
         /// <param name="predicate">The list of children to send to are filtered by the predicate provided</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Unit tellChildren<T>(T message, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            Children.Filter(predicate).Iter(child => tell(child, message, sender));
+            Children.Filter(predicate).Iter(child => {
+                                                try
+                                                {
+                                                    tell(child, message, sender);
+                                                }
+                                                catch
+                                                {
+                                                    // Children may change as we're telling, so ignore failures
+                                                    return;
+                                                }
+                                            });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -154,7 +214,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, Schedule schedule, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            Children.Filter(predicate).Values.Iter(child => tell(child, message, schedule, sender));
+            Children.Filter(predicate).Values.Iter(child => {
+                                                       try
+                                                       {
+                                                           tell(child, message, schedule, sender);
+                                                       }
+                                                       catch
+                                                       {
+                                                           // Children may change as we're telling, so ignore failures
+                                                           return;
+                                                       }
+                                                   });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -167,7 +237,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, TimeSpan delayFor, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            Children.Filter(predicate).Values.Iter(child => tell(child, message, delayFor, sender));
+            Children.Filter(predicate).Values.Iter(child => {
+                                                       try
+                                                       {
+                                                           tell(child, message, delayFor, sender);
+                                                       }
+                                                       catch
+                                                       {
+                                                           // Children may change as we're telling, so ignore failures
+                                                           return;
+                                                       }
+                                                   });
 
         /// <summary>
         /// Tell children the same message, delayed.
@@ -183,7 +263,17 @@ namespace Echo
         /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
         /// for any other reason.</returns>
         public static Unit tellChildren<T>(T message, DateTime delayUntil, Func<ProcessId, bool> predicate, ProcessId sender = default(ProcessId)) =>
-            Children.Filter(predicate).Values.Iter(child => tell(child, message, delayUntil, sender));
+            Children.Filter(predicate).Values.Iter(child => {
+                                                       try
+                                                       {
+                                                           tell(child, message, delayUntil, sender);
+                                                       }
+                                                       catch
+                                                       {
+                                                           // Children may change as we're telling, so ignore failures
+                                                           return;
+                                                       }
+                                                   });
 
         /// <summary>
         /// Send a message to the parent process

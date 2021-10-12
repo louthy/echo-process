@@ -39,8 +39,26 @@ namespace Echo
         /// <param name="pid">Process ID to send to</param>
         /// <param name="message">Message to send</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, ProcessId sender = default(ProcessId)) =>
+            pid.Bind(p => tell(p, message, sender));
+
+        /// <summary>
+        /// Send a message to a process
+        /// </summary>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         internal static Aff<RT, Unit> tellSystem<T>(ProcessId pid, T message, ProcessId sender = default(ProcessId)) =>
             Eff(() => Process.tellSystem(pid, message, sender));
+
+        /// <summary>
+        /// Send a message to a process
+        /// </summary>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        internal static Aff<RT, Unit> tellSystem<T>(Eff<RT, ProcessId> pid, T message, ProcessId sender = default(ProcessId)) =>
+            pid.Bind(p => tellSystem(p, message, sender));
 
         /// <summary>
         /// Send a message at a specified time in the future
@@ -61,10 +79,34 @@ namespace Echo
         /// for any other reason.</returns>
         /// <param name="pid">Process ID to send to</param>
         /// <param name="message">Message to send</param>
+        /// <param name="schedule">A structure that defines the method of delivery of the scheduled message</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, Schedule schedule, ProcessId sender = default(ProcessId)) =>
+            pid.Bind(p => tell(p, message, schedule, sender));
+
+        /// <summary>
+        /// Send a message at a specified time in the future
+        /// </summary>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
         /// <param name="delayFor">How long to delay sending for</param>
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Aff<RT, Unit> tell<T>(ProcessId pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
             Eff(() => Process.tell(pid, message, delayFor, sender));
+
+        /// <summary>
+        /// Send a message at a specified time in the future
+        /// </summary>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
+        /// <param name="delayFor">How long to delay sending for</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, TimeSpan delayFor, ProcessId sender = default(ProcessId)) =>
+            pid.Bind(p => tell(pid, message, delayFor, sender));
 
         /// <summary>
         /// Send a message at a specified time in the future
@@ -81,6 +123,22 @@ namespace Echo
         /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
         public static Aff<RT, Unit> tell<T>(ProcessId pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
             Eff(() => Process.tell(pid, message, delayUntil, sender));
+
+        /// <summary>
+        /// Send a message at a specified time in the future
+        /// </summary>
+        /// <remarks>
+        /// It is advised to use the variant that takes a TimeSpan, this will fail to be accurate across a Daylight Saving 
+        /// Time boundary or if you use non-UTC dates
+        /// </remarks>
+        /// <returns>IDisposable that you can use to cancel the operation if necessary.  You do not need to call Dispose 
+        /// for any other reason.</returns>
+        /// <param name="pid">Process ID to send to</param>
+        /// <param name="message">Message to send</param>
+        /// <param name="delayUntil">Date and time to send</param>
+        /// <param name="sender">Optional sender override.  The sender is handled automatically if you do not provide one.</param>
+        public static Aff<RT, Unit> tell<T>(Eff<RT, ProcessId> pid, T message, DateTime delayUntil, ProcessId sender = default(ProcessId)) =>
+            pid.Bind(p =>tell(pid, message, delayUntil, sender));
 
         /// <summary>
         /// Tell children the same message
