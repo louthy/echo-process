@@ -46,7 +46,6 @@ namespace Echo
         /// startup(processId) manually</param>
         /// <param name="MaxMailboxSize">Maximum number of messages to queue</param>
         /// <param name="Shutdown">Optional shutdown function</param>
-        /// <param name="System">Echo process system to spawn in</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static Eff<RT, ProcessId> spawn<T>(ProcessName Name,
             Func<T, Aff<RT, Unit>> Inbox,
