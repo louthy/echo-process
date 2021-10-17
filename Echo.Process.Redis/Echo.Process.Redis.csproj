@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.1.15-beta</PackageVersion>
+    <PackageVersion>2.1.16-beta</PackageVersion>
     <PackageId>Echo.Process.Redis</PackageId>
     <Title>echo-process Redis Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -40,8 +40,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Jaeger.Core" Version="1.0.3" />
-    <PackageReference Include="LanguageExt.Core" Version="3.5.64-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.64-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="3.5.69-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.5.69-beta" />
     <PackageReference Include="StackExchange.Redis" Version="2.2.50" />
   </ItemGroup>
   <ItemGroup>

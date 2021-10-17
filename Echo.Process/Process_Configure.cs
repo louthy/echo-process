@@ -58,7 +58,7 @@ namespace Echo
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
         /// <param name="tracer">Optional support for Open Tracing</param>
         public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null) =>
-            initialiseWeb(nodeName, () => { }, strategyFuncs, tracer);
+            initialiseWeb(nodeName, () => { }, strategyFuncs, tracer: tracer);
 
         /// <param name="nodeName">
         /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
@@ -145,7 +145,7 @@ namespace Echo
         {
             lock (sync)
             {
-                return initialiseFileSystem(nodeName, () => { }, strategyFuncs, tracer);
+                return initialiseFileSystem(nodeName, () => { }, strategyFuncs, tracer: tracer);
             }
         }
 
