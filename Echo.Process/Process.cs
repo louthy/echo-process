@@ -157,7 +157,7 @@ namespace Echo
         /// be provided).
         /// </summary>
         public static ProcessId Sender =>
-            ActorContext.Request.Sender;
+            ActorContext.Request?.Sender ?? ProcessId.NoSender;
 
         /// <summary>
         /// Get the child processes of the running process
