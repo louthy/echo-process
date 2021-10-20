@@ -30,31 +30,33 @@ namespace Echo
             var sender = String.IsNullOrEmpty(msg.Sender) ? ProcessId.NoSender : new ProcessId(msg.Sender);
             var replyTo = String.IsNullOrEmpty(msg.ReplyTo) ? ProcessId.NoSender : new ProcessId(msg.ReplyTo);
 
-            switch ((Message.TagSpec)msg.Tag)
-            {
-                case Message.TagSpec.UserReply:
-                    var content = DeserialiseMsgContent(msg);
-                    return new ActorResponse(content, actorId, sender, msg.RequestId, content.GetType().AssemblyQualifiedName, msg.Exception == "RESPERR");
+            Message rmsg = (Message.TagSpec) msg.Tag switch
+                           {
+                               Message.TagSpec.UserReply =>
+                                   DeserialiseMsgContent(msg) switch
+                                   {
+                                       null        => throw new Exception($"Failed to deserialise message: {msg.Tag}"),
+                                       var content => new ActorResponse(content, actorId, sender, msg.RequestId, content.GetType().AssemblyQualifiedName, msg.Exception == "RESPERR")
+                                   },
+                               Message.TagSpec.UserAsk         => new ActorRequest(DeserialiseMsgContent(msg), actorId, replyTo.SetSystem(sys), msg.RequestId),
+                               Message.TagSpec.User            => new UserMessage(DeserialiseMsgContent(msg), sender.SetSystem(sys), replyTo.SetSystem(sys)),
+                               Message.TagSpec.UserTerminated  => ((TerminatedMessage) DeserialiseMsgContent(msg)).SetSystem(sys),
+                               Message.TagSpec.GetChildren     => UserControlMessage.GetChildren,
+                               Message.TagSpec.StartupProcess  => (StartupProcessMessage) DeserialiseMsgContent(msg),
+                               Message.TagSpec.ShutdownProcess => (ShutdownProcessMessage) DeserialiseMsgContent(msg),
+                               Message.TagSpec.Restart         => SystemMessage.Restart,
+                               Message.TagSpec.Pause           => SystemMessage.Pause,
+                               Message.TagSpec.Unpause         => SystemMessage.Unpause,
+                               Message.TagSpec.DispatchWatch   => (SystemDispatchWatchMessage) DeserialiseMsgContent(msg),
+                               Message.TagSpec.DispatchUnWatch => (SystemDispatchUnWatchMessage) DeserialiseMsgContent(msg),
+                               Message.TagSpec.Watch           => (SystemAddWatcherMessage) DeserialiseMsgContent(msg),
+                               Message.TagSpec.UnWatch         => (SystemRemoveWatcherMessage) DeserialiseMsgContent(msg),
+                               _                               => throw new Exception($"Unknown Message Tag: {msg.Tag}")
+                           };
 
-                case Message.TagSpec.UserAsk:           return new ActorRequest(DeserialiseMsgContent(msg), actorId, replyTo.SetSystem(sys), msg.RequestId);
-                case Message.TagSpec.User:              return new UserMessage(DeserialiseMsgContent(msg), sender.SetSystem(sys), replyTo.SetSystem(sys));
-                case Message.TagSpec.UserTerminated:    return ((TerminatedMessage)DeserialiseMsgContent(msg)).SetSystem(sys);
-
-                case Message.TagSpec.GetChildren:       return UserControlMessage.GetChildren;
-                case Message.TagSpec.StartupProcess:    return (StartupProcessMessage)DeserialiseMsgContent(msg);
-                case Message.TagSpec.ShutdownProcess:   return (ShutdownProcessMessage)DeserialiseMsgContent(msg);
-
-                case Message.TagSpec.Restart:           return SystemMessage.Restart;
-                case Message.TagSpec.Pause:             return SystemMessage.Pause;
-                case Message.TagSpec.Unpause:           return SystemMessage.Unpause;
-
-                case Message.TagSpec.DispatchWatch:    return (SystemDispatchWatchMessage)DeserialiseMsgContent(msg);
-                case Message.TagSpec.DispatchUnWatch:  return (SystemDispatchUnWatchMessage)DeserialiseMsgContent(msg);
-                case Message.TagSpec.Watch:            return (SystemAddWatcherMessage)DeserialiseMsgContent(msg);
-                case Message.TagSpec.UnWatch:          return (SystemRemoveWatcherMessage)DeserialiseMsgContent(msg);
-            }
-
-            throw new Exception($"Unknown Message Tag: {msg.Tag}");
+            rmsg.ConversationId = msg.ConversationId;
+            rmsg.SessionId      = msg.SessionId; 
+            return rmsg;
         }
 
         private static object DeserialiseMsgContent(RemoteMessageDTO msg)

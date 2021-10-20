@@ -2,9 +2,11 @@
 using LanguageExt.ClassInstances;
 using System.Collections.Generic;
 using System.Linq;
+using Echo.Traits;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
+using LanguageExt.Effects.Traits;
 
 namespace Echo
 {
@@ -22,16 +24,14 @@ namespace Echo
     /// 'subscribe', etc.  This can allow reliable messaging to Processes in the cluster.
     /// </para>
     /// </summary>
-    public static class Role
+    public static class Role<RT>
+        where RT : struct, HasCancel<RT>, HasEcho<RT>
     {
         /// <summary>
         /// The role that this node is a part of
         /// </summary>
-        public static ProcessName Current
-        {
-            get;
-            private set;
-        }
+        public static Eff<RT, ProcessName> Current =>
+            SuccessEff(Role.Current);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for
@@ -45,7 +45,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Broadcast["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId Broadcast;
+        public static Eff<RT, ProcessId> Broadcast =>
+            SuccessEff(Role.Broadcast);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for
@@ -60,7 +61,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.LeastBusy["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId LeastBusy;
+        public static Eff<RT, ProcessId> LeastBusy =>
+            SuccessEff(Role.LeastBusy);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for
@@ -75,7 +77,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Random["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId Random;
+        public static Eff<RT, ProcessId> Random =>
+            SuccessEff(Role.Random);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for
@@ -90,7 +93,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.RoundRobin["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId RoundRobin;
+        public static Eff<RT, ProcessId> RoundRobin =>
+            SuccessEff(Role.RoundRobin);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for 
@@ -106,7 +110,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.First["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId First;
+        public static Eff<RT, ProcessId> First =>
+            SuccessEff(Role.First);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for 
@@ -121,7 +126,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Second["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId Second;
+        public static Eff<RT, ProcessId> Second =>
+            SuccessEff(Role.Second);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for 
@@ -136,7 +142,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Third["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId Third;
+        public static Eff<RT, ProcessId> Third =>
+            SuccessEff(Role.Third);
 
         /// <summary>
         /// A ProcessId that represents a set of nodes in a cluster.  When used for 
@@ -151,7 +158,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Last["message-role"]["user"]["message-log"], "Hello" );
         /// </example>
-        public static readonly ProcessId Last;
+        public static Eff<RT, ProcessId> Last =>
+            SuccessEff(Role.Last);
 
         /// <summary>
         /// Builds a ProcessId that represents the next node in the role that this node
@@ -167,8 +175,8 @@ namespace Echo
         /// <example>
         ///     tell( Role.Next["user"]["message-log"], "Hello" );
         /// </example>
-        public static ProcessId Next(SystemName system = default(SystemName)) =>
-            nextRoot[Root(system).Name];
+        public static Eff<RT, ProcessId> Next =>
+            Process<RT>.CurrentSystem.Map(Role.Next);
 
         /// <summary>
         /// Builds a ProcessId that represents the previous node in the role that this 
@@ -184,127 +192,13 @@ namespace Echo
         /// <example>
         ///     tell( Role.Prev["user"]["message-log"], "Hello" );
         /// </example>
-        public static ProcessId Prev(SystemName system = default(SystemName)) =>
-            prevRoot[Root(system).Name];
+        public static Eff<RT, ProcessId> Prev =>
+            Process<RT>.CurrentSystem.Map(Role.Prev);
 
-        public static IEnumerable<ProcessId> NodeIds(ProcessId leaf) =>
-            Nodes(leaf).Values.Map(node => ProcessId.Top[node.NodeName].Append(leaf.Skip(1)));
+        public static Eff<RT, Seq<ProcessId>> NodeIds(ProcessId leaf) =>
+            SuccessEff(Role.NodeIds(leaf).ToSeq());
 
-        public static HashMap<ProcessName, ClusterNode> Nodes(ProcessId leaf, SystemName system = default(SystemName))
-        {
-            // Look for online nodes
-            var nodes = ClusterNodes(system).Filter(node => node.Role == leaf.Take(1).Name);
-            if (nodes.Count != 0) return nodes;
-
-            // There aren't any online nodes.  So look for nodes that were online recently, backing off one hour at a
-            // time until we find something.  After 24 hours, give up, because they've been down for too long and are
-            // probably not coming back.
-            
-            var now     = DateTime.UtcNow;
-            var nodes24 = ClusterNodes24(system);
-            for (var i = -1; i >= -24; i--)
-            {
-                nodes = nodes24.Filter(node => node.LastHeartbeat > now.AddHours(i) && node.Role == leaf.Take(1).Name);
-                if (nodes.Count != 0) return nodes;
-            }
-            return Empty;
-        }
-
-        static readonly ProcessId nextRoot;
-        static readonly ProcessId prevRoot;
-
-        internal static Unit init(ProcessName name)
-        {
-            Current = name;
-            return unit;
-        }
-
-        /// <summary>
-        /// Static ctor
-        /// Sets up the default roles
-        /// </summary>
-        static Role()
-        {
-            ProcessName first       = "role-first";
-            ProcessName second      = "role-second";
-            ProcessName third       = "role-third";
-            ProcessName last        = "role-last";
-            ProcessName next        = "role-next";
-            ProcessName prev        = "role-prev";
-            ProcessName broadcast   = "role-broadcast";
-            ProcessName leastBusy   = "role-least-busy";
-            ProcessName random      = "role-random";
-            ProcessName roundRobin  = "role-round-robin";
-
-            var nextNode = fun((bool fwd) => fun((ProcessId leaf) =>
-            {
-                var self = leaf.Take(1).Name;
-                var isNext = false;
-                var nodeMap = Nodes(leaf);
-
-                var nodes = fwd
-                    ? MEnumerable<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values)
-                    : MEnumerable<ClusterNode>.Inst.Append(nodeMap.Values, nodeMap.Values).Reverse(); //< TODO: Inefficient
-
-                foreach (var node in nodes)
-                {
-                    if (isNext)
-                    {
-                        return new[] { ProcessId.Top[node.NodeName].Append(leaf.Skip(1)) }.AsEnumerable();
-                    }
-
-                    if (node.NodeName == self)
-                    {
-                        isNext = true;
-                    }
-                }
-                return new ProcessId[0].AsEnumerable();
-            }));
-
-            // Next 
-            nextRoot = Dispatch.register(next, nextNode(true));
-
-            // Prev 
-            prevRoot = Dispatch.register(prev, nextNode(false));
-
-            // First
-            First = Dispatch.register(first, leaf => NodeIds(leaf).Take(1));
-
-            // Second
-            Second = Dispatch.register(second, leaf => NodeIds(leaf).Skip(1).Take(1));
-
-            // Third
-            Third = Dispatch.register(third, leaf => NodeIds(leaf).Skip(2).Take(1));
-
-            // Last
-            Last = Dispatch.register(last, leaf => NodeIds(leaf).Reverse().Take(1));
-
-            // Broadcast
-            Broadcast = Dispatch.register(broadcast, NodeIds);
-
-            // Least busy
-            LeastBusy = Dispatch.register(leastBusy, leaf =>
-                            NodeIds(leaf)
-                                .Map(pid => Tuple(inboxCount(pid), pid))
-                                .OrderBy(tup => tup.Item1)
-                                .Map(tup => tup.Item2)
-                                .Take(1));
-
-            // Random
-            Random = Dispatch.register(random, leaf => {
-                var workers = NodeIds(leaf).ToArray();
-                return new ProcessId[1] { workers[Prelude.random(workers.Length)] };
-                });
-
-            // Round-robin
-            var roundRobinState = AtomHashMap<string, int>();
-            RoundRobin = Dispatch.register(roundRobin, leaf => {
-                var key = leaf.ToString();
-                var workers = NodeIds(leaf).ToArray();
-                int index = 0;
-                roundRobinState.AddOrUpdate(key, x => { index = x % workers.Length; return x + 1; }, 0);
-                return new ProcessId[1] { workers[index] };
-            });
-        }
+        public static Eff<RT, HashMap<ProcessName, ClusterNode>> Nodes(ProcessId leaf) =>
+            Process<RT>.CurrentSystem.Map(sys => Role.Nodes(leaf, sys));
     }
 }

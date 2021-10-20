@@ -15,14 +15,16 @@ namespace Echo
         public readonly ProcessId ProcessId;
         public readonly ICluster Cluster;
         public readonly Option<SessionId> SessionId;
+        public readonly long ConversationId;
         public readonly Ping Pinger;
 
         public ActorDispatchRemote(Ping ping, ProcessId pid, ICluster cluster, Option<SessionId> sessionId)
         {
-            Pinger = ping;
-            ProcessId = pid;
-            Cluster = cluster;
-            SessionId = sessionId;
+            Pinger         = ping;
+            ProcessId      = pid;
+            Cluster        = cluster;
+            SessionId      = sessionId;
+            ConversationId = ActorContext.NextOrCurrentConversationId();
         }
 
         public HashMap<string, ProcessId> GetChildren() =>
@@ -87,13 +89,22 @@ namespace Echo
         public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
             Tell(message, schedule, sender, "user", Message.Type.User, tag);
 
-        public Unit TellUserControl(UserControlMessage message, ProcessId sender) =>
-            Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag);
+        public Unit TellUserControl(UserControlMessage message, ProcessId sender)
+        {
+            message.ConversationId = ConversationId;
+            message.SessionId      = SessionId.Map(static x => x.Value).IfNoneUnsafe(message.SessionId);
+            return Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag);
+        }
 
-        public Unit TellSystem(SystemMessage message, ProcessId sender) =>
-            ignore(Cluster.PublishToChannel(
-                       ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
-                       RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0)));
+        public Unit TellSystem(SystemMessage message, ProcessId sender)
+        {
+            message.ConversationId = ConversationId;
+            message.SessionId      = SessionId.Map(static x => x.Value).IfNoneUnsafe(message.SessionId);
+            Cluster.PublishToChannel(
+                ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
+                RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, ConversationId, 0));
+            return unit;
+        }
 
         public Unit Tell(object message, Schedule schedule, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
             schedule == Schedule.Immediate
@@ -105,7 +116,7 @@ namespace Echo
         Unit TellNoIO(object message, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag)
         {
             ValidateMessageType(message, sender);
-            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, 0);
+            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, ConversationId, 0);
             var inboxKey = ActorInboxCommon.ClusterInboxKey(ProcessId, inbox);
             var inboxNotifyKey = ActorInboxCommon.ClusterInboxNotifyKey(ProcessId, inbox);
             Cluster.Enqueue(inboxKey, dto);
@@ -135,7 +146,7 @@ namespace Echo
 
             ValidateMessageType(message, sender);
 
-            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, schedule.Due.Ticks);
+            var dto = RemoteMessageDTO.Create(message, ProcessId, sender, type, tag, SessionId, ConversationId, schedule.Due.Ticks);
 
             tell(ProcessId.Take(1).Child("system").Child("scheduler"), Scheduler.Msg.AddToSchedule(inboxKey, id, dto));
 

@@ -68,24 +68,23 @@ namespace Echo
         /// <summary>
         /// Posts a user ask into the user queue (non-blocking)
         /// </summary>
-        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId) =>
-            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId, conversationId).IfSome(TellUserControl);
 
         /// <summary>
         /// Posts a user tell into the user queue (non-blocking)
         /// </summary>
-        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId) =>
-            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId, conversationId).IfSome(TellUserControl);
         
         /// <summary>
         /// Posts a user-control message into the user queue (non-blocking)
         /// </summary>
-        public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId)
+        public Unit TellUserControl(UserControlMessage message)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInboxQueue.Count >= maxMailboxSize) throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
             if (shutdownRequested) throw new ProcessShutdownException(actor.Id);
-            message.SessionId ??= sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
             userInboxQueue.Enqueue(message);
             return DrainUserQueue();
         }

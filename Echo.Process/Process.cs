@@ -98,6 +98,20 @@ namespace Echo
             ActorContext.Self;
 
         /// <summary>
+        /// Current conversation ID
+        /// </summary>
+        /// <remarks>
+        /// This should be used from within a process message loop only.  It traces a series of tells/asks etc through
+        /// the network of processes.  Useful for logging the journey of a message, or other more complex behaviours
+        /// like saga management.
+        ///
+        /// A unique conversation ID is generated when a tell or ask originates outside of a process, it is then maintained
+        /// as it flows through any process.
+        /// </remarks>
+        public static long ConversationId =>
+            ActorContext.ConversationId;
+
+        /// <summary>
         /// Parent process ID
         /// </summary>
         /// <remarks>
@@ -403,6 +417,12 @@ namespace Echo
         /// </summary>
         public static HashMap<ProcessName, ClusterNode> ClusterNodes(SystemName system = default(SystemName)) =>
             ActorContext.System(system).ClusterState?.Members.ToHashMap() ?? HashMap<ProcessName, ClusterNode>();
+
+        /// <summary>
+        /// Get a list of cluster nodes that have been alive in the past 24 hours
+        /// </summary>
+        public static HashMap<ProcessName, ClusterNode> ClusterNodes24(SystemName system = default(SystemName)) =>
+            ActorContext.System(system).ClusterState?.Members24.ToHashMap() ?? HashMap<ProcessName, ClusterNode>();
 
         /// <summary>
         /// List of system names running on this node

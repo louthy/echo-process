@@ -77,7 +77,7 @@ namespace Echo
 
             var root = ProcessId.Top.Child(GetRootProcessName(cluster));
 
-            ClusterState = ClusterMonitor.State.Create(AtomHashMap<ProcessName, ClusterNode>(), this);
+            ClusterState = ClusterMonitor.State.Create(AtomHashMap<ProcessName, ClusterNode>(), AtomHashMap<ProcessName, ClusterNode>(), this);
             
             (rootProcess, rootInbox, parent) = ActorSystemBootstrap2.Boot(
                 countdown,
@@ -382,7 +382,6 @@ namespace Echo
 
                 var askPid = ActorContext.System(pid).System.Child($"ask-{req.RequestId % AskActor.Actors}");
                 tell(askPid, req);
-
                 handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
 
                 if (response == null)
@@ -805,10 +804,11 @@ by name then use Process.deregisterByName(name).");
             }
         }
 
-        public async ValueTask<R> WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, Func<ValueTask<R>> f)
+        public async ValueTask<R> WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, long connversationId, Func<ValueTask<R>> f)
         {
-            var savedContext = ActorContext.Request;
-            var savedSession = ActorContext.SessionId;
+            var savedContext         = ActorContext.Request;
+            var savedSession         = ActorContext.SessionId;
+            var savedConnversationId = ActorContext.ConversationId;
 
             try
             {
@@ -833,15 +833,17 @@ by name then use Process.deregisterByName(name).");
             }
             finally
             {
-                ActorContext.SessionId = savedSession;
+                ActorContext.SessionId      = savedSession;
+                ActorContext.ConversationId = savedConnversationId;
                 ActorContext.SetContext(savedContext);
             }
         }
         
-        public R WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, Func<R> f)
+        public R WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, long conversationId, Func<R> f)
         {
-            var savedContext = ActorContext.Request;
-            var savedSession = ActorContext.SessionId;
+            var savedContext         = ActorContext.Request;
+            var savedSession         = ActorContext.SessionId;
+            var savedConnversationId = ActorContext.ConversationId;
 
             try
             {
@@ -866,7 +868,8 @@ by name then use Process.deregisterByName(name).");
             }
             finally
             {
-                ActorContext.SessionId = savedSession;
+                ActorContext.SessionId      = savedSession;
+                ActorContext.ConversationId = savedConnversationId;
                 ActorContext.SetContext(savedContext);
             }
         }

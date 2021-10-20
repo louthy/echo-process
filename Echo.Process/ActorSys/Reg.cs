@@ -30,7 +30,8 @@ namespace Echo
                 var name = leaf.Head().Name;
                 var key  = ProcessId.Top["__registered"][name].Path;
 
-                return ActorContext.System(leaf).Cluster
+                return ActorContext.System(leaf)
+                                   .Cluster
                                    .Map(x => x.GetSet<ProcessId>(key))
                                    .IfNone(Set<ProcessId>())
                                    .Append(ActorContext.System(leaf).GetLocalRegistered(name))

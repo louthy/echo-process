@@ -11,11 +11,13 @@ const int interval = 100000;
 Process.ProcessSystemLog.Subscribe(WriteLine);
 ProcessConfig.initialise();
 
+WriteLine(ConversationId);
+
 var logger = spawn<Stopwatch, string>("logger", loggerSetup, loggerInbox);
 var ping   = spawn<int>("ping", pingInbox, Shutdown: shutdownInbox);
 var pong   = spawn<int>("pong", pongInbox, Shutdown: shutdownInbox);
 
-tell(ping, 0);
+tell(ping, 0, pong);
 
 ReadKey();
 
@@ -26,11 +28,11 @@ WriteLine("Goodbye!");
 void pingInbox(int n)
 {
     if (n % interval == 0) tell(logger, $"{n}");
-    tell(pong, n + 1);
+    tell(Sender, n + 1);
 }
 
 void pongInbox(int n) =>
-    tell(ping, n + 1);
+    tell(Sender, n + 1);
 
 static Stopwatch loggerSetup()
 {
@@ -42,7 +44,7 @@ static Stopwatch loggerSetup()
 static Stopwatch loggerInbox(Stopwatch sw, string message)
 {
     sw.Stop();
-    WriteLine($"{message}: duration = {sw.ElapsedMilliseconds}ms");
+    WriteLine($"{message}: duration = {sw.ElapsedMilliseconds}ms [{ConversationId}]");
     sw.Restart();
     return sw;
 }
