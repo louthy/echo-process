@@ -137,10 +137,12 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainSystemQueueAsync()
         {
+            bool first = true;
             while (system.IsActive &&
                    sysInboxQueue.Count > 0 &&
-                   Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+                   (first || Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0))
             {
+                first = false;
                 try
                 {
                     // Keep processing whilst we're not shutdown or there's something in the queue
@@ -196,7 +198,7 @@ namespace Echo
                         else
                         {
                             // Nothing left in the queue, so return
-                            return unit;
+                            break;
                         }
                     }
                 }
@@ -230,12 +232,14 @@ namespace Echo
 
         async ValueTask<Unit> DrainUserQueueAsync(string key)
         {
+            bool first = true;
             while (!shutdownRequested &&
                    !IsPaused &&
                    system.IsActive &&
                    (cluster?.QueueLength(key) ?? 0) > 0 &&
-                   Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
+                   (first || Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0))
             {
+                first = false;
                 try
                 {
                     var inbox = this;
@@ -304,13 +308,14 @@ namespace Echo
                             }
                         }
                     }
-
-                    return unit;
                 }
                 finally
                 {
                     Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
                 }
+
+                // If we're processing a lot, let's give the scheduler a chance to do something else
+                Thread.Yield();
             }
             return unit;
         }
