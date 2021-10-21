@@ -168,8 +168,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommonServiceLocator" Version="1.3.0" />
-    <PackageReference Include="LanguageExt.Core" Version="3.5.69-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.69-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="4.0.3" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.0.3" />
     <PackageReference Include="Microsoft.CodeDom.Providers.DotNetCompilerPlatform" Version="3.6.0" />
     <PackageReference Include="Microsoft.Owin" Version="4.2.0" />
     <PackageReference Include="Microsoft.Owin.Host.SystemWeb" Version="4.2.0" />
