@@ -26,7 +26,7 @@ namespace Echo.Tests
             public void Dispose() => shutdownAll();
         }
 
-
+        [Collection("no-parallelism")]
         public class LifeTimeIssues : IClassFixture<ProcessFixture>
         {
             private static void WaitForActor(ProcessId pid)
@@ -35,12 +35,21 @@ namespace Echo.Tests
                 {
                     using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
                     {
-                        mre.WaitOne();
+                        if (mre.WaitOne(5000))
+                        {
+                            throw new TimeoutException($"State not changed within 10s: {pid}");
+                        }
                     }
 
+                    var start = DateTime.Now;
                     // actor is in shutdown, wait a very short time
                     while (exists(pid))
                     {
+                        if ((DateTime.Now - start).TotalSeconds > 5)
+                        {
+                            throw new TimeoutException($"PID still exists after 10s: {pid}");
+                        }
+
                         Task.Delay(1).Wait();
                     }
                 }
