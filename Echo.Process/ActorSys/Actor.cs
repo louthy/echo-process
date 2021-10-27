@@ -798,10 +798,11 @@ namespace Echo
 
             var span = traceInbox?.WithTag("type", "tell")
                                   .WithTag("message-type", message?.GetType().FullName)
-                                  .WithTag("conversation-id", savedReq.ConversationId)
+                                  .WithTag("conversation-id", savedReq?.ConversationId ?? 0)
+                                  .WithTag("request-id", savedReq?.RequestId ?? 0)
                                   .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "")
                                   .StartActive();
-            
+
             try
             {
                 ActorContext.Request.CurrentRequest = null;
