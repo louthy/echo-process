@@ -26,21 +26,31 @@ namespace Echo.Tests
             public void Dispose() => shutdownAll();
         }
 
-
+        [Collection("no-parallelism")]
         public class LifeTimeIssues : IClassFixture<ProcessFixture>
         {
-            private static void WaitForActor(ProcessId pid)
+            private static void WaitForKill(ProcessId pid)
             {
                 using (var mre = new ManualResetEvent(false))
                 {
-                    using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
+                    if(exists(pid))
                     {
-                        mre.WaitOne();
+                        using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
+                        {
+                            mre.WaitOne(300);
+                            // not throwing if we took 300ms - the process is too quick and we probably missed the OnCompleted 
+                        }
                     }
 
+                    var start = DateTime.Now;
                     // actor is in shutdown, wait a very short time
                     while (exists(pid))
                     {
+                        if ((DateTime.Now - start).TotalMilliseconds > 300)
+                        {
+                            throw new TimeoutException($"{pid} still exists after 10s");
+                        }
+
                         Task.Delay(1).Wait();
                     }
                 }
@@ -70,7 +80,7 @@ namespace Echo.Tests
                     });
                 tell(actor, "inbox1"); // inbox1 might arrive before StartUp-System-Message (but doesn't matter)
                 tell(actor, "inbox2"); // msg inbox2 will arrive before kill is executed
-                WaitForActor(actor);
+                WaitForKill(actor);
                 Assert.False(Process.exists(actor));
                 Assert.Equal(List("setup", "inbox1", "dispose"), events.Freeze());
             }
@@ -101,7 +111,7 @@ namespace Echo.Tests
                 var answer2task = Task.Run(() => ask<string>(actor, "request2")); // request will arrive before kill is executed
                 Task.Delay(50 * milliseconds).Wait();
                 kill(actor);
-                WaitForActor(actor);
+                WaitForKill(actor);
                 Assert.False(Process.exists(actor));
                 Assert.Equal("request1answer", answer1Task.Result);
                 Assert.Equal(List("setup", "request1", "request1answer", "dispose"), events.Freeze());
@@ -145,6 +155,109 @@ namespace Echo.Tests
                 kill(actor);
                 Assert.Equal(0, inboxResult);
             }*/
+
+            [Fact(Timeout = 5000)]
+            public void KillAndStart()
+            {
+                static ProcessId start(int state) =>
+                    spawn<int, Unit>(
+                        nameof(KillAndStart),
+                        () => state,
+                        (int state, Unit _) =>
+                        {
+                            reply(state);
+                            return state;
+                        });
+
+                // start and check it is running with a correct startup number
+                var actor = start(1);
+                Assert.Equal(1, ask<int>(actor, unit));
+                Assert.True(children(User()).Contains(actor));
+                
+                // kill and make sure it is gone
+                kill(actor);
+                WaitForKill(actor);
+                Assert.False(children(User()).Contains(actor));
+                
+                // start and check it is running with a correct startup number
+                actor = start(2);
+                Assert.Equal(2, ask<int>(actor, unit));
+                Assert.True(children(User()).Contains(actor));
+                
+                kill(actor);
+            }
+
+            [Fact(Timeout = 5000)]
+            public void KillAndStartChild()
+            {
+                var actor = spawn(nameof(KillAndStartChild), (string msg) =>
+                {
+                    if (msg == "count")
+                    {
+                        reply(Children.Count.ToString());
+                        return;
+                    }
+                    else
+                    {
+                        var child = Children.Find("child")
+                                            .IfNone(() => spawn("child", (string msg) => reply(msg)));
+                        if (msg == "kill")
+                        {
+                            kill(child);
+                            WaitForKill(child);
+                        }
+                        else
+                        {
+                            fwd(child);
+                        }
+                    }
+                });
+                
+                Assert.Equal("0", ask<string>(actor, "count"));
+                Assert.Equal("test1", ask<string>(actor, "test1"));
+                Assert.Equal("1", ask<string>(actor, "count"));
+                
+                tell(actor, "kill");
+                
+                Assert.Equal("0", ask<string>(actor, "count"));
+                Assert.Equal("test2", ask<string>(actor, "test2"));
+                Assert.Equal("1", ask<string>(actor, "count"));
+                
+                kill(actor);
+            }
+                        
+            [Theory]
+            [InlineData(false, 1)]
+            [InlineData(true, 3)]
+            public void CrashAndManageState(bool resume, int expectedState)
+            {
+                var actor = spawn<int>(
+                    nameof(CrashAndManageState),
+                    (int msg) =>
+                    {
+                        var child = Children.Find("child")
+                                            .IfNone(() => spawn<int, int>(
+                                                        "child",
+                                                        () => 0,
+                                                        (state, msg) =>
+                                                        {
+                                                            if (msg == 2) throw new Exception();
+                                                            reply(state + msg);
+                                                            return state + msg;
+                                                        }));
+                        fwd(child);
+                    },
+                    Strategy: OneForOne(Always(resume ? Directive.Resume : Directive.Restart)));
+
+                Assert.Equal(1, ask<int>(actor, 1));
+                Assert.Equal(2, ask<int>(actor, 1));
+
+                tell(actor, 2); // crash + resume/restart
+                Task.Delay(100).Wait();
+                Assert.Equal(expectedState, ask<int>(actor, 1));
+
+                kill(actor);
+            }
         }
     }
 }
