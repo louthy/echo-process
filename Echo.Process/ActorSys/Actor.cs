@@ -796,12 +796,20 @@ namespace Echo
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedMsg   = ActorContext.Request.CurrentMsg;
 
-            var span = traceInbox?.WithTag("type", "tell")
-                                  .WithTag("message-type", message?.GetType().FullName)
-                                  .WithTag("conversation-id", savedReq.ConversationId)
-                                  .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "")
-                                  .StartActive();
-            
+            var spanBuilder = traceInbox?.WithTag("type", "tell");
+            if (message is not null)
+            {
+                spanBuilder = spanBuilder
+                    .WithTag("message-type", message?.GetType().FullName);
+            }
+            if (savedReq is not null)
+            {
+                spanBuilder = spanBuilder
+                    .WithTag("conversation-id", savedReq?.ConversationId.ToString() ?? "")
+                    .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "");
+            }
+            var span = spanBuilder.StartActive();
+
             try
             {
                 ActorContext.Request.CurrentRequest = null;
