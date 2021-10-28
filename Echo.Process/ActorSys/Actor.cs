@@ -813,13 +813,14 @@ namespace Echo
                 sw.SpinOnce();
             }
 
-            var savedReq   = ActorContext.Request.CurrentRequest;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedMsg   = ActorContext.Request.CurrentMsg;
+            var savedConversationId = ActorContext.ConversationId;
+            var savedReq            = ActorContext.Request.CurrentRequest;
+            var savedFlags          = ActorContext.Request.ProcessFlags;
+            var savedMsg            = ActorContext.Request.CurrentMsg;
 
             var span = traceInbox?.WithTag("type", "tell")
                                   .WithTag("message-type", message?.GetType().FullName)
-                                  .WithTag("conversation-id", savedReq?.ConversationId ?? 0)
+                                  .WithTag("conversation-id", savedConversationId)
                                   .WithTag("request-id", savedReq?.RequestId ?? 0)
                                   .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "")
                                   .StartActive();
