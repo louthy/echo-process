@@ -395,13 +395,22 @@ namespace Echo
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
-        public async ValueTask<Unit> Restart(bool unpauseAfterRestart)
+        public async ValueTask<Unit> Restart(bool unpauseAfterRestart) =>
+            await RestartInternal(unpauseAfterRestart, true).ConfigureAwait(false);
+ 
+        /// <summary>
+        /// Clears the state (keeps the mailbox items)
+        /// </summary>
+        async ValueTask<Unit> RestartInternal(bool unpauseAfterRestart, bool waitUntilPaused)
         {
             // Make sure we're not hanging in the SettingUp phase, go back to uninitialised if we are
             // because there was an error somewhere.
             if(Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) == AState.Running)
             {
-                SpinUntilPaused();
+                if (waitUntilPaused)
+                {
+                    SpinUntilPaused();
+                }
 
                 try
                 {
@@ -482,21 +491,22 @@ namespace Echo
         /// <summary>
         /// Shutdown everything from this node down
         /// </summary>
-        public async ValueTask<Unit> Shutdown(bool maintainState)
-        {
-            SpinUntilPaused();
-            return await ShutdownInternal(maintainState).ConfigureAwait(false);
-        }
+        public async ValueTask<Unit> Shutdown(bool maintainState) =>
+            await ShutdownInternal(maintainState, true).ConfigureAwait(false);
 
         /// <summary>
         /// Shutdown everything from this node down
         /// </summary>
-        async ValueTask<Unit> ShutdownInternal(bool maintainState)
+        async ValueTask<Unit> ShutdownInternal(bool maintainState, bool waitForPaused)
         {
             if (Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) != AState.Running) return unit;
-            
             try
             {
+                if (waitForPaused)
+                {
+                    SpinUntilPaused();
+                }
+
                 // Tell our parent to unlink us
                 Process.tellSystem(Parent.Actor.Id, new SystemUnLinkChildMessage(Self));
 
@@ -1063,9 +1073,9 @@ namespace Echo
                     // Note: unpause should not be necessary if unPauseAfterRestart==false because our strategy did not pause before (but unpause should not harm)
                     return unpause(pid);
                 case DirectiveType.Restart:
-                    return await Restart(unPauseAfterRestart).ConfigureAwait(false);
+                    return await RestartInternal(unPauseAfterRestart, false).ConfigureAwait(false);
                 case DirectiveType.Stop:
-                    return await ShutdownInternal(false).ConfigureAwait(false);
+                    return await ShutdownInternal(false, false).ConfigureAwait(false);
                 default:
                     return unit;
             }
