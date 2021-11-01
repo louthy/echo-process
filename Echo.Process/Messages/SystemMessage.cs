@@ -80,7 +80,11 @@ namespace Echo
         public ProcessId Child { get; }
 
         public SystemUnLinkChildMessage SetSystem(SystemName sys) =>
-            new SystemUnLinkChildMessage(Child.SetSystem(sys));
+            new SystemUnLinkChildMessage(Child.SetSystem(sys))
+            {
+                ConversationId = ConversationId,
+                SessionId = SessionId
+            };
     }
 
     class SystemChildFaultedMessage : SystemMessage
@@ -100,7 +104,11 @@ namespace Echo
         public object Message { get; }
 
         public SystemChildFaultedMessage SetSystem(SystemName sys) =>
-            new SystemChildFaultedMessage(Child.SetSystem(sys), Sender.SetSystem(sys), Exception, Message);
+            new SystemChildFaultedMessage(Child.SetSystem(sys), Sender.SetSystem(sys), Exception, Message)
+            {
+                ConversationId = ConversationId,
+                SessionId = SessionId
+            };
     }
 
     class ShutdownProcessMessage : SystemMessage
