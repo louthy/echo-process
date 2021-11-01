@@ -804,16 +804,16 @@ by name then use Process.deregisterByName(name).");
             }
         }
 
-        public async ValueTask<R> WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, long connversationId, Func<ValueTask<R>> f)
+        public async ValueTask<R> WithContext<R>(ActorItem self, ActorItem parent, ProcessId sender, ActorRequest request, object msg, Option<SessionId> sessionId, long conversationId, Func<ValueTask<R>> f)
         {
-            var savedContext         = ActorContext.Request;
-            var savedSession         = ActorContext.SessionId;
-            var savedConnversationId = ActorContext.ConversationId;
+            var savedContext        = ActorContext.Request;
+            var savedSession        = ActorContext.SessionId;
+            var savedConversationId = ActorContext.ConversationId;
 
             try
             {
                 ActorContext.SessionId = sessionId;
-
+                ActorContext.ConversationId = conversationId;
                 ActorContext.SetContext(
                     new ActorRequestContext(
                         this,
@@ -834,7 +834,7 @@ by name then use Process.deregisterByName(name).");
             finally
             {
                 ActorContext.SessionId      = savedSession;
-                ActorContext.ConversationId = savedConnversationId;
+                ActorContext.ConversationId = savedConversationId;
                 ActorContext.SetContext(savedContext);
             }
         }

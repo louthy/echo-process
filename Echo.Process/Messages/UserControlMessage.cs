@@ -43,7 +43,11 @@ namespace Echo
         public object Content { get; internal set; }
 
         public UserMessage SetSystem(SystemName sys) =>
-            new UserMessage(Content, Sender.SetSystem(sys), ReplyTo.SetSystem(sys));
+            new UserMessage(Content, Sender.SetSystem(sys), ReplyTo.SetSystem(sys))
+            {
+                ConversationId = ConversationId,
+                SessionId = SessionId
+            };
 
         public override string ToString() => $"UserMessage: {Content}";
     }

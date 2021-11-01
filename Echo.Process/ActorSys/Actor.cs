@@ -14,6 +14,9 @@ using OpenTracing;
 
 namespace Echo
 {
+    /// <summary>
+    /// Actor state machine 
+    /// </summary>
     internal static class AState
     {
         public const int Shutdown = 0;
@@ -22,6 +25,9 @@ namespace Echo
         public const int ShuttingDown = 3;
     }
 
+    /// <summary>
+    /// Message state machine 
+    /// </summary>
     internal static class MState
     {
         public const int Paused = 0;
@@ -389,13 +395,22 @@ namespace Echo
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
-        public async ValueTask<Unit> Restart(bool unpauseAfterRestart)
+        public async ValueTask<Unit> Restart(bool unpauseAfterRestart) =>
+            await RestartInternal(unpauseAfterRestart, true).ConfigureAwait(false);
+ 
+        /// <summary>
+        /// Clears the state (keeps the mailbox items)
+        /// </summary>
+        async ValueTask<Unit> RestartInternal(bool unpauseAfterRestart, bool waitUntilPaused)
         {
             // Make sure we're not hanging in the SettingUp phase, go back to uninitialised if we are
             // because there was an error somewhere.
             if(Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) == AState.Running)
             {
-                SpinUntilPaused();
+                if (waitUntilPaused)
+                {
+                    SpinUntilPaused();
+                }
 
                 try
                 {
@@ -476,13 +491,25 @@ namespace Echo
         /// <summary>
         /// Shutdown everything from this node down
         /// </summary>
-        public async ValueTask<Unit> Shutdown(bool maintainState)
+        public async ValueTask<Unit> Shutdown(bool maintainState) =>
+            await ShutdownInternal(maintainState, true).ConfigureAwait(false);
+
+        /// <summary>
+        /// Shutdown everything from this node down
+        /// </summary>
+        async ValueTask<Unit> ShutdownInternal(bool maintainState, bool waitForPaused)
         {
             if (Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) != AState.Running) return unit;
-            SpinUntilPaused();
-
             try
             {
+                if (waitForPaused)
+                {
+                    SpinUntilPaused();
+                }
+
+                // Tell our parent to unlink us
+                Process.tellSystem(Parent.Actor.Id, new SystemUnLinkChildMessage(Self));
+
                 // Shutdown children
                 var kids = Children;
                 children.Clear();
@@ -515,18 +542,18 @@ namespace Echo
                 publishSubject.OnCompleted();
                 stateSubject.OnCompleted();
                 remoteSubsAcquired = false;
-                strategyState = StrategyState.Empty;
+                strategyState      = StrategyState.Empty;
                 if (state.Case is S s) await shutdownFn(s).ConfigureAwait(false);
                 DisposeState();
 
                 sys.DispatchTerminate(Id);
+
+                return unit;
             }
             finally
             {
                 Interlocked.CompareExchange(ref astatus, AState.Shutdown, AState.ShuttingDown);
             }
-
-            return unit;
         }
 
         public async ValueTask<Unit> ProcessResponse(ActorResponse response) =>
@@ -758,7 +785,9 @@ namespace Echo
                 // Go back to waiting for a message
                 Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
             }
-            return InboxDirective.Default;
+            return astatus == AState.Shutdown 
+                       ? InboxDirective.Shutdown
+                       : InboxDirective.Default;
         }
 
         async ValueTask<InboxDirective> DefaultErrorHandler(object message, Exception e)
@@ -773,7 +802,9 @@ namespace Echo
                 Parent.Actor.Strategy).ConfigureAwait(false);
             if (!(e is ProcessKillException)) tell(sys.Errors, e);
 
-            return directive;
+            return astatus == AState.Shutdown 
+                       ? InboxDirective.Shutdown
+                       : directive;
         }
 
         /// <summary>
@@ -792,16 +823,18 @@ namespace Echo
                 sw.SpinOnce();
             }
 
-            var savedReq   = ActorContext.Request.CurrentRequest;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedMsg   = ActorContext.Request.CurrentMsg;
+            var savedConversationId = ActorContext.ConversationId;
+            var savedReq            = ActorContext.Request.CurrentRequest;
+            var savedFlags          = ActorContext.Request.ProcessFlags;
+            var savedMsg            = ActorContext.Request.CurrentMsg;
 
             var span = traceInbox?.WithTag("type", "tell")
                                   .WithTag("message-type", message?.GetType().FullName)
-                                  .WithTag("conversation-id", savedReq.ConversationId)
+                                  .WithTag("conversation-id", savedConversationId)
+                                  .WithTag("request-id", savedReq?.RequestId ?? 0)
                                   .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "")
                                   .StartActive();
-            
+
             try
             {
                 ActorContext.Request.CurrentRequest = null;
@@ -881,7 +914,9 @@ namespace Echo
                 Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
             }
 
-            return InboxDirective.Default;
+            return astatus == AState.Shutdown 
+                       ? InboxDirective.Shutdown
+                       : InboxDirective.Default;
         }
 
         public async ValueTask<InboxDirective> RunStrategy(
@@ -1039,46 +1074,13 @@ namespace Echo
                     // Note: unpause should not be necessary if unPauseAfterRestart==false because our strategy did not pause before (but unpause should not harm)
                     return unpause(pid);
                 case DirectiveType.Restart:
-                    return await Restart(unPauseAfterRestart).ConfigureAwait(false);
+                    return await RestartInternal(unPauseAfterRestart, false).ConfigureAwait(false);
                 case DirectiveType.Stop:
-                    return await Shutdown(false).ConfigureAwait(false);
+                    return await ShutdownInternal(false, false).ConfigureAwait(false);
                 default:
                     return unit;
             }
         }
-
-        /*public async ValueTask<Unit> ShutdownProcess(bool maintainState)
-        {
-            if(Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) == AState.Running) 
-            {
-                Parent.Actor.Children.Find(Name.Value).Sequence(self =>
-                {
-                    await ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState).ConfigureAwait(false);
-                    Parent.Actor.UnlinkChild(Id);
-                    children.Swap(_ => HashMap<string, ActorItem>());
-                });
-
-                return unit;
-            }
-        }
-
-        async ValueTask<Unit> ShutdownProcessRec(ActorItem item, Option<ILocalActorInbox> inboxShutdown, bool maintainState)
-        {
-            var process = item.Actor;
-            var inbox = item.Inbox;
-
-            foreach (var child in process.Children.Values)
-            {
-                await ShutdownProcessRec(child, inboxShutdown, maintainState);
-            }
-
-            inboxShutdown.Match(
-                Some: ibs => ibs.Tell(inbox, ProcessId.NoSender, None),
-                None: ()  => inbox.Dispose()
-            );
-
-            return await process.Shutdown(maintainState).ConfigureAwait(false);
-        }*/
 
         public void Dispose()
         {

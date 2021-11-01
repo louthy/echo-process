@@ -26,24 +26,20 @@ namespace Echo.Tests
             public void Dispose() => shutdownAll();
         }
 
-
+        [Collection("no-parallelism")]
         public class LifeTimeIssues : IClassFixture<ProcessFixture>
         {
-            private static void WaitForActor(ProcessId pid)
+            static Unit WaitForKill(ProcessId pid, int timeOutSeconds = 3)
             {
-                using (var mre = new ManualResetEvent(false))
+                var total = timeOutSeconds * 1000;
+                var span  = 200;
+                while (total > 0)
                 {
-                    using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
-                    {
-                        mre.WaitOne();
-                    }
-
-                    // actor is in shutdown, wait a very short time
-                    while (exists(pid))
-                    {
-                        Task.Delay(1).Wait();
-                    }
+                    if (!Process.exists(pid)) return unit;
+                    Task.Delay(span).Wait();
+                    total -= span;
                 }
+                throw new TimeoutException($"Process still exists after {timeOutSeconds}s: {pid}");
             }
 
             [Fact(Timeout = 5000)]
@@ -56,22 +52,19 @@ namespace Echo.Tests
                     () =>
                     {
                         events.Add("setup");
-                        return Disposable.Create(
-                            () => events.Add("dispose")
-                        );
+                        return Disposable.Create(() => events.Add("dispose"));
                     },
                     (state, msg) =>
                     {
                         events.Add(msg);
                         Task.Delay(100 * milliseconds).Wait();
-                        Assert.Equal(1, inboxCount(Self)); // msg inbox2 will arrive before kill is executed
                         kill();
                         return state; // will never get here
                     });
                 tell(actor, "inbox1"); // inbox1 might arrive before StartUp-System-Message (but doesn't matter)
-                tell(actor, "inbox2"); // msg inbox2 will arrive before kill is executed
-                WaitForActor(actor);
-                Assert.False(Process.exists(actor));
+                tell(actor, "inbox2"); // msg inbox2 may or may not arrive before kill is executed, either way, it shouldn't be processed
+                WaitForKill(actor);
+                
                 Assert.Equal(List("setup", "inbox1", "dispose"), events.Freeze());
             }
 
@@ -84,28 +77,28 @@ namespace Echo.Tests
                     () =>
                     {
                         events.Add("setup");
-                        return Disposable.Create(
-                            () => events.Add("dispose")
-                        );
+                        return Disposable.Create(() => events.Add("dispose"));
                     },
                     (state, msg) =>
                     {
                         events.Add(msg);
-                        Task.Delay(100 * milliseconds).Wait();
-                        Assert.Equal(1, inboxCount(Self)); // msg 2 will arrive before kill is executed
                         reply($"{msg}answer");
                         events.Add($"{msg}answer");
                         return state;
                     });
                 var answer1Task = Task.Run(() => ask<string>(actor, "request1")); // request will arrive before kill is executed
-                var answer2task = Task.Run(() => ask<string>(actor, "request2")); // request will arrive before kill is executed
-                Task.Delay(50 * milliseconds).Wait();
+                Task.Delay(50).Wait();
+
                 kill(actor);
-                WaitForActor(actor);
-                Assert.False(Process.exists(actor));
+                Task.Delay(50).Wait();
+ 
+                var answer2task = Task.Run(() => ask<string>(actor, "request2")); // request will arrive after kill is executed
+                Task.Delay(50).Wait();
+
+                WaitForKill(actor);
                 Assert.Equal("request1answer", answer1Task.Result);
                 Assert.Equal(List("setup", "request1", "request1answer", "dispose"), events.Freeze());
-                Assert.Equal("ProcessException", Try(() => answer2task.Result).IfFail().With<AggregateException>(_ => _.InnerException.GetType().Name).OtherwiseReThrow());
+                Assert.Throws<AggregateException>(() => answer2task.Result);
             }
 
             [Fact(Timeout = 5000)]
@@ -116,7 +109,6 @@ namespace Echo.Tests
 
                 var actor = spawn(nameof(ActorWithoutCancellationToken), (string msg) =>
                 {
-                    Task.Delay(100 * milliseconds).Wait();
                     inboxResult++;
                 });
                 tell(actor, "test");
@@ -125,26 +117,107 @@ namespace Echo.Tests
                 Assert.Equal(1, inboxResult);
             }
 
-            /*[Fact(Timeout = 5000)]
-            // issue 47 / pr 49
-            public void ActorWithCancellationToken()
+            [Fact(Timeout = 5000)]
+            public void KillAndStart()
             {
-                int inboxResult = 0;
+                static ProcessId start(int state) =>
+                    spawn<int, Unit>(
+                        nameof(KillAndStart),
+                        () => state,
+                        (int state, Unit _) =>
+                        {
+                            reply(state);
+                            return state;
+                        });
 
-                var actor = spawn(nameof(ActorWithCancellationToken), (string msg) =>
+                // start and check it is running with a correct startup number
+                var actor = start(1);
+                Assert.Equal(1, ask<int>(actor, unit));
+                Assert.True(children(User()).Contains(actor));
+                
+                // kill and make sure it is gone
+                kill(actor);
+                WaitForKill(actor);
+                Assert.False(children(User()).Contains(actor));
+                
+                // start and check it is running with a correct startup number
+                actor = start(2);
+                Assert.Equal(2, ask<int>(actor, unit));
+                Assert.True(children(User()).Contains(actor));
+                
+                kill(actor);
+            }
+
+            [Fact(Timeout = 5000)]
+            public void KillAndStartChild()
+            {
+                var actor = spawn(nameof(KillAndStartChild), (string msg) =>
                 {
-                    Task.Delay(100 * milliseconds).Wait(SelfProcessCancellationToken);
-                    if (!SelfProcessCancellationToken.IsCancellationRequested)
+                    if (msg == "count")
                     {
-                        // will never get here
-                        inboxResult++;
+                        reply(Children.Count.ToString());
+                        return;
+                    }
+                    else
+                    {
+                        var child = Children.Find("child")
+                                            .IfNone(() => spawn("child", (string msg) => reply(msg)));
+                        if (msg == "kill")
+                        {
+                            kill(child);
+                            WaitForKill(child);
+                        }
+                        else
+                        {
+                            fwd(child);
+                        }
                     }
                 });
-                tell(actor, "test");
-                Task.Delay(50).Wait();
+                
+                Assert.Equal("0", ask<string>(actor, "count"));
+                Assert.Equal("test1", ask<string>(actor, "test1"));
+                Assert.Equal("1", ask<string>(actor, "count"));
+                
+                tell(actor, "kill");
+                
+                Assert.Equal("0", ask<string>(actor, "count"));
+                Assert.Equal("test2", ask<string>(actor, "test2"));
+                Assert.Equal("1", ask<string>(actor, "count"));
+                
                 kill(actor);
-                Assert.Equal(0, inboxResult);
-            }*/
+            }
+                        
+            [Theory]
+            [InlineData(false, 1)]
+            [InlineData(true, 3)]
+            public void CrashAndManageState(bool resume, int expectedState)
+            {
+                ProcessId spawnKidIfNotExists() =>
+                    spawn<int, int>(
+                        "child",
+                        () => 0,
+                        (state, msg) => {
+                            if (msg == 2) throw new Exception();
+                            reply(state + msg);
+                            return state + msg;
+                        });
+                
+                var actor = spawn<int>(
+                    nameof(CrashAndManageState),
+                    (int msg) => {
+                        fwd(Children.Find("child").IfNone(spawnKidIfNotExists));
+                    },
+                    Strategy: OneForOne(Always(resume ? Directive.Resume : Directive.Restart)));
+
+                Assert.Equal(1, ask<int>(actor, 1));
+                Assert.Equal(2, ask<int>(actor, 1));
+
+                tell(actor, 2); // crash + resume/restart
+                Task.Delay(100).Wait();
+                Assert.Equal(expectedState, ask<int>(actor, 1));
+
+                kill(actor);
+            }
         }
     }
 }
