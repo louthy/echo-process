@@ -151,6 +151,7 @@ namespace Echo.Tests
             [Fact(Timeout = 5000)]
             public void KillAndStartChild()
             {
+                ProcessId child = ProcessId.None;
                 var actor = spawn(nameof(KillAndStartChild), (string msg) =>
                 {
                     if (msg == "count")
@@ -160,12 +161,11 @@ namespace Echo.Tests
                     }
                     else
                     {
-                        var child = Children.Find("child")
-                                            .IfNone(() => spawn("child", (string msg) => reply(msg)));
+                        child = Children.Find("child")
+                                        .IfNone(() => spawn("child", (string msg) => reply(msg)));
                         if (msg == "kill")
                         {
                             kill(child);
-                            WaitForKill(child);
                         }
                         else
                         {
@@ -179,6 +179,7 @@ namespace Echo.Tests
                 Assert.Equal("1", ask<string>(actor, "count"));
                 
                 tell(actor, "kill");
+                WaitForKill(child);
                 
                 Assert.Equal("0", ask<string>(actor, "count"));
                 Assert.Equal("test2", ask<string>(actor, "test2"));
@@ -203,7 +204,7 @@ namespace Echo.Tests
                         });
                 
                 var actor = spawn<int>(
-                    nameof(CrashAndManageState),
+                    $"{nameof(CrashAndManageState)}{resume}{expectedState}",
                     (int msg) => {
                         fwd(Children.Find("child").IfNone(spawnKidIfNotExists));
                     },
@@ -217,6 +218,157 @@ namespace Echo.Tests
                 Assert.Equal(expectedState, ask<int>(actor, 1));
 
                 kill(actor);
+            }
+            
+            [Fact(Timeout = 5000)]
+            public void RestartWaitsForMessageToComplete()
+            {
+                int threadsCount = 0;
+                var messages     = Seq<string>();
+                
+                var actor = spawn(nameof(RestartWaitsForMessageToComplete), (string msg) =>
+                {
+                    threadsCount++;
+                    messages = messages.Add(msg);
+                    Task.Delay(100 * milliseconds).Wait();
+                    threadsCount--;
+                });
+                
+                tell(actor, "test");
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount);
+                Assert.Equal(Seq1("test"), messages);
+                
+                restart(actor);
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount); // still processing the first message
+                Assert.Equal(Seq1("test"), messages);
+                
+                Task.Delay(80).Wait();
+                Assert.Equal(0, threadsCount);        // finished processing  
+                Assert.Equal(Seq1("test"), messages); // only one message was in the queue
+                
+            }
+
+            [Fact(Timeout = 5000)]
+            public void RestartWaitsForMessageToCompleteBeforeStartingNext()
+            {
+                int threadsCount = 0;
+                var messages     = Seq<string>();
+                
+                var actor = spawn(nameof(RestartWaitsForMessageToCompleteBeforeStartingNext), (string msg) =>
+                {
+                    threadsCount++;
+                    messages = messages.Add(msg);
+                    Task.Delay(100 * milliseconds).Wait();
+                    threadsCount--;
+                });
+                
+                tell(actor, "test1");
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount);
+                Assert.Equal(Seq1("test1"), messages);
+                
+                restart(actor);
+                tell(actor, "test2");
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount); // finishing the first message
+                Assert.Equal(Seq1("test1"), messages);
+                
+                Task.Delay(80).Wait();
+                Assert.Equal(1, threadsCount); // processing the second message  
+                Assert.Equal(Seq("test1", "test2"), messages);
+                
+            }
+            
+              [Fact(Timeout = 5000)]
+            public void KillCompletesTheMessage()
+            {
+                int threadsCount = 0;
+                var messages     = Seq<string>();
+                
+                var actor = spawn(nameof(KillCompletesTheMessage), (string msg) =>
+                {
+                    threadsCount++;
+                    messages = messages.Add(msg);
+                    Task.Delay(100 * milliseconds).Wait();
+                    threadsCount--;
+                });
+                
+                tell(actor, "test");
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount); // keep processing the message
+                Assert.Equal(Seq1("test"), messages);
+                
+                var start = DateTime.Now;
+                kill(actor);
+                Assert.True((DateTime.Now - start).TotalMilliseconds < 50); // kill is async and will finish in next 70ms
+                Task.Delay(20).Wait();
+                Assert.Equal(1, threadsCount); // keep processing the message
+                Assert.Equal(Seq1("test"), messages);
+                
+                Task.Delay(80).Wait();
+                Assert.Equal(0, threadsCount); // message gone, process gone
+                Assert.False(exists(actor));
+                Assert.Equal(Seq1("test"), messages); 
+                
+            }
+            
+            [Fact]
+            public void KillDoesNotWaitForAllMessages()
+            {
+                var  messages    = Seq<int>();
+                bool wasShutdown = false;
+
+                var actor = spawn(
+                    nameof(KillDoesNotWaitForAllMessages),
+                    (int msg) =>
+                    {
+                        messages = messages.Add(msg);
+                        Task.Delay(100 * milliseconds).Wait();
+                    },
+                    Shutdown: () => ignore(wasShutdown = true));
+
+                for (int i = 1; i <= 10; i++)
+                {
+                    tell(actor, i);    
+                }
+                
+                Task.Delay(20).Wait();
+                kill(actor); // kill sent while the first message is being processed
+                
+                for (int i = 11; i <= 20; i++)
+                {
+                    tell(actor, i);    
+                }
+                
+                WaitForKill(actor);
+                
+                // The inbox should die after the first message
+                Assert.True(Seq1(1) == messages, $"Only the first message should be processed. Actual: {messages.ToFullString()}. Shutdown called: {wasShutdown}"); 
+            }
+                        
+            [Fact]
+            public void SetupIsCalledOnlyOnce()
+            {
+                var setupCount = 0;
+                var actor = spawn<int, string>(
+                    nameof(SetupIsCalledOnlyOnce),
+                    () =>
+                    {
+                        setupCount++;
+                        Task.Delay(30).Wait();
+                        return 0;
+                    },
+                    (state, msg) => state);
+                
+                tell(actor, "test1");
+                tell(actor, "test2");
+                tell(actor, "test3");
+                tell(actor, "test4");
+                Task.Delay(100).Wait();
+                
+                Assert.Equal(1, setupCount);
             }
         }
     }
