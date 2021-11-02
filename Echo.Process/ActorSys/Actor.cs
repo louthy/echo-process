@@ -109,6 +109,12 @@ namespace Echo
         }
 
         /// <summary>
+        /// Paused flag
+        /// </summary>
+        public bool IsPaused =>
+            mstatus == MState.Paused;
+
+        /// <summary>
         /// Start up - placeholder
         /// </summary>
         public async ValueTask<InboxDirective> Startup()
@@ -449,18 +455,19 @@ namespace Echo
             return unit;
         }
 
-        public Unit Pause()
-        {
-            Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage);
-            Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.ProcessingMessage);
-            return default;
-        }
+        /// <summary>
+        /// Pause the process
+        /// </summary>
+        /// <returns>True if the process paused, False if it was already paused</returns>
+        public bool Pause() =>
+            Interlocked.Exchange(ref mstatus, MState.Paused) != MState.Paused;
 
-        public Unit UnPause()
-        {
-            Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
-            return default;
-        }
+        /// <summary>
+        /// Unpause the process
+        /// </summary>
+        /// <returns>True if the process un-paused, False if it was already un-paused</returns>
+        public bool UnPause() =>
+            Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused) == MState.Paused;
 
         /// <summary>
         /// Add a watcher of this Process
@@ -499,9 +506,13 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> ShutdownInternal(bool maintainState, bool waitForPaused)
         {
+            // If we're not running, we must already be shutting down, or shutdown, so return
             if (Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) != AState.Running) return unit;
+            
             try
             {
+                // At this point we've forced the messages to stop processing, now we wait for any existing message
+                // being processed to finish, then we'll pause
                 if (waitForPaused)
                 {
                     SpinUntilPaused();

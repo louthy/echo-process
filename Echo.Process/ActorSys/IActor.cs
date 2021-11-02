@@ -111,7 +111,21 @@ namespace Echo
         Unit DispatchWatch(ProcessId pid);
         Unit DispatchUnWatch(ProcessId pid);
 
-        Unit Pause();
-        Unit UnPause();
+        /// <summary>
+        /// Pause the process
+        /// </summary>
+        /// <returns>True if the process paused, False if it was already paused</returns>
+        bool Pause();
+
+        /// <summary>
+        /// Unpause the process
+        /// </summary>
+        /// <returns>True if the process un-paused, False if it was already un-paused</returns>
+        bool UnPause();
+        
+        /// <summary>
+        /// True if the process is paused
+        /// </summary>
+        bool IsPaused { get; }
     }
 }

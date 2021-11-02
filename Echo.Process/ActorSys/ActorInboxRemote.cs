@@ -22,7 +22,6 @@ namespace Echo
         readonly ConcurrentQueue<RemoteMessageDTO> sysInboxQueue = new();
         volatile int drainingUserQueue = 0;
         volatile int drainingSystemQueue = 0;
-        volatile int paused = 1;
 
         public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
@@ -82,18 +81,18 @@ namespace Echo
         /// True if paused
         /// </summary>
         public bool IsPaused =>
-            paused == 1;
+            actor?.IsPaused ?? true;
 
         /// <summary>
         /// Pause the inbox
         /// </summary>
         public Unit Pause()
         {
-            if (Interlocked.CompareExchange(ref paused, 1, 0) == 0)
+            if (actor?.Pause() ?? false)
             {
                 cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
             }
-            return unit;
+            return default;
         }
 
         /// <summary>
@@ -101,12 +100,12 @@ namespace Echo
         /// </summary>
         public Unit Unpause()
         {
-            if (Interlocked.CompareExchange(ref paused, 0, 1) == 1)
+            if (actor?.UnPause() ?? false)
             {
                 SubscribeToUserInboxChannel();
                 DrainUserQueue();
             }
-            return unit;
+            return default;
         }
 
         /// <summary>

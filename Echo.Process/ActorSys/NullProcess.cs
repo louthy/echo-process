@@ -35,8 +35,9 @@ namespace Echo
         public Unit RemoveWatcher(ProcessId item) => unit;
         public Unit DispatchWatch(ProcessId item) => unit;
         public Unit DispatchUnWatch(ProcessId item) => unit;
-        public Unit Pause() => unit;
-        public Unit UnPause() => unit;
+        public bool Pause() => false;
+        public bool UnPause() => false;
+        public bool IsPaused => false;
         public Unit Publish(object message) => unit;
         public IObservable<object> PublishStream => null;
         public IObservable<object> StateStream => null;

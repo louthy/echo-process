@@ -26,7 +26,6 @@ namespace Echo
         Option<ICluster> cluster;
         int maxMailboxSize;
         bool shutdownRequested = false;
-        volatile int paused = 1;
         volatile int drainingUserQueue = 0;
         volatile int drainingSystemQueue = 0;
 
@@ -259,34 +258,23 @@ namespace Echo
         /// True if paused
         /// </summary>
         public bool IsPaused =>
-            paused == 1;
+            actor?.IsPaused ?? true;
 
         /// <summary>
         /// Pause the queue
         /// </summary>
         /// <returns></returns>
-        public Unit Pause()
-        {
-            if (Interlocked.CompareExchange(ref paused, 1, 0) == 0)
-            {
-                actor.Pause();
-            }
-            return unit;
-        }
+        public Unit Pause() =>
+            ignore(actor?.Pause());
 
         /// <summary>
         /// Unpause the queue
         /// </summary>
         /// <returns></returns>
-        public Unit Unpause()
-        {
-            if (Interlocked.CompareExchange(ref paused, 0, 1) == 1)
-            {
-                actor.UnPause();
-                DrainUserQueue();
-            }
-            return unit;
-        }
+        public Unit Unpause() =>
+            actor?.UnPause() ?? false
+                ? DrainUserQueue()
+                : unit;
 
         /// <summary>
         /// Number of unprocessed items

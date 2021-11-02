@@ -33,7 +33,6 @@ namespace Echo
         IActorSystem system;
         ActorItem parent;
         int maxMailboxSize;
-        int paused = 1;
         bool shutdownRequested = false;
         volatile int drainingUserQueue = 0;
         volatile int drainingSystemQueue = 0;
@@ -99,7 +98,7 @@ namespace Echo
         /// True if paused
         /// </summary>
         public bool IsPaused =>
-            paused == 1;
+            actor?.IsPaused ?? true;
 
         /// <summary>
         /// Pauses the process so it doesn't process any messages (will still queue them)
@@ -107,7 +106,7 @@ namespace Echo
         /// <returns></returns>
         public Unit Pause()
         {
-            if (Interlocked.CompareExchange(ref paused, 1, 0) == 0)
+            if (actor?.Pause() ?? false)
             {
                 cluster.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
             }
@@ -119,7 +118,7 @@ namespace Echo
         /// </summary>
         public Unit Unpause()
         {
-            if (Interlocked.CompareExchange(ref paused, 0, 1) == 1)
+            if (actor?.UnPause() ?? false)
             {
                 SubscribeToUserInboxChannel();
                 DrainUserQueue();
