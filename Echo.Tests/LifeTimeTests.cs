@@ -151,7 +151,6 @@ namespace Echo.Tests
             [Fact(Timeout = 5000)]
             public void KillAndStartChild()
             {
-                ProcessId child = ProcessId.None;
                 var actor = spawn(nameof(KillAndStartChild), (string msg) =>
                 {
                     if (msg == "count")
@@ -161,11 +160,12 @@ namespace Echo.Tests
                     }
                     else
                     {
-                        child = Children.Find("child")
-                                        .IfNone(() => spawn("child", (string msg) => reply(msg)));
+                        var child = Children.Find("child")
+                                            .IfNone(() => spawn("child", (string msg) => reply(msg)));
                         if (msg == "kill")
                         {
                             kill(child);
+                            WaitForKill(child);
                         }
                         else
                         {
@@ -179,7 +179,6 @@ namespace Echo.Tests
                 Assert.Equal("1", ask<string>(actor, "count"));
                 
                 tell(actor, "kill");
-                WaitForKill(child);
                 
                 Assert.Equal("0", ask<string>(actor, "count"));
                 Assert.Equal("test2", ask<string>(actor, "test2"));
