@@ -217,7 +217,7 @@ namespace Echo
                     ? File.ReadAllText(processPath)
                     : "";
 
-                return initialise(clusterText + processText, nodeName, setup, strategyFuncs);
+                return initialise(clusterText + processText, nodeName, setup, strategyFuncs, tracer);
             }
         }
 
