@@ -59,7 +59,7 @@ namespace Echo
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
 
-            Unpause();
+            UnPause();
 
             DrainSystemQueue();
             DrainUserQueue();
@@ -116,7 +116,7 @@ namespace Echo
         /// <summary>
         /// Unpause the process, and work through the backlog of messages
         /// </summary>
-        public Unit Unpause()
+        public Unit UnPause()
         {
             if (actor?.UnPause() ?? false)
             {

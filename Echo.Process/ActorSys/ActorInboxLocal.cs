@@ -42,7 +42,7 @@ namespace Echo
                                       ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
                                       : maxMailboxSize;
 
-            Unpause();
+            UnPause();
             DrainUserQueue();
             DrainSystemQueue();
             return unit;
@@ -271,7 +271,7 @@ namespace Echo
         /// Unpause the queue
         /// </summary>
         /// <returns></returns>
-        public Unit Unpause() =>
+        public Unit UnPause() =>
             actor?.UnPause() ?? false
                 ? DrainUserQueue()
                 : unit;

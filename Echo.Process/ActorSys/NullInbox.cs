@@ -43,7 +43,7 @@ namespace Echo
             new Type [0];
 
         public Unit Pause() => unit;
-        public Unit Unpause() => unit;
+        public Unit UnPause() => unit;
         public bool IsPaused => false;
 
         public void Dispose()

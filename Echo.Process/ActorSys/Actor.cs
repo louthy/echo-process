@@ -440,20 +440,14 @@ namespace Echo
         /// <summary>
         /// Disowns a child process
         /// </summary>
-        public Unit UnlinkChild(ProcessId pid)
-        {
+        public Unit UnlinkChild(ProcessId pid) =>
             children.Remove(pid.Name.Value);
-            return unit;
-        }
 
         /// <summary>
         /// Gains a child process
         /// </summary>
-        public Unit LinkChild(ActorItem item)
-        {
+        public Unit LinkChild(ActorItem item) =>
             children.AddOrUpdate(item.Actor.Id.Name.Value, item);
-            return unit;
-        }
 
         /// <summary>
         /// Pause the process

@@ -7,7 +7,7 @@ namespace Echo
     {
         Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize);
         Unit Pause();
-        Unit Unpause();
+        Unit UnPause();
         Unit Shutdown();
         bool IsPaused { get; }
     }

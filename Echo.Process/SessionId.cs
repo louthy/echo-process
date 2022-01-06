@@ -11,7 +11,7 @@ namespace Echo
     /// <remarks>
     /// It enforces the rules for session IDs.
     /// </remarks>
-    public struct SessionId : IEquatable<SessionId>, IComparable<SessionId>, IComparable
+    public readonly struct SessionId : IEquatable<SessionId>, IComparable<SessionId>, IComparable
     {
         public readonly string Value;
 
@@ -20,10 +20,8 @@ namespace Echo
         /// </summary>
         /// <param name="value">SessionId</param>
         [JsonConstructor]
-        public SessionId(string value)
-        {
+        public SessionId(string value) =>
             Value = value;
-        }
 
         const int DefaultSessionIdSizeInBytes = 32;
 
@@ -55,11 +53,9 @@ namespace Echo
             String.Compare(Value, other.Value, StringComparison.Ordinal);
 
         public int CompareTo(object obj) =>
-            obj == null
-                ? -1
-                : obj is SessionId
-                    ? CompareTo((SessionId)obj)
-                    : -1;
+            obj is SessionId cid
+                ? CompareTo(cid)
+                : -1;
 
         public static bool operator == (SessionId lhs, SessionId rhs) =>
             lhs.Equals(rhs);
@@ -68,8 +64,6 @@ namespace Echo
             !lhs.Equals(rhs);
 
         public override bool Equals(object obj) =>
-            obj is SessionId
-                ? Equals((SessionId)obj)
-                : false;
+            obj is SessionId sid && Equals(sid);
     }
 }

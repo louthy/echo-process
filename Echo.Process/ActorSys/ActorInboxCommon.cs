@@ -51,7 +51,7 @@ namespace Echo
                         var inboxDirective = await actor.Startup().ConfigureAwait(false); 
                         if (startupProcess.UnpauseAfterStartup && !inboxDirective.HasFlag(InboxDirective.Pause))
                         {
-                            inbox.Unpause();
+                            inbox.UnPause();
                         }
                         return InboxDirective.Default;
 
@@ -61,7 +61,7 @@ namespace Echo
                         return InboxDirective.Default;
 
                     case Message.TagSpec.Unpause:
-                        inbox.Unpause();
+                        inbox.UnPause();
                         actor.UnPause();
                         return InboxDirective.Default;
                         

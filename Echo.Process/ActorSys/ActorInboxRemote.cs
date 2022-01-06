@@ -45,11 +45,8 @@ namespace Echo
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
 
-            Unpause();
+            UnPause();
 
-            DrainSystemQueue();
-            DrainUserQueue();
- 
             return unit;
         }
 
@@ -98,11 +95,12 @@ namespace Echo
         /// <summary>
         /// Unpause the inbox
         /// </summary>
-        public Unit Unpause()
+        public Unit UnPause()
         {
             if (actor?.UnPause() ?? false)
             {
                 SubscribeToUserInboxChannel();
+                DrainSystemQueue();
                 DrainUserQueue();
             }
             return default;

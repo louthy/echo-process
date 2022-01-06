@@ -10,7 +10,7 @@ namespace Echo
 {
     static class ActorContext
     {
-        static long uniqueConversationId;
+        internal static long uniqueConversationId;
         static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
 
         internal static SystemName Context
