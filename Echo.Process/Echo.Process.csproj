@@ -10,7 +10,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.1.22-beta</PackageVersion>
+    <PackageVersion>2.1.21-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
@@ -53,9 +53,9 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Jaeger.Core" Version="1.0.3" />
-    <PackageReference Include="LanguageExt.Core" Version="4.0.3" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.0.3" />
-    <PackageReference Include="LanguageExt.Sys" Version="4.0.3" />
+    <PackageReference Include="LanguageExt.Core" Version="3.5.69-beta" />
+    <PackageReference Include="LanguageExt.Parsec" Version="3.5.69-beta" />
+    <PackageReference Include="LanguageExt.Sys" Version="3.5.69-beta" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
   </ItemGroup>
