@@ -186,7 +186,6 @@ namespace Echo
                                              // Run the operations that affect the settings and sending of tells
                                              // in the order which they occured in the actor
                                              ActorContext.Request?.Ops?.Run();
-                                             return unit.AsValueTask();
                                          });
                         }
                     }

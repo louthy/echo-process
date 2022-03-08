@@ -3,7 +3,7 @@ using System;
 
 namespace Echo
 {
-    interface IActorInbox
+    interface IActorInbox : IDisposable
     {
         Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize);
         Unit Pause();

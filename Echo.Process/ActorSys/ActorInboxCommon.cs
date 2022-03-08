@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
@@ -8,86 +7,81 @@ namespace Echo
 {
     static class ActorInboxCommon
     {
-        public static async ValueTask<InboxDirective> SystemMessageInbox<S,T>(Actor<S,T> actor, IActorInbox inbox, SystemMessage msg, ActorItem parent)
+        public static InboxDirective SystemMessageInbox<S,T>(Actor<S,T> actor, IActorInbox inbox, SystemMessage msg, ActorItem parent)
         {
             var session = msg.SessionId == null
                 ? None
                 : Some(new SessionId(msg.SessionId));
 
-            return await ActorContext.System(actor.Id).WithContext(new ActorItem(actor,inbox,actor.Flags), parent, ProcessId.NoSender, null, msg, session, async () =>
+            return ActorContext.System(actor.Id).WithContext(new ActorItem(actor,inbox,actor.Flags), parent, ProcessId.NoSender, null, msg, session, () =>
             {
                 switch (msg.Tag)
                 {
                     case Message.TagSpec.Restart:
-                        await actor.Restart(inbox.IsPaused).ConfigureAwait(false);
-                        return InboxDirective.Default;
+                        actor.Restart(inbox.IsPaused);
+                        break;
 
                     case Message.TagSpec.LinkChild:
-                        var lc = (SystemLinkChildMessage)msg;
+                        var lc = msg as SystemLinkChildMessage;
                         actor.LinkChild(lc.Child);
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.UnlinkChild:
-                        var ulc = ((SystemUnLinkChildMessage)msg).SetSystem(actor.Id.System);
+                        var ulc = (msg as SystemUnLinkChildMessage).SetSystem(actor.Id.System);
                         actor.UnlinkChild(ulc.Child);
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.ChildFaulted:
-                        var cf = ((SystemChildFaultedMessage)msg).SetSystem(actor.Id.System);
-                        return await actor.ChildFaulted(cf.Child, cf.Sender, cf.Exception, cf.Message).ConfigureAwait(false);
+                        var cf = (msg as SystemChildFaultedMessage).SetSystem(actor.Id.System);
+                        return actor.ChildFaulted(cf.Child, cf.Sender, cf.Exception, cf.Message);
 
                     case Message.TagSpec.StartupProcess:
-                        // get feedback whether startup will somehow trigger Unpause itself (i.e. error => strategy => restart)
-                        var startupProcess = (StartupProcessMessage)msg;
-                        var inboxDirective = await actor.Startup().ConfigureAwait(false); 
+                        var startupProcess = msg as StartupProcessMessage;
+                        var inboxDirective = actor.Startup(); // get feedback whether startup will somehow trigger Unpause itself (i.e. error => strategy => restart)
                         if (startupProcess.UnpauseAfterStartup && !inboxDirective.HasFlag(InboxDirective.Pause))
                         {
                             inbox.Unpause();
                         }
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.ShutdownProcess:
-                        var shutdownProcess = (ShutdownProcessMessage)msg;
-                        await actor.Shutdown(shutdownProcess.MaintainState).ConfigureAwait(false);
-                        return InboxDirective.Default;
+                        var shutdownProcess = msg as ShutdownProcessMessage;
+                        actor.ShutdownProcess(shutdownProcess.MaintainState);
+                        break;
 
                     case Message.TagSpec.Unpause:
                         inbox.Unpause();
-                        actor.UnPause();
-                        return InboxDirective.Default;
-                        
+                        break;
+
                     case Message.TagSpec.Pause:
                         inbox.Pause();
-                        actor.Pause();
-                        return InboxDirective.Default; // do not return InboxDirective.Pause because system queue should never pause
+                        break; // do not return InboxDirective.Pause because system queue should never pause
 
                     case Message.TagSpec.Watch:
-                        var awm = (SystemAddWatcherMessage)msg;
+                        var awm = msg as SystemAddWatcherMessage;
                         actor.AddWatcher(awm.Id);
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.UnWatch:
-                        var rwm = (SystemRemoveWatcherMessage)msg;
+                        var rwm = msg as SystemRemoveWatcherMessage;
                         actor.RemoveWatcher(rwm.Id);
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.DispatchWatch:
-                        var dwm = (SystemDispatchWatchMessage)msg;
+                        var dwm = msg as SystemDispatchWatchMessage;
                         actor.DispatchWatch(dwm.Id);
-                        return InboxDirective.Default;
+                        break;
 
                     case Message.TagSpec.DispatchUnWatch:
-                        var duwm = (SystemDispatchUnWatchMessage)msg;
+                        var duwm = msg as SystemDispatchUnWatchMessage;
                         actor.DispatchUnWatch(duwm.Id);
-                        return InboxDirective.Default;
-                    
-                    default:
-                        return InboxDirective.Default;
+                        break;
                 }
-            }).ConfigureAwait(false);
+                return InboxDirective.Default;
+            });
         }
 
-        public static async ValueTask<InboxDirective> UserMessageInbox<S, T>(Actor<S, T> actor, IActorInbox inbox, UserControlMessage msg, ActorItem parent)
+        public static InboxDirective UserMessageInbox<S, T>(Actor<S, T> actor, IActorInbox inbox, UserControlMessage msg, ActorItem parent)
         {
             var session = msg.SessionId == null 
                 ? None 
@@ -97,34 +91,26 @@ namespace Echo
             {
                 case Message.TagSpec.UserAsk:
                     var rmsg = ((ActorRequest)msg).SetSystem(actor.Id.System);
-                    return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, rmsg.ReplyTo, rmsg, msg, session, () => actor.ProcessAsk(rmsg))
-                                             .ConfigureAwait(false);
+                    return ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, rmsg.ReplyTo, rmsg, msg, session, () => actor.ProcessAsk(rmsg));
 
                 case Message.TagSpec.UserReply:
                     var urmsg = ((ActorResponse)msg).SetSystem(actor.Id.System);
-                    await ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, urmsg.ReplyFrom, null, msg, session, () => actor.ProcessResponse(urmsg));
-                    return InboxDirective.Default;
+                    ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, urmsg.ReplyFrom, null, msg, session, () => actor.ProcessResponse(urmsg));
+                    break;
 
                 case Message.TagSpec.UserTerminated:
                     var utmsg = ((TerminatedMessage)msg).SetSystem(actor.Id.System);
-                    return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, utmsg.Id, null, msg, session, () => actor.ProcessTerminated(utmsg.Id))
-                                             .ConfigureAwait(false);
+                    return ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, utmsg.Id, null, msg, session, () => actor.ProcessTerminated(utmsg.Id));
 
                 case Message.TagSpec.User:
                     var umsg = ((UserMessage)msg).SetSystem(actor.Id.System);
-                    return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, umsg.Sender, null, msg, session, () => actor.ProcessMessage(umsg.Content))
-                                             .ConfigureAwait(false);
+                    return ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, umsg.Sender, null, msg, session, () => actor.ProcessMessage(umsg.Content));
 
                 case Message.TagSpec.ShutdownProcess:
                     kill(actor.Id);
-                    return InboxDirective.Default;
-                
-                default:
-                    return InboxDirective.Default;
+                    break;
             }
+            return InboxDirective.Default;
         }
 
         public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message, Option<SessionId> sessionId)
@@ -132,7 +118,7 @@ namespace Echo
             if (message == null)
             {
                 var emsg = $"Message is null for tell (expected {typeof(T)})";
-                tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg));
+                tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg, message));
                 return None;
             }
 
@@ -143,7 +129,7 @@ namespace Echo
                 if (!(req.Message is T) && !(req.Message is Message))
                 {
                     var emsg = $"Invalid message type for ask (expected {typeof(T)})";
-                    tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg, req));
+                    tell(ActorContext.System(self).DeadLetters, DeadLetter.create(sender, self, emsg, message));
 
                     ActorContext.System(self).Tell(
                         sender,
@@ -160,21 +146,21 @@ namespace Echo
 
                     return None;
                 }
-                rmsg = req;
+                rmsg = message as UserControlMessage;
             }
             else
             {
                 rmsg = new UserMessage(message, sender, sender);
             }
 
-            if(rmsg.SessionId == null && sessionId.IsSome)
+            if(rmsg != null && rmsg.SessionId == null && sessionId.IsSome)
             {
                 rmsg.SessionId = sessionId.Map(x => x.Value).IfNoneUnsafe((string)null);
             }
             return Optional(rmsg);
         }
 
-        public static Option<(RemoteMessageDTO, Message)> GetNextMessage(ICluster cluster, ProcessId self, string key)
+        public static Option<Tuple<RemoteMessageDTO, Message>> GetNextMessage(ICluster cluster, ProcessId self, string key)
         {
             if (cluster == null) return None;
             Message msg = null;
@@ -212,7 +198,7 @@ namespace Echo
                 return None;
             }
 
-            return Some((dto, msg));
+            return Some(Tuple(dto, msg));
         }
 
         public static string ClusterKey(ProcessId pid) =>

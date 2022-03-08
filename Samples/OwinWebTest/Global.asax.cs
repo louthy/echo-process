@@ -17,7 +17,7 @@ namespace OwinWebTest
             RedisCluster.register();
 
             // Load the config for this web-site 
-            ProcessConfig.initialiseWeb("localhost");
+            ProcessConfig.initialiseWeb();
 
             // Allow messages to all processes from the browser
             ProcessHub.RouteValidator = _ => true;

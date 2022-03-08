@@ -2,13 +2,12 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <LangVersion>default</LangVersion>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.5.62-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.62-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="[3.5.18-beta,)" />
+    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.18-beta,)" />
   </ItemGroup>
 
   <ItemGroup>

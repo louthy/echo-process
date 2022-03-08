@@ -6,28 +6,12 @@ using static Echo.Process;
 using System.Reactive.Subjects;
 using Newtonsoft.Json;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Echo.Config;
 using LanguageExt.ClassInstances;
 using LanguageExt;
 
 namespace Echo
 {
-    internal static class AState
-    {
-        public const int Shutdown = 0;
-        public const int SettingUp = 1;
-        public const int Running = 2;
-        public const int ShuttingDown = 3;
-    }
-
-    internal static class MState
-    {
-        public const int Paused = 0;
-        public const int WaitingForMessage = 1;
-        public const int ProcessingMessage = 2;
-    }
-
     /// <summary>
     /// Internal class that represents the state of a single process.
     /// </summary>
@@ -35,55 +19,54 @@ namespace Echo
     /// <typeparam name="T">Message type</typeparam>
     class Actor<S, T> : IActor
     {
-        readonly Func<S, T, ValueTask<S>> actorFn;
-        readonly Func<S, ProcessId, ValueTask<S>> termFn;
-        readonly Func<IActor, ValueTask<S>> setupFn;
-        readonly Func<S, ValueTask<Unit>> shutdownFn;
+        readonly Func<S, T, S> actorFn;
+        readonly Func<S, ProcessId, S> termFn;
+        readonly Func<IActor, S> setupFn;
+        readonly Func<S, Unit> shutdownFn;
         readonly ProcessFlags flags;
         readonly Subject<object> publishSubject = new Subject<object>();
         readonly Subject<object> stateSubject = new Subject<object>();
+        readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         readonly Option<ICluster> cluster;
-        readonly Atom<HashMap<string, ActorItem>> children = Atom(HashMap<string, ActorItem>());
         HashMap<string, IDisposable> subs = HashMap<string, IDisposable>();
+        Atom<HashMap<string, ActorItem>> children = Atom(HashMap<string, ActorItem>());
         Option<S> state;
         StrategyState strategyState = StrategyState.Empty;
+        EventWaitHandle request;
         volatile ActorResponse response;
+        object sync = new object();
         bool remoteSubsAcquired;
         IActorSystem sys;
-        volatile int astatus;
-        volatile int mstatus;
 
         internal Actor(
             Option<ICluster> cluster,
             ActorItem parent,
             ProcessName name,
-            Func<S, T, ValueTask<S>> actor,
-            Func<IActor, ValueTask<S>> setup,
-            Func<S, ValueTask<Unit>> shutdown,
-            Func<S, ProcessId, ValueTask<S>> term,
+            Func<S, T, S> actor,
+            Func<IActor, S> setup,
+            Func<S, Unit> shutdown,
+            Func<S, ProcessId, S> term,
             State<StrategyContext, Unit> strategy,
             ProcessFlags flags,
             ProcessSystemConfig settings,
             IActorSystem sys
             )
         {
-            astatus    = AState.Shutdown;
-            mstatus    = MState.Paused;
-            setupFn    = setup ?? throw new ArgumentNullException(nameof(setup));
-            actorFn    = actor ?? throw new ArgumentNullException(nameof(actor));
+            setupFn = setup ?? throw new ArgumentNullException(nameof(setup));
+            actorFn = actor ?? throw new ArgumentNullException(nameof(actor));
             shutdownFn = shutdown ?? throw new ArgumentNullException(nameof(shutdown));
-            shutdownFn = async (S s) =>
+            shutdownFn = fun((S s) =>
             {
                 try
                 {
-                    await shutdown(s).ConfigureAwait(false);
+                    shutdown(s);
                 }
                 catch (Exception e)
                 {
                     logErr(e);
                 }
                 return unit;
-            };
+            });
 
             this.sys = sys;
             Id = parent.Actor.Id[name];
@@ -103,72 +86,64 @@ namespace Echo
         /// <summary>
         /// Start up - placeholder
         /// </summary>
-        public async ValueTask<InboxDirective> Startup()
+        public InboxDirective Startup()
         {
-            // Protect against multiple entry
-            if (state.IsSome || Interlocked.CompareExchange(ref astatus, AState.SettingUp, AState.Shutdown) != AState.Shutdown)
+            lock(sync)
             {
-                return InboxDirective.Default;
-            }
+                if (cancellationTokenSource.IsCancellationRequested)
+                {
+                    return InboxDirective.Shutdown;
+                }
 
-            var savedReq = ActorContext.Request.CurrentRequest;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedMsg = ActorContext.Request.CurrentMsg;
+                if (state.IsSome) return InboxDirective.Default;
 
-            try
-            {
-                ActorContext.Request.CurrentRequest = null;
-                ActorContext.Request.ProcessFlags = flags;
-                ActorContext.Request.CurrentMsg = null;
+                var savedReq = ActorContext.Request.CurrentRequest;
+                var savedFlags = ActorContext.Request.ProcessFlags;
+                var savedMsg = ActorContext.Request.CurrentMsg;
 
-                var stateValue = await GetState().ConfigureAwait(false);
                 try
                 {
-                    if (notnull(stateValue))
+                    ActorContext.Request.CurrentRequest = null;
+                    ActorContext.Request.ProcessFlags = flags;
+                    ActorContext.Request.CurrentMsg = null;
+
+                    var stateValue = GetState();
+                    try
                     {
-                        stateSubject.OnNext(stateValue);
+                        if (notnull(stateValue))
+                        {
+                            stateSubject.OnNext(stateValue);
+                        }
                     }
+                    catch (Exception e)
+                    {
+                        // Not our errors, so just log and move on
+                        logErr(e);
+                    }
+
+                    return InboxDirective.Default;
                 }
                 catch (Exception e)
                 {
-                    // Not our errors, so just log and move on
-                    logErr(e);
+                    var directive = RunStrategy(
+                        Id,
+                        Parent.Actor.Id,
+                        Sender,
+                        Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
+                        e,
+                        null,
+                        Parent.Actor.Strategy
+                    );
+
+                    if(!(e is ProcessKillException)) tell(sys.Errors, e);
+                    return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause
                 }
-
-                // Success, so now we're ready to receive messages
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
-                Interlocked.CompareExchange(ref astatus, AState.Running, AState.SettingUp);
-                
-                return InboxDirective.Default;
-            }
-            catch (Exception e)
-            {
-                var directive = RunStrategy(
-                    Id,
-                    Parent.Actor.Id,
-                    Sender,
-                    Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
-                    e,
-                    null,
-                    Parent.Actor.Strategy
-                );
-
-                if(!(e is ProcessKillException)) tell(sys.Errors, e);
-
-                return InboxDirective.Pause; // we give this feedback because Strategy will handle unpause
-            }
-            finally
-            {
-                // Make sure we're not hanging in the SettingUp phase, go back to uninitialised if we are
-                // because there was an error somewhere.
-                if (Interlocked.CompareExchange(ref astatus, AState.Shutdown, AState.SettingUp) == AState.SettingUp)
+                finally
                 {
-                    Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
+                    ActorContext.Request.CurrentRequest = savedReq;
+                    ActorContext.Request.ProcessFlags = savedFlags;
+                    ActorContext.Request.CurrentMsg = savedMsg;
                 }
-
-                ActorContext.Request.CurrentRequest = savedReq;
-                ActorContext.Request.ProcessFlags = savedFlags;
-                ActorContext.Request.CurrentMsg = savedMsg;
             }
         }
 
@@ -178,8 +153,14 @@ namespace Echo
         State<StrategyContext, Unit> strategy;
         public State<StrategyContext, Unit> Strategy
         {
-            get => strategy ?? sys.Settings.GetProcessStrategy(Id);
-            private set => strategy = value;
+            get
+            {
+                return strategy ?? sys.Settings.GetProcessStrategy(Id);
+            }
+            private set
+            {
+                strategy = value;
+            }
         }
 
         public Unit AddSubscription(ProcessId pid, IDisposable sub)
@@ -258,18 +239,17 @@ namespace Echo
             remoteSubsAcquired = true;
         }
 
-        async ValueTask<S> GetState()
+        S GetState()
         {
-            var res = state.Case switch
-                      {
-                          S s => s,
-                          _   => await InitState().ConfigureAwait(false)
-                      };
-            state = res;
-            return res;
+            lock (sync)
+            {
+                var res = state.IfNoneUnsafe(InitState);
+                state = res;
+                return res;
+            }
         }
 
-        async ValueTask<S> InitState()
+        S InitState()
         {
             S state;
 
@@ -285,18 +265,18 @@ namespace Echo
 
                         state = cluster.IfNoneUnsafe(() => null).Exists(StateKey)
                             ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
-                            : await setupFn(this).ConfigureAwait(false);
+                            : setupFn(this);
 
                     }
                     catch (Exception e)
                     {
                         logSysErr(e);
-                        state = await setupFn(this).ConfigureAwait(false);
+                        state = setupFn(this);
                     }
                 }
                 else
                 {
-                    state = await setupFn(this).ConfigureAwait(false);
+                    state = setupFn(this);
                 }
 
                 ActorContext.Request.RunOps();
@@ -366,46 +346,24 @@ namespace Echo
         public HashMap<string, ActorItem> Children =>
             children;
 
-        /// <summary>
-        /// Waits for any message being processed to finish
-        /// </summary>
-        void SpinUntilPaused()
-        {
-            while (Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage) != MState.WaitingForMessage)
-            {
-                if (mstatus == MState.Paused) return;
-                SpinWait sw = default;
-                sw.SpinOnce();
-            }
-        }
+        public CancellationTokenSource CancellationTokenSource => cancellationTokenSource;
 
         /// <summary>
         /// Clears the state (keeps the mailbox items)
         /// </summary>
-        public async ValueTask<Unit> Restart(bool unpauseAfterRestart)
+        public Unit Restart(bool unpauseAfterRestart)
         {
-            // Make sure we're not hanging in the SettingUp phase, go back to uninitialised if we are
-            // because there was an error somewhere.
-            if(Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) == AState.Running)
+            lock (sync)
             {
-                SpinUntilPaused();
-
-                try
+                RemoveAllSubscriptions();
+                state.IfSome(shutdownFn);
+                DisposeState();
+                foreach (var kid in Children)
                 {
-                    RemoveAllSubscriptions();
-                    if (state.Case is S s) await shutdownFn(s).ConfigureAwait(false);
-                    DisposeState();
-                    foreach (var kid in Children)
-                    {
-                        kill(kid.Value.Actor.Id);
-                    }
+                    kill(kid.Value.Actor.Id);
                 }
-                finally
-                {
-                    Interlocked.CompareExchange(ref astatus, AState.Shutdown, AState.ShuttingDown);
-                }
-                tellSystem(Id, SystemMessage.StartupProcess(unpauseAfterRestart)); 
             }
+            tellSystem(Id, SystemMessage.StartupProcess(unpauseAfterRestart)); 
             return unit;
         }
 
@@ -425,25 +383,6 @@ namespace Echo
         {
             children.Swap(c => c.AddOrUpdate(item.Actor.Id.Name.Value, item));
             return unit;
-        }
-
-        public Unit Pause()
-        {
-            if (astatus == AState.Running)
-            {
-                Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.WaitingForMessage);
-                Interlocked.CompareExchange(ref mstatus, MState.Paused, MState.ProcessingMessage);
-            }
-            return default;
-        }
-
-        public Unit UnPause()
-        {
-            if (astatus == AState.Running)
-            {
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.Paused);
-            }
-            return default;
         }
 
         /// <summary>
@@ -475,39 +414,29 @@ namespace Echo
         /// <summary>
         /// Shutdown everything from this node down
         /// </summary>
-        public async ValueTask<Unit> Shutdown(bool maintainState)
+        public Unit Shutdown(bool maintainState)
         {
-            if (Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) != AState.Running) return unit;
-            SpinUntilPaused();
-
-            try
+            cancellationTokenSource.Cancel(); // this will signal other operations not to start processing more messages (ProcessMessage) or startup again (Startup), even if they already received something from the queue
+            lock(sync)
             {
-                // Shutdown children
-                var kids = Children;
-                children.Swap(_ => Empty);
-                foreach (var child in kids)
-                {
-                    await child.Value.Actor.Shutdown(maintainState);
-                }
-
                 if (maintainState == false && Flags != ProcessFlags.Default)
                 {
-                    cluster.IfSome(c => {
-                                       // TODO: Make this transactional 
-                                       // {
-                                       c.DeleteMany(
-                                           StateKey,
-                                           ActorInboxCommon.ClusterUserInboxKey(Id),
-                                           ActorInboxCommon.ClusterSystemInboxKey(Id),
-                                           ActorInboxCommon.ClusterMetaDataKey(Id),
-                                           ActorInboxCommon.ClusterSettingsKey(Id));
+                    cluster.IfSome(c =>
+                    {
+                        // TODO: Make this transactional 
+                        // {
+                        c.DeleteMany(
+                            StateKey,
+                            ActorInboxCommon.ClusterUserInboxKey(Id),
+                            ActorInboxCommon.ClusterSystemInboxKey(Id),
+                            ActorInboxCommon.ClusterMetaDataKey(Id),
+                            ActorInboxCommon.ClusterSettingsKey(Id));
 
-                                       sys.DeregisterById(Id);
+                            sys.DeregisterById(Id);
+                        // }
 
-                                       // }
-
-                                       sys.Settings.ClearInMemorySettingsOverride(ActorInboxCommon.ClusterSettingsKey(Id));
-                                   });
+                        sys.Settings.ClearInMemorySettingsOverride(ActorInboxCommon.ClusterSettingsKey(Id));
+                    });
                 }
 
                 RemoveAllSubscriptions();
@@ -515,41 +444,34 @@ namespace Echo
                 stateSubject.OnCompleted();
                 remoteSubsAcquired = false;
                 strategyState = StrategyState.Empty;
-                if (state.Case is S s) await shutdownFn(s).ConfigureAwait(false);
+                state.IfSome(shutdownFn);
                 DisposeState();
 
                 sys.DispatchTerminate(Id);
-            }
-            finally
-            {
-                Interlocked.CompareExchange(ref astatus, AState.Shutdown, AState.ShuttingDown);
-            }
 
-            return unit;
+                return unit;
+            }
         }
-
-        public async ValueTask<Unit> ProcessResponse(ActorResponse response) =>
-            ignore(await ProcessMessage(response).ConfigureAwait(false));
 
         public Option<T> PreProcessMessageContent(object message)
         {
             if (message == null)
             {
-                tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Message is null for tell (expected {typeof(T)})"));
+                tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Message is null for tell (expected {typeof(T)})", message));
                 return None;
             }
 
-            if (typeof(T) != typeof(string) && message is string strmsg)
+            if (typeof(T) != typeof(string) && message is string)
             {
                 try
                 {
                     // This allows for messages to arrive from JS and be dealt with at the endpoint 
                     // (where the type is known) rather than the gateway (where it isn't)
-                    return Some(Deserialise.Object<T>(strmsg));
+                    return Some(Deserialise.Object<T>((string)message));
                 }
                 catch
                 {
-                    tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Invalid message type for tell (expected {typeof(T)})", strmsg));
+                    tell(sys.DeadLetters, DeadLetter.create(Sender, Self, $"Invalid message type for tell (expected {typeof(T)})", message));
                     return None;
                 }
             }
@@ -563,59 +485,213 @@ namespace Echo
             return Some((T)message);
         }
 
-        public async ValueTask<InboxDirective> ProcessAsk(ActorRequest request)
+        public R ProcessRequest<R>(ProcessId pid, object message)
         {
-            // Make sure we only process one message at a time
-            while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
-            {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
-                sw.SpinOnce();
-            }
-
-            var savedMsg = ActorContext.Request.CurrentMsg;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedReq = ActorContext.Request.CurrentRequest;
-
             try
             {
-                ActorContext.Request.CurrentRequest = request;
-                ActorContext.Request.ProcessFlags = flags;
-                ActorContext.Request.CurrentMsg = request.Message;
-
-                if (typeof(T) != typeof(string) && request.Message is string)
+                if (request != null)
                 {
-                    state = await PreProcessMessageContent(request.Message).ToAsync().MatchAsync(
-                        Some: async tmsg =>
-                        {
-                            var stateIn = await GetState().ConfigureAwait(false);
-                            var stateOut = await actorFn(stateIn, tmsg).ConfigureAwait(false);
-                            try
-                            {
-                                if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                                {
-                                    stateSubject.OnNext(stateOut);
-                                }
-                            }
-                            catch (Exception ue)
-                            {
-                                // Not our errors, so just log and move on
-                                logErr(ue);
-                            }
-
-                            return Some(stateOut);
-                        },
-                        None: async () =>
-                        {
-                            replyError(new AskException($"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                            return await new ValueTask<Option<S>>(state);
-                        }).ConfigureAwait(false);
+                    throw new Exception("async ask not allowed");
                 }
-                else if (request.Message is T msg)
+
+                response = null;
+                request = new AutoResetEvent(false);
+                sys.Ask(pid, new ActorRequest(message, pid, Self, 0), Self);
+                request.WaitOne(sys.Settings.Timeout);
+
+                if (response == null)
                 {
-                    var stateIn  = await GetState().ConfigureAwait(false);
-                    var stateOut = await actorFn(stateIn, msg).ConfigureAwait(false);
+                    throw new TimeoutException("Request timed out");
+                }
+                else
+                {
+                    if (response.IsFaulted)
+                    {
+                        var ex = (Exception)response.Message;
+                        throw new ProcessException($"Process issue: {ex.Message}", pid.Path, Self.Path, ex);
+                    }
+                    else
+                    {
+                        return (R)response.Message;
+                    }
+                }
+            }
+            finally
+            {
+                if (request != null)
+                {
+                    request.Dispose();
+                    request = null;
+                }
+            }
+        }
+
+        public Unit ProcessResponse(ActorResponse response)
+        {
+            if (request == null)
+            {
+                ProcessMessage(response);
+            }
+            else
+            {
+                this.response = response;
+                request.Set();
+            }
+            return unit;
+        }
+
+        public InboxDirective ProcessAsk(ActorRequest request)
+        {
+            lock (sync)
+            {
+                if (cancellationTokenSource.IsCancellationRequested)
+                {
+                    replyError(new AskException(
+                        $"Can't ask {Id.Path} because actor shutdown in progress"));
+                    return InboxDirective.Shutdown;
+                }
+
+                var savedMsg = ActorContext.Request.CurrentMsg;
+                var savedFlags = ActorContext.Request.ProcessFlags;
+                var savedReq = ActorContext.Request.CurrentRequest;
+
+                try
+                {
+                    ActorContext.Request.CurrentRequest = request;
+                    ActorContext.Request.ProcessFlags = flags;
+                    ActorContext.Request.CurrentMsg = request.Message;
+
+                    //ActorContext.AssertSession();
+
+                    if (typeof(T) != typeof(string) && request.Message is string)
+                    {
+                        state = PreProcessMessageContent(request.Message).Match(
+                            Some: tmsg =>
+                            {
+                                var stateIn = GetState();
+                                var stateOut = actorFn(stateIn, tmsg);
+                                try
+                                {
+                                    if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                                    {
+                                        stateSubject.OnNext(stateOut);
+                                    }
+                                }
+                                catch (Exception ue)
+                                {
+                                    // Not our errors, so just log and move on
+                                    logErr(ue);
+                                }
+
+                                return stateOut;
+                            },
+                            None: () =>
+                            {
+                                replyError(new AskException(
+                                    $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
+                                return state;
+                            }
+                        );
+                    }
+                    else if (request.Message is T msg)
+                    {
+                        var stateIn = GetState();
+                        var stateOut = actorFn(stateIn, msg);
+                        try
+                        {
+                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                            {
+                                stateSubject.OnNext(stateOut);
+                            }
+                        }
+                        catch (Exception ue)
+                        {
+                            // Not our errors, so just log and move on
+                            logErr(ue);
+                        }
+
+                        state = stateOut;
+                    }
+                    else if (request.Message is Message m)
+                    {
+                        ProcessSystemMessage(m);
+                    }
+                    else
+                    {
+                        // Failure to deserialise is not our problem, its the sender's
+                        // so we don't throw here.
+                        replyError(new AskException(
+                            $"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
+                        return InboxDirective.Default;
+                    }
+
+                    strategyState = strategyState.With(
+                        Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
+                        LastFailure: DateTime.MaxValue,
+                        BackoffAmount: 0 * seconds
+                    );
+
+                    ActorContext.Request.RunOps();
+                }
+                catch (Exception e)
+                {
+                    ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
+                    replyError(e);
+                    ActorContext.Request.RunOps();
+                    return DefaultErrorHandler(request, e);
+                }
+                finally
+                {
+                    ActorContext.Request.CurrentMsg = savedMsg;
+                    ActorContext.Request.ProcessFlags = savedFlags;
+                    ActorContext.Request.CurrentRequest = savedReq;
+                }
+
+                return InboxDirective.Default;
+            }
+        }
+
+        void ProcessSystemMessage(Message message)
+        {
+            lock (sync)
+            {
+                switch (message.Tag)
+                {
+                    case Message.TagSpec.GetChildren:
+                        replyIfAsked(Children);
+                        break;
+                    case Message.TagSpec.ShutdownProcess:
+                        replyIfAsked(ShutdownProcess(false));
+                        break;
+                }
+            }
+        }
+
+        public InboxDirective ProcessTerminated(ProcessId pid)
+        {
+            if (termFn == null) return InboxDirective.Default;
+
+            lock (sync)
+            {
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
+
+                var savedReq   = ActorContext.Request.CurrentRequest;
+                var savedFlags = ActorContext.Request.ProcessFlags;
+                var savedMsg   = ActorContext.Request.CurrentMsg;
+
+                try
+                {
+                    ActorContext.Request.CurrentRequest = null;
+                    ActorContext.Request.ProcessFlags   = flags;
+                    ActorContext.Request.CurrentMsg     = pid;
+
+                    //ActorContext.AssertSession();
+
+                    var stateIn = GetState();
+                    var stateOut = termFn(stateIn, pid);
+                    state = stateOut;
+
                     try
                     {
                         if (!default(EqDefault<S>).Equals(stateOut, stateIn))
@@ -629,142 +705,43 @@ namespace Echo
                         logErr(ue);
                     }
 
-                    state = stateOut;
+                    strategyState = strategyState.With(
+                        Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
+                        LastFailure: DateTime.MaxValue,
+                        BackoffAmount: 0 * seconds
+                        );
+
+                    ActorContext.Request.RunOps();
                 }
-                else if (request.Message is Message m)
+                catch (Exception e)
                 {
-                    await ProcessSystemMessage(m).ConfigureAwait(false);
+                    return DefaultErrorHandler(pid, e);
                 }
-                else
+                finally
                 {
-                    // Failure to deserialise is not our problem, its the sender's
-                    // so we don't throw here.
-                    replyError(new AskException($"Can't ask {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {request.Message}"));
-                    return InboxDirective.Default;
+                    ActorContext.Request.CurrentRequest = savedReq;
+                    ActorContext.Request.ProcessFlags   = savedFlags;
+                    ActorContext.Request.CurrentMsg     = savedMsg;
                 }
-
-                strategyState = strategyState.With(
-                    Failures: 0,
-                    FirstFailure: DateTime.MaxValue,
-                    LastFailure: DateTime.MaxValue,
-                    BackoffAmount: 0 * seconds
-                );
-
-                ActorContext.Request.RunOps();
-            }
-            catch (Exception e)
-            {
-                ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
-                replyError(e);
-                ActorContext.Request.RunOps();
-                return await DefaultErrorHandler(request, e).ConfigureAwait(false);
-            }
-            finally
-            {
-                ActorContext.Request.CurrentMsg = savedMsg;
-                ActorContext.Request.ProcessFlags = savedFlags;
-                ActorContext.Request.CurrentRequest = savedReq;
-
-                // Go back to waiting for a message
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
-            }
-
-            return InboxDirective.Default;
-        }
-
-        async ValueTask<Unit> ProcessSystemMessage(Message message)
-        {
-            switch (message.Tag)
-            {
-                case Message.TagSpec.GetChildren:
-                    return replyIfAsked(Children);
-                
-                case Message.TagSpec.ShutdownProcess:
-                    return replyIfAsked(await Shutdown(false).ConfigureAwait(false));
-                
-                default:
-                    return unit;
+                return InboxDirective.Default;
             }
         }
 
-        public async ValueTask<InboxDirective> ProcessTerminated(ProcessId pid)
-        {
-            if (termFn == null) return InboxDirective.Default;
-
-            // Make sure we only process one message at a time
-            while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
-            {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
-                sw.SpinOnce();
-            }
-            
-            var savedReq   = ActorContext.Request.CurrentRequest;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedMsg   = ActorContext.Request.CurrentMsg;
-
-            try
-            {
-                ActorContext.Request.CurrentRequest = null;
-                ActorContext.Request.ProcessFlags   = flags;
-                ActorContext.Request.CurrentMsg     = pid;
-
-                var stateIn = await GetState().ConfigureAwait(false);
-                var stateOut = await termFn(stateIn, pid).ConfigureAwait(false);
-                state = stateOut;
-
-                try
-                {
-                    if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                    {
-                        stateSubject.OnNext(stateOut);
-                    }
-                }
-                catch (Exception ue)
-                {
-                    // Not our errors, so just log and move on
-                    logErr(ue);
-                }
-
-                strategyState = strategyState.With(
-                    Failures: 0,
-                    FirstFailure: DateTime.MaxValue,
-                    LastFailure: DateTime.MaxValue,
-                    BackoffAmount: 0 * seconds
-                    );
-
-                ActorContext.Request.RunOps();
-            }
-            catch (Exception e)
-            {
-                return await DefaultErrorHandler(pid, e).ConfigureAwait(false);
-            }
-            finally
-            {
-                ActorContext.Request.CurrentRequest = savedReq;
-                ActorContext.Request.ProcessFlags   = savedFlags;
-                ActorContext.Request.CurrentMsg     = savedMsg;
-                
-                // Go back to waiting for a message
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
-            }
-            return InboxDirective.Default;
-        }
-
-        async ValueTask<InboxDirective> DefaultErrorHandler(object message, Exception e)
+        InboxDirective DefaultErrorHandler(object message, Exception e)
         {
             // Wipe all transactional outputs because of the error
             ActorContext.Request.SetOps(ProcessOpTransaction.Start(Id));
 
-            var directive = await RunStrategy(
+            var directive = RunStrategy(
                 Id,
                 Parent.Actor.Id,
                 Sender,
                 Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
                 e,
                 message,
-                Parent.Actor.Strategy).ConfigureAwait(false);
+                Parent.Actor.Strategy
+            );
             if (!(e is ProcessKillException)) tell(sys.Errors, e);
 
             // Run any transactional outputs caused by the strategy computation
@@ -777,105 +754,98 @@ namespace Echo
         /// </summary>
         /// <param name="message"></param>
         /// <returns></returns>
-        public async ValueTask<InboxDirective> ProcessMessage(object message)
+        public InboxDirective ProcessMessage(object message)
         {
-            // Make sure we only process one message at a time
-            while (Interlocked.CompareExchange(ref mstatus, MState.ProcessingMessage, MState.WaitingForMessage) != MState.WaitingForMessage)
+            lock (sync)
             {
-                if (mstatus == MState.Paused) return InboxDirective.Default;
-                if (astatus != AState.Running) return InboxDirective.Default;
-                SpinWait sw = default;
-                sw.SpinOnce();
-            }
+                if (cancellationTokenSource.IsCancellationRequested) return InboxDirective.Shutdown;
 
-            var savedReq   = ActorContext.Request.CurrentRequest;
-            var savedFlags = ActorContext.Request.ProcessFlags;
-            var savedMsg   = ActorContext.Request.CurrentMsg;
+                var savedReq = ActorContext.Request.CurrentRequest;
+                var savedFlags = ActorContext.Request.ProcessFlags;
+                var savedMsg = ActorContext.Request.CurrentMsg;
 
-            try
-            {
-                ActorContext.Request.CurrentRequest = null;
-                ActorContext.Request.ProcessFlags   = flags;
-                ActorContext.Request.CurrentMsg     = message;
-
-                if (message is T)
+                try
                 {
-                    var stateIn  = await GetState().ConfigureAwait(false);
-                    var stateOut = await actorFn(stateIn, (T) message).ConfigureAwait(false);
-                    state = stateOut;
-                    try
+                    ActorContext.Request.CurrentRequest = null;
+                    ActorContext.Request.ProcessFlags = flags;
+                    ActorContext.Request.CurrentMsg = message;
+
+                    if (message is T)
                     {
-                        if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                        var stateIn = GetState();
+                        var stateOut = actorFn(stateIn, (T)message);
+                        state = stateOut;
+                        try
                         {
-                            stateSubject.OnNext(stateOut);
+                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                            {
+                                stateSubject.OnNext(stateOut);
+                            }
+                        }
+                        catch (Exception ue)
+                        {
+                            // Not our errors, so just log and move on
+                            logErr(ue);
                         }
                     }
-                    catch (Exception ue)
+                    else if (typeof(T) != typeof(string) && message is string)
                     {
-                        // Not our errors, so just log and move on
-                        logErr(ue);
+                        state = PreProcessMessageContent(message).Match(
+                                    Some: tmsg =>
+                                    {
+                                        var stateIn = GetState();
+                                        var stateOut = actorFn(stateIn, tmsg);
+                                        try
+                                        {
+                                            if (!default(EqDefault<S>).Equals(stateOut, stateIn))
+                                            {
+                                                stateSubject.OnNext(stateOut);
+                                            }
+                                        }
+                                        catch (Exception ue)
+                                        {
+                                        // Not our errors, so just log and move on
+                                        logErr(ue);
+                                        }
+                                        return stateOut;
+                                    },
+                                    None: () => state
+                                );
                     }
+                    else if (message is Message)
+                    {
+                        ProcessSystemMessage((Message)message);
+                    }
+                    else
+                    {
+                        logErr($"Can't tell {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {message}");
+                        return InboxDirective.Default;
+                    }
+
+                    strategyState = strategyState.With(
+                        Failures: 0,
+                        FirstFailure: DateTime.MaxValue,
+                        LastFailure: DateTime.MaxValue,
+                        BackoffAmount: 0 * seconds
+                        );
+
+                    ActorContext.Request.RunOps();
                 }
-                else if (typeof(T) != typeof(string) && message is string)
+                catch (Exception e)
                 {
-                    state = await PreProcessMessageContent(message).ToAsync().MatchAsync(
-                                Some: async tmsg => {
-                                          var stateIn  = await GetState().ConfigureAwait(false);
-                                          var stateOut = await actorFn(stateIn, tmsg).ConfigureAwait(false);
-                                          try
-                                          {
-                                              if (!default(EqDefault<S>).Equals(stateOut, stateIn))
-                                              {
-                                                  stateSubject.OnNext(stateOut);
-                                              }
-                                          }
-                                          catch (Exception ue)
-                                          {
-                                              // Not our errors, so just log and move on
-                                              logErr(ue);
-                                          }
-
-                                          return Some(stateOut);
-                                      },
-                                None: async () => await state.AsValueTask()).ConfigureAwait(false);
+                    return DefaultErrorHandler(message, e);
                 }
-                else if (message is Message m)
+                finally
                 {
-                    await ProcessSystemMessage(m).ConfigureAwait(false);
+                    ActorContext.Request.CurrentRequest = savedReq;
+                    ActorContext.Request.ProcessFlags = savedFlags;
+                    ActorContext.Request.CurrentMsg = savedMsg;
                 }
-                else
-                {
-                    logErr($"Can't tell {Id.Path}, message is not {typeof(T).GetTypeInfo().Name} : {message}");
-                    return InboxDirective.Default;
-                }
-
-                strategyState = strategyState.With(
-                    Failures: 0,
-                    FirstFailure: DateTime.MaxValue,
-                    LastFailure: DateTime.MaxValue,
-                    BackoffAmount: 0 * seconds
-                );
-
-                ActorContext.Request.RunOps();
+                return InboxDirective.Default;
             }
-            catch (Exception e)
-            {
-                return await DefaultErrorHandler(message, e).ConfigureAwait(false);
-            }
-            finally
-            {
-                ActorContext.Request.CurrentRequest = savedReq;
-                ActorContext.Request.ProcessFlags   = savedFlags;
-                ActorContext.Request.CurrentMsg     = savedMsg;
-
-                // Go back to waiting for a message
-                Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
-            }
-
-            return InboxDirective.Default;
         }
 
-        public async ValueTask<InboxDirective> RunStrategy(
+        public InboxDirective RunStrategy(
             ProcessId pid,
             ProcessId parent,
             ProcessId sender,
@@ -900,13 +870,8 @@ namespace Echo
                 // Invoke the strategy with the running state
                 var result = failureStrategy.Run(strategyState);
 
-                if (astatus == AState.ShuttingDown || astatus == AState.Shutdown)
-                {
-                    return InboxDirective.Default;
-                }
-
-                return await result.Value.Match(
-                    Some: async decision =>
+                return result.Value.Match(
+                    Some: decision =>
                     {
                         // Save the strategy state back to the actor
                         strategyState = result.State;
@@ -915,11 +880,11 @@ namespace Echo
                         {
                             decision.Affects.Iter(p => pause(p));
 
-                            safedelay(() => {
-                                          if (astatus == AState.ShuttingDown || astatus == AState.Shutdown) return;
-                                          ignore(RunProcessDirective(pid, sender, ex, message, decision, true)); 
-                                      },
-                                      decision.Pause);
+                            var safeDelayDisposable = safedelay(
+                                () => RunProcessDirective(pid, sender, ex, message, decision, true),
+                                decision.Pause
+                            );
+                            cancellationTokenSource.Token.Register(() => safeDelayDisposable.Dispose());
 
                             return InboxDirective.Pause | RunMessageDirective(pid, sender, decision, ex, message);
                         }
@@ -928,7 +893,7 @@ namespace Echo
                             // Run the instruction for the Process (stop/restart/etc.)
                             try
                             {
-                                await RunProcessDirective(pid, sender, ex, message, decision, false).ConfigureAwait(false);
+                                RunProcessDirective(pid, sender, ex, message, decision, false);
                             }
                             catch (Exception e)
                             {
@@ -939,15 +904,15 @@ namespace Echo
                             return RunMessageDirective(pid, sender, decision, ex, message);
                         }
                     },
-                    None: async () =>
+                    None: () =>
                     {
                         logErr("Strategy failed (no decision) in " + Id);
-                        return await InboxDirective.Default.AsValueTask();
+                        return InboxDirective.Default;
                     },
-                    Fail: async e =>
+                    Fail: e =>
                     {
                         logErr("Strategy exception (decision error) " + Id, e);
-                        return await InboxDirective.Default.AsValueTask();
+                        return InboxDirective.Default;
                     });
             }
             catch (Exception e)
@@ -977,7 +942,7 @@ namespace Echo
                     return InboxDirective.Default;
 
                 case MessageDirectiveType.ForwardToProcess:
-                    tell(((ForwardToProcess)directive).ProcessId, message, sender);
+                    tell((directive as ForwardToProcess).ProcessId, message, sender);
                     return InboxDirective.Default;
 
                 case MessageDirectiveType.StayInQueue:
@@ -992,7 +957,7 @@ namespace Echo
             }
         }
 
-        async ValueTask<Unit> RunProcessDirective(
+        void RunProcessDirective(
             ProcessId pid,
             ProcessId sender,
             Exception e,
@@ -1025,42 +990,43 @@ namespace Echo
             switch (directive.Type)
             {
                 case DirectiveType.Escalate:
-                    return tellSystem(Parent.Actor.Id, SystemMessage.ChildFaulted(pid, sender, e, message), Self);
+                    tellSystem(Parent.Actor.Id, SystemMessage.ChildFaulted(pid, sender, e, message), Self);
+                    break;
                 case DirectiveType.Resume:
                     // Note: unpause should not be necessary if unPauseAfterRestart==false because our strategy did not pause before (but unpause should not harm)
-                    return unpause(pid);
+                    unpause(pid);
+                    break;
                 case DirectiveType.Restart:
-                    return await Restart(unPauseAfterRestart).ConfigureAwait(false);
+                    Restart(unPauseAfterRestart);
+                    break;
                 case DirectiveType.Stop:
-                    return await Shutdown(false).ConfigureAwait(false);
-                default:
-                    return unit;
+                    ShutdownProcess(false);
+                    break;
             }
         }
 
-        /*public async ValueTask<Unit> ShutdownProcess(bool maintainState)
+        public Unit ShutdownProcess(bool maintainState)
         {
-            if(Interlocked.CompareExchange(ref astatus, AState.ShuttingDown, AState.Running) == AState.Running) 
+            cancellationTokenSource.Cancel();
+            lock (sync)
             {
-                Parent.Actor.Children.Find(Name.Value).Sequence(self =>
+                return Parent.Actor.Children.Find(Name.Value).IfSome(self =>
                 {
-                    await ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState).ConfigureAwait(false);
+                    ShutdownProcessRec(self, sys.GetInboxShutdownItem().Map(x => (ILocalActorInbox)x.Inbox), maintainState);
                     Parent.Actor.UnlinkChild(Id);
                     children.Swap(_ => HashMap<string, ActorItem>());
                 });
-
-                return unit;
             }
         }
 
-        async ValueTask<Unit> ShutdownProcessRec(ActorItem item, Option<ILocalActorInbox> inboxShutdown, bool maintainState)
+        void ShutdownProcessRec(ActorItem item, Option<ILocalActorInbox> inboxShutdown, bool maintainState)
         {
             var process = item.Actor;
             var inbox = item.Inbox;
 
             foreach (var child in process.Children.Values)
             {
-                await ShutdownProcessRec(child, inboxShutdown, maintainState);
+                ShutdownProcessRec(child, inboxShutdown, maintainState);
             }
 
             inboxShutdown.Match(
@@ -1068,14 +1034,15 @@ namespace Echo
                 None: ()  => inbox.Dispose()
             );
 
-            return await process.Shutdown(maintainState).ConfigureAwait(false);
-        }*/
+            process.Shutdown(maintainState);
+        }
 
         public void Dispose()
         {
             RemoveAllSubscriptions();
-            if(state.Case is S s) shutdownFn(s);
+            state.IfSome(shutdownFn);
             DisposeState();
+            cancellationTokenSource.Dispose();
         }
 
         void DisposeState()
@@ -1084,14 +1051,17 @@ namespace Echo
             state = None;
         }
 
-        public ValueTask<InboxDirective> ChildFaulted(ProcessId pid, ProcessId sender, Exception ex, object message) =>
-            RunStrategy(
+        public InboxDirective ChildFaulted(ProcessId pid, ProcessId sender, Exception ex, object message)
+        {
+            return RunStrategy(
                 pid,
                 Parent.Actor.Id,
                 sender,
                 Parent.Actor.Children.Values.Map(n => n.Actor.Id).Filter(x => x != Id),
                 ex,
                 message,
-                Parent.Actor.Strategy);
+                Parent.Actor.Strategy
+            );
+        }
     }
 }

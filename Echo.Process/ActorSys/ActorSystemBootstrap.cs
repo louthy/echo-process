@@ -5,7 +5,6 @@ using System.Reactive.Subjects;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using System.Threading;
-using System.Threading.Tasks;
 using Echo.Config;
 using Echo.Session;
 using LanguageExt.UnitsOfMeasure;
@@ -53,8 +52,8 @@ namespace Echo
                 parent,
                 rootProcessName,
                 SystemInbox,
-                _ => this.AsValueTask(),
-                ActorSystem.NoShutdownAsync<ActorSystemBootstrap>(),
+                _ => this,
+                ActorSystem.NoShutdown<ActorSystemBootstrap>(),
                 null,
                 Process.DefaultStrategy,
                 ProcessFlags.Default,
@@ -71,9 +70,9 @@ namespace Echo
             RootProcessName = rootProcessName;
         }
 
-        public ValueTask<ActorSystemBootstrap> SystemInbox(ActorSystemBootstrap state, Unit msg)
+        public ActorSystemBootstrap SystemInbox(ActorSystemBootstrap state, Unit msg)
         {
-            return state.AsValueTask();
+            return state;
         }
 
         private Option<ActorItem> GetItem(ProcessId pid) =>
@@ -140,7 +139,7 @@ namespace Echo
         {
             logInfo("Process system shutting down");
 
-            user?.Actor?.Shutdown(true);
+            user?.Actor?.ShutdownProcess(true);
             user = ActorCreate<object>(root, Config.UserProcessName, publish, null, ProcessFlags.Default);
 
             if (ActorContext.Request.CurrentRequest != null && ActorContext.Request.CurrentRequest.RequestId != -1)
@@ -153,26 +152,21 @@ namespace Echo
             return unit;
         }
 
-        public ActorItem ActorCreate<T>(ActorItem parent, ProcessName name, Func<T, Unit> actorFn, Func<Unit, ProcessId, Unit> termFn, ProcessFlags flags, int maxMailboxSize = -1) =>
-            ActorCreateAsync<Unit, T>(parent, name, (s, t) => actorFn(t).AsValueTask(), static () => unit.AsValueTask(), (_, p) => termFn(unit, p).AsValueTask(), flags, maxMailboxSize);
+        public ActorItem ActorCreate<T>(ActorItem parent, ProcessName name, Func<T, Unit> actorFn, Func<Unit, ProcessId, Unit> termFn, ProcessFlags flags, int maxMailboxSize = -1)
+        {
+            return ActorCreate<Unit, T>(parent, name, (s, t) => { actorFn(t); return unit; }, () => unit, termFn, flags, maxMailboxSize);
+        }
 
-        public ActorItem ActorCreate<T>(ActorItem parent, ProcessName name, Action<T> actorFn, Func<Unit, ProcessId, Unit> termFn, ProcessFlags flags, int maxMailboxSize = -1) =>
-            ActorCreateAsync<Unit, T>(parent, name, (s, t) => { actorFn(t); return unit.AsValueTask(); }, static () => unit.AsValueTask(), (_, p) => termFn(unit, p).AsValueTask(), flags, maxMailboxSize);
+        public ActorItem ActorCreate<T>(ActorItem parent, ProcessName name, Action<T> actorFn, Func<Unit, ProcessId, Unit> termFn, ProcessFlags flags, int maxMailboxSize = -1)
+        {
+            return ActorCreate<Unit, T>(parent, name, (s, t) => { actorFn(t); return unit; }, () => unit, termFn, flags, maxMailboxSize);
+        }
 
-        public ActorItem ActorCreate<S, T>(ActorItem parent, ProcessName name, Func<S, T, S> actorFn, Func<S> setupFn, Func<S, ProcessId, S> termFn, ProcessFlags flags, int maxMailboxSize = -1) =>
-            ActorCreateAsync<S, T>(parent, name, (s, m) => actorFn(s,m).AsValueTask(), () => setupFn().AsValueTask(), (s, p) => termFn(s, p).AsValueTask(), flags, maxMailboxSize);
-        
-        public ActorItem ActorCreateAsync<T>(ActorItem parent, ProcessName name, Func<T, ValueTask<Unit>> actorFn, Func<Unit, ProcessId, ValueTask<Unit>> termFn, ProcessFlags flags, int maxMailboxSize = -1) =>
-            ActorCreateAsync<Unit, T>(parent, name, async (s, t) => { await actorFn(t).ConfigureAwait(false); return unit; }, static () => unit.AsValueTask(), termFn, flags, maxMailboxSize);
-
-        public ActorItem ActorCreateAsync<T>(ActorItem parent, ProcessName name, Action<T> actorFn, Func<Unit, ProcessId, ValueTask<Unit>> termFn, ProcessFlags flags, int maxMailboxSize = -1) =>
-            ActorCreateAsync<Unit, T>(parent, name, (s, t) => { actorFn(t); return unit.AsValueTask(); }, static () => unit.AsValueTask(), termFn, flags, maxMailboxSize);
-
-        public ActorItem ActorCreateAsync<S, T>(ActorItem parent, ProcessName name, Func<S, T, ValueTask<S>> actorFn, Func<ValueTask<S>> setupFn, Func<S, ProcessId, ValueTask<S>> termFn, ProcessFlags flags, int maxMailboxSize = -1)
+        public ActorItem ActorCreate<S, T>(ActorItem parent, ProcessName name, Func<S, T, S> actorFn, Func<S> setupFn, Func<S, ProcessId, S> termFn, ProcessFlags flags, int maxMailboxSize = -1)
         {
             if (ProcessDoesNotExist(nameof(ActorCreate), parent.Actor.Id)) return null;
 
-            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), ActorSystem.NoShutdownAsync<S>(), termFn, Process.DefaultStrategy, flags, Settings, System);
+            var actor = new Actor<S, T>(Cluster, parent, name, actorFn, _ => setupFn(), ActorSystem.NoShutdown<S>(), termFn, Process.DefaultStrategy, flags, Settings, System);
 
             IActorInbox inbox = null;
             if ((actor.Flags & ProcessFlags.ListenRemoteAndLocal) == ProcessFlags.ListenRemoteAndLocal && Cluster.IsSome)
@@ -200,7 +194,7 @@ namespace Echo
             }
             catch (Exception e)
             {
-                item.Actor.Shutdown(false);
+                item.Actor.ShutdownProcess(false);
                 logSysErr(new ProcessException($"Process failed starting up: {e.Message}", actor.Id.Path, actor.Parent.Actor.Id.Path, e));
             }
 
