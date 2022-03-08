@@ -59,7 +59,7 @@ namespace Echo
             bool Lazy = false) =>
             spawn<Unit, T>(
                 Name,
-                unitAff,
+                () => unitAff,
                 (_, m) => Inbox(m).Map(static _ => unit),
                 Flags,
                 Strategy,
@@ -93,7 +93,7 @@ namespace Echo
         /// <returns>A ProcessId that identifies the child</returns>
         public static Eff<RT, ProcessId> spawn<S, T>(
             ProcessName Name,
-            Aff<RT, S> Setup,
+            Func<Aff<RT, S>> Setup,
             Func<S, T, Aff<RT, S>> Inbox,
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
@@ -106,29 +106,18 @@ namespace Echo
             Shutdown   ??= (s => unitAff);
             Terminated ??= ((s, p) => SuccessAff(s));
             
-            static EchoState<RT> makeState() =>
-                new EchoState<RT>(
-                    ActorContext.SessionId,
-                    ActorContext.Request,
-                    ActorContext.DefaultSystem,
-                    ActorContext.Systems);
-            
             Func<ValueTask<S>> setup(RT runtime) =>
-                async () => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()),
-                                                       Setup).ReRun(runtime).ConfigureAwait(false)).ThrowIfFail();
+                async () => (await Setup().Run(runtime).ConfigureAwait(false)).ThrowIfFail();
 
             Func<S, T, ValueTask<S>> inbox(RT runtime) =>
-                async (s, m) => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()), 
-                                                           Inbox(s, m)).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
+                async (s, m) => (await Inbox(s, m).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
 
             Func<S, ValueTask<Unit>> shut(RT runtime) =>
-                async s => await localAff<RT, RT, Unit>(rt => rt.MapEchoState(_ => makeState()),
-                                                        Shutdown(s)).RunUnit(runtime).ConfigureAwait(false);
+                async s => await Shutdown(s).RunUnit(runtime).ConfigureAwait(false);
 
             Func<S, ProcessId, ValueTask<S>> term(RT runtime) =>
-                async (s, p) => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()),
-                                                           Terminated(s, p)).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
-            
+                async (s, p) => (await Terminated(s, p).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
+
             return Eff<RT, ProcessId>(
                 rt => {
                     var lrt = rt.LocalCancel;
@@ -159,7 +148,7 @@ namespace Echo
         /// <returns>ProcessId IEnumerable</returns>
         public static Eff<RT, Seq<ProcessId>> spawnMany<S, T>(int Count,
             ProcessName Name,
-            Aff<RT, S> Setup,
+            Func<Aff<RT, S>> Setup,
             Func<S, T, Aff<RT, S>> Inbox,
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
@@ -199,7 +188,7 @@ namespace Echo
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
         public static Aff<RT, Seq<ProcessId>> spawnMany<S, T>(ProcessName Name,
-            HashMap<int, Aff<RT, S>> Spec,
+            HashMap<int, Func<Aff<RT, S>>> Spec,
             Func<S, T, Aff<RT, S>> Inbox,
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,

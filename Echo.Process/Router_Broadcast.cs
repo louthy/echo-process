@@ -91,7 +91,6 @@ namespace Echo
         /// </summary>
         /// <typeparam name="S">State type</typeparam>
         /// <typeparam name="T">Message type</typeparam>
-        /// <typeparam name="U">Mapped message type</typeparam>
         /// <param name="Name">Delegator process name</param>
         /// <param name="Map">Message mapping function</param>
         /// <param name="Count">Number of worker processes</param>
