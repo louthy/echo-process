@@ -301,6 +301,8 @@ namespace Echo
             );
         }
 
+#if !COREFX
+
         /// <summary>
         /// Proxy based system for processes that are defined by a single type: 
         /// their state type.  The state type holds state in its member variables
@@ -399,5 +401,6 @@ namespace Echo
             }
             return process;
         }
+#endif
     }
 }
