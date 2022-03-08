@@ -26,30 +26,30 @@ namespace Echo
         public ProcessName Name => "$";
         public ActorItem Parent => new ActorItem(new NullProcess(System), new NullInbox(), ProcessFlags.Default);
         public State<StrategyContext, Unit> Strategy => Process.DefaultStrategy;
-        public ValueTask<Unit> Restart(bool unpauseAfterRestart) => unit.AsValueTask();
-        public ValueTask<InboxDirective> Startup() => InboxDirective.Default.AsValueTask();
-        public ValueTask<Unit> Shutdown(bool maintainState) => unit.AsValueTask();
+        public Unit Restart(bool unpauseAfterRestart) => unit;
+        public InboxDirective Startup() => InboxDirective.Default;
+        public Unit Shutdown(bool maintainState) => unit;
         public Unit LinkChild(ActorItem item) => unit;
         public Unit UnlinkChild(ProcessId item) => unit;
         public Unit AddWatcher(ProcessId item) => unit;
         public Unit RemoveWatcher(ProcessId item) => unit;
         public Unit DispatchWatch(ProcessId item) => unit;
         public Unit DispatchUnWatch(ProcessId item) => unit;
-        public Unit Pause() => unit;
-        public Unit UnPause() => unit;
         public Unit Publish(object message) => unit;
         public IObservable<object> PublishStream => null;
         public IObservable<object> StateStream => null;
 
         public CancellationTokenSource CancellationTokenSource => new CancellationTokenSource();
 
-        public ValueTask<InboxDirective> ProcessTerminated(ProcessId pid) => InboxDirective.Default.AsValueTask();
-        public ValueTask<InboxDirective> ProcessMessage(object message) => InboxDirective.Default.AsValueTask();
-        public ValueTask<InboxDirective> ProcessAsk(ActorRequest request) => InboxDirective.Default.AsValueTask();
+        public InboxDirective ProcessTerminated(ProcessId pid) => InboxDirective.Default;
+        public InboxDirective ProcessMessage(object message) => InboxDirective.Default;
+        public InboxDirective ProcessAsk(ActorRequest request) => InboxDirective.Default;
         public Unit AddSubscription(ProcessId pid, IDisposable sub) => Unit.Default;
         public Unit RemoveSubscription(ProcessId pid) => Unit.Default;
         public int GetNextRoundRobinIndex() => 0;
-        public ValueTask<Unit> ProcessResponse(ActorResponse response) => unit.AsValueTask();
+        public R ProcessRequest<R>(ProcessId pid, object message) => default(R);
+        public Unit ProcessResponse(ActorResponse response) => unit;
+        public Unit ShutdownProcess(bool maintainState) => unit;
 
         public void Dispose()
         {

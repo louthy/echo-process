@@ -35,6 +35,7 @@ namespace Echo.Config
         Time timeout = 30 * seconds;
         Time sessionTimeoutCheck = 60 * seconds;
         int maxMailboxSize = 100000;
+        bool transactionalIO = false;
 
         public readonly static ProcessSystemConfig Empty =
             new ProcessSystemConfig(
@@ -384,12 +385,16 @@ namespace Echo.Config
         internal Time SessionTimeoutCheckFrequency =>
             sessionTimeoutCheck;
 
+        internal bool TransactionalIO =>
+            transactionalIO;
+
         internal void PostConnect()
         {
             // Cache the frequently accessed
             maxMailboxSize = GetRoleSetting("mailbox-size", "value", 100000);
             timeout = GetRoleSetting("timeout", "value", 30 * seconds);
             sessionTimeoutCheck = GetRoleSetting("session-timeout-check", "value", 60 * seconds);
+            transactionalIO = GetRoleSetting("transactional-io", "value", true);
         }
     }
 }

@@ -58,6 +58,10 @@ namespace Echo
         }
 
         public string SessionId;
-        public long ConversationId;
+
+        public Message()
+        {
+            SessionId = ActorContext.SessionId.Map(s => s.Value).IfNoneUnsafe((string)null);
+        }
     }
 }

@@ -10,29 +10,23 @@ namespace Echo
 {
     static class ActorContext
     {
-        static long uniqueConversationId;
         static readonly AsyncLocal<SystemName> context = new AsyncLocal<SystemName>();
 
-        internal static SystemName Context
+        static SystemName Context
         {
             get => context.Value;
             set => context.Value = value;
         }
 
-
-        static readonly AsyncLocal<long> conversationId;
         static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
-        static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
-        static SystemName defaultSystem;
-        static SystemName[] systemNames = new SystemName[0];
-        internal static ActorSystem[] systems = new ActorSystem[0];
-        static readonly object sync = new object();
 
-        static ActorContext()
-        {
-            uniqueConversationId = Math.Abs(Guid.NewGuid().GetHashCode());
-            conversationId       = new AsyncLocal<long> {Value = uniqueConversationId};
-        }
+        static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
+
+        static SystemName defaultSystem;
+
+        static SystemName[] systemNames = new SystemName[0];
+        static ActorSystem[] systems = new ActorSystem[0];
+        static readonly object sync = new object();
 
         public static Unit StartSystem(SystemName system, Option<ICluster> cluster, AppProfile appProfile, ProcessSystemConfig config)
         {
@@ -48,6 +42,8 @@ namespace Echo
 
                 try
                 {
+                    asystem.Initialise();
+
                     // Set the default system if the 'default: yes' setting is in the ProcessSystemConfig
                     defaultSystem = defaultSystem.IsValid
                         ? (from c in config.Cluster
@@ -55,8 +51,6 @@ namespace Echo
                            select system)
                           .IfNone(defaultSystem)
                         : system;
-                    
-                    asystem.Initialise();
                 }
                 catch
                 {
@@ -70,17 +64,6 @@ namespace Echo
                 }
                 return unit;
             }
-        }
-
-        public static long NextOrCurrentConversationId() =>
-            request.Value == null
-                ? conversationId.Value = Interlocked.Increment(ref uniqueConversationId)
-                : conversationId.Value;
-
-        public static long ConversationId
-        {
-            get => conversationId.Value;
-            set => conversationId.Value = value;
         }
 
         public static bool InMessageLoop =>
@@ -182,36 +165,6 @@ namespace Echo
                 return DefaultSystem;
             }
         }
-        
-        public static Option<ActorSystem> SystemSafe(ProcessId pid) =>
-            SystemSafe(pid.System);
-
-        public static Option<ActorSystem> SystemSafe(SystemName system)
-        {
-            ActorSystem asys = null;
-            if (system.IsValid)
-            {
-                asys = FindSystem(system);
-                if (asys != null)
-                {
-                    return asys;
-                }
-                else
-                {
-                    return None;
-                }
-            }
-            else
-            {
-                return DefaultSystem;
-            }
-        }
-
-        public static bool IsSystemActive(SystemName name) =>
-            SystemSafe(name).Map(static s => s.IsActive).IfNone(false);
-
-        public static bool IsSystemActive(ProcessId pid) =>
-            SystemSafe(pid).Map(static s => s.IsActive).IfNone(false);
 
         public static ActorSystem DefaultSystem
         {
@@ -286,7 +239,7 @@ namespace Echo
             return false;
         }
 
-        internal static ActorSystem FindSystem(SystemName system)
+        static ActorSystem FindSystem(SystemName system)
         {
             foreach (var item in systems)
             {

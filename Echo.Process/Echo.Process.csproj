@@ -9,7 +9,7 @@
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
     <PackageVersion>2.1.25-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
@@ -52,12 +52,10 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Jaeger.Core" Version="1.0.3" />
-    <PackageReference Include="LanguageExt.Core" Version="4.0.3" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.0.3" />
-    <PackageReference Include="LanguageExt.Sys" Version="4.0.3" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="System.Reactive" Version="[4.0,)" />
+    <PackageReference Include="LanguageExt.Core" Version="4.0.4" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.0.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="System.Reactive" Version="5.0.0" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
       <Reference Include="System.Web" />

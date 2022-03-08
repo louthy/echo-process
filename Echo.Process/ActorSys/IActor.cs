@@ -45,18 +45,18 @@ namespace Echo
         /// Clears the state (keeps the mailbox items)
         /// </summary>
         /// <param name="unpauseAfterRestart">if set to true then inbox shall be unpaused after starting up again</param>
-        ValueTask<Unit> Restart(bool unpauseAfterRestart);
+        Unit Restart(bool unpauseAfterRestart);
 
         /// <summary>
         /// Startup
         /// </summary>
         /// <returns>returns InboxDirective.Pause if Startup will unpause inbox (via some strategy error handling). Otherwise InboxDirective.Default</returns>
-        ValueTask<InboxDirective> Startup();
+        InboxDirective Startup();
 
         /// <summary>
         /// Shutdown
         /// </summary>
-        ValueTask<Unit> Shutdown(bool maintainState);
+        Unit Shutdown(bool maintainState);
 
         /// <summary>
         /// Link child
@@ -97,21 +97,20 @@ namespace Echo
         /// </summary>
         IObservable<object> StateStream { get; }
 
-        ValueTask<InboxDirective> ProcessMessage(object message);
-        ValueTask<InboxDirective> ProcessAsk(ActorRequest request);
-        ValueTask<InboxDirective> ProcessTerminated(ProcessId id);
-        ValueTask<Unit> ProcessResponse(ActorResponse response);
-        
-        //R ProcessRequest<R>(ProcessId pid, object message);
-        //Unit ShutdownProcess(bool maintainState);
+        CancellationTokenSource CancellationTokenSource { get; }
+
+        InboxDirective ProcessMessage(object message);
+        InboxDirective ProcessAsk(ActorRequest request);
+        InboxDirective ProcessTerminated(ProcessId id);
+
+        R ProcessRequest<R>(ProcessId pid, object message);
+        Unit ProcessResponse(ActorResponse response);
+        Unit ShutdownProcess(bool maintainState);
 
         Unit AddSubscription(ProcessId pid, IDisposable sub);
         Unit RemoveSubscription(ProcessId pid);
 
         Unit DispatchWatch(ProcessId pid);
         Unit DispatchUnWatch(ProcessId pid);
-
-        Unit Pause();
-        Unit UnPause();
     }
 }
