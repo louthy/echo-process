@@ -16,10 +16,6 @@ namespace Echo.Tests
 {
     public class StrategyTests
     {
-        /*
-         
-         DELETING BECAUSE I DON'T UNDERSTAND THEM
-         
         public class ProcessFixture : IDisposable
         {
             public ProcessFixture()
@@ -60,6 +56,7 @@ namespace Echo.Tests
             }
         }
 
+        /*
         [Collection("no-parallelism")]
         public class StrategyRestartDelayIssue : IClassFixture<ProcessFixture>
         {
