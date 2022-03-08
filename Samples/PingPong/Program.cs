@@ -15,7 +15,7 @@ var logger = spawn<Stopwatch, string>("logger", loggerSetup, loggerInbox);
 var ping   = spawn<int>("ping", pingInbox, Shutdown: shutdownInbox);
 var pong   = spawn<int>("pong", pongInbox, Shutdown: shutdownInbox);
 
-tell(ping, 0, pong);
+tell(ping, 0);
 
 ReadKey();
 
@@ -26,11 +26,11 @@ WriteLine("Goodbye!");
 void pingInbox(int n)
 {
     if (n % interval == 0) tell(logger, $"{n}");
-    tell(Sender, n + 1);
+    tell(pong, n + 1);
 }
 
 void pongInbox(int n) =>
-    tell(Sender, n + 1);
+    tell(ping, n + 1);
 
 static Stopwatch loggerSetup()
 {

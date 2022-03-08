@@ -31,7 +31,7 @@ var application = from logger in spawn<D.Stopwatch, string>("logger", startWatch
                   from _2     in readKey
                   from _3     in writeLine("Shutting down...")
                   
-                  from _4     in shutdownAll
+                  from _4     in shutdownAll()
                   
                   from _5     in writeLine("Goodbye!")
                   

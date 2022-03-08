@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Linq;
-using LanguageExt;
 using System.Reactive.Linq;
-using static LanguageExt.Map;
 using static LanguageExt.Prelude;
+using static LanguageExt.Map;
+using LanguageExt;
 
 namespace Echo
 {
@@ -23,43 +23,25 @@ namespace Echo
         /// </summary>
         /// <param name="pid">Process ID to send to</param>
         /// <param name="message">Message to send</param>
-        public static Unit fwd<T>(ProcessId pid, T message)
-        {
-            try
-            {
-                return ActorContext.Request.CurrentRequest == null
-                           ? tell(pid, message, Sender)
-                           : tell(pid,
-                                  new ActorRequest(
-                                      message,
-                                      pid,
-                                      ActorContext.Request.CurrentRequest.ReplyTo,
-                                      ActorContext.Request.CurrentRequest.RequestId),
-                                  Sender);
-            }
-            catch (Exception e)
-            {
-                return dead("fwd", e);
-            }
-        }
+        public static Unit fwd<T>(ProcessId pid, T message) =>
+            ActorContext.Request.CurrentRequest == null
+                ? tell(pid, message, Sender)
+                : tell(pid,
+                       new ActorRequest(
+                           message,
+                           pid,
+                           ActorContext.Request.CurrentRequest.ReplyTo,
+                           ActorContext.Request.CurrentRequest.RequestId),
+                       Sender);
 
         /// <summary>
         /// Forward a message
         /// </summary>
         /// <param name="pid">Process ID to send to</param>
-        public static Unit fwd(ProcessId pid)
-        {
-            try
-            {
-                return ActorContext.Request.CurrentRequest == null
-                           ? tell(pid, ActorContext.Request.CurrentMsg, Sender)
-                           : tell(pid, ActorContext.Request.CurrentRequest, Sender);
-            }
-            catch (Exception e)
-            {
-                return dead("fwd", e);
-            }
-        }
+        public static Unit fwd(ProcessId pid) =>
+            ActorContext.Request.CurrentRequest == null
+                ? tell(pid, ActorContext.Request.CurrentMsg, Sender)
+                : tell(pid, ActorContext.Request.CurrentRequest, Sender);
 
         /// <summary>
         /// Forward a message to a named child process
@@ -88,7 +70,7 @@ namespace Echo
         /// </summary>
         /// <param name="name">Name of the child process</param>
         public static Unit fwdChild(ProcessName name) =>
-             fwd(Self.Child(name));
+            fwd(Self.Child(name));
 
         /// <summary>
         /// Forward a message to a child process (found by index)

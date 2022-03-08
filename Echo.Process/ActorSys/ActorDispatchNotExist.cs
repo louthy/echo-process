@@ -18,7 +18,7 @@ namespace Echo
 
         Unit Raise(ProcessId sender) =>
             ActorContext.IsSystemActive(sender)
-                ? raise<Unit>(new ProcessDoesNotExistException(ProcessId, sender.Path, sender.Path, null))
+                ? raise<Unit>(new ProcessException($"Doesn't exist ({ProcessId})", sender.Path, sender.Path, null))
                 : default;
 
         public HashMap<string, ProcessId> GetChildren() =>

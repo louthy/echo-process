@@ -34,7 +34,7 @@ namespace Echo
         /// <param name="sender">Sender process</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> ask<T>(ProcessId pid, object message, ProcessId sender) =>
-            EffMaybe(() => Process.askSafe<T>(pid, message, sender));
+            Eff(() => Process.ask<T>(pid, message, sender));
 
         /// <summary>
         /// Ask a process for a reply
@@ -44,7 +44,7 @@ namespace Echo
         /// <param name="sender">Sender process</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> ask<T>(Eff<RT, ProcessId> pid, object message, ProcessId sender) =>
-            pid.Bind(p => askSafe<T>(p, message, sender).ToAff());
+            pid.Bind(p => ask<T>(p, message, sender));
 
         /// <summary>
         /// Ask a process for a reply
@@ -53,7 +53,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> ask<T>(ProcessId pid, object message) =>
-            EffMaybe(() => Process.askSafe<T>(pid, message));
+            Eff(() => Process.ask<T>(pid, message));
 
         /// <summary>
         /// Ask a process for a reply
@@ -62,7 +62,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> ask<T>(Eff<RT, ProcessId> pid, object message) =>
-            pid.Bind(p => askSafe<T>(p, message).ToAff());
+            pid.Bind(p => ask<T>(p, message));
 
         /// <summary>
         /// Ask a process for a reply (if the process is running).  If the process isn't running
@@ -111,8 +111,8 @@ namespace Echo
         /// </summary>
         /// <param name="message">Message to send</param>
         /// <returns></returns>
-        public static Aff<RT, Seq<T>> askChildren<T>(object message, int take = Int32.MaxValue) =>
-            EffMaybe(() => Process.askChildrenSafe<T>(message, take));
+        public static Aff<RT, IEnumerable<T>> askChildren<T>(object message, int take = Int32.MaxValue) =>
+            Eff(() => Process.askChildren<T>(message, take));
 
         /// <summary>
         /// Ask parent process for a reply
@@ -120,7 +120,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <returns>The response to the request</returns>
         public static Aff<RT, T> askParent<T>(object message) =>
-            EffMaybe(() => Process.askParentSafe<T>(message));
+            Eff(() => Process.askParent<T>(message));
 
         /// <summary>
         /// Ask a named child process for a reply
@@ -128,7 +128,7 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="name">Name of the child process</param>
         public static Aff<RT, T> askChild<T>(ProcessName name, object message) =>
-            EffMaybe(() => Process.askChildSafe<T>(name, message));
+            Eff(() => Process.askChild<T>(name, message));
 
         /// <summary>
         /// Ask a child process (found by index) for a reply
@@ -142,6 +142,6 @@ namespace Echo
         /// <param name="message">Message to send</param>
         /// <param name="index">Index of the child process (see remarks)</param>
         public static Aff<RT, T> askChild<T>(int index, object message) =>
-            EffMaybe(() => Process.askChildSafe<T>(index, message));
+            Eff(() => Process.askChild<T>(index, message));
     }
 }
