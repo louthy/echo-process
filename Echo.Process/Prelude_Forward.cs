@@ -26,13 +26,13 @@ namespace Echo
         public static Unit fwd<T>(ProcessId pid, T message) =>
             ActorContext.Request.CurrentRequest == null
                 ? tell(pid, message, Sender)
-                : tell(pid,
-                       new ActorRequest(
-                           message,
-                           pid,
-                           ActorContext.Request.CurrentRequest.ReplyTo,
-                           ActorContext.Request.CurrentRequest.RequestId),
-                       Sender);
+                : tell(pid, 
+                    new ActorRequest(
+                        message,
+                        pid,
+                        ActorContext.Request.CurrentRequest.ReplyTo,
+                        ActorContext.Request.CurrentRequest.RequestId),
+                    ActorContext.System(pid).AskId);
 
         /// <summary>
         /// Forward a message
@@ -41,7 +41,7 @@ namespace Echo
         public static Unit fwd(ProcessId pid) =>
             ActorContext.Request.CurrentRequest == null
                 ? tell(pid, ActorContext.Request.CurrentMsg, Sender)
-                : tell(pid, ActorContext.Request.CurrentRequest, Sender);
+                : tell(pid, ActorContext.Request.CurrentRequest, ActorContext.System(pid).AskId);
 
         /// <summary>
         /// Forward a message to a named child process

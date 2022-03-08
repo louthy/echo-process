@@ -80,7 +80,7 @@ namespace Echo
             var state = new ActorSystemBootstrap(
                 this,
                 cluster,
-                root, 
+                root, null,
                 rootInbox,
                 cluster.Map(x => x.NodeName).IfNone(ActorSystemConfig.Default.RootProcessName),
                 ActorSystemConfig.Default,
@@ -90,19 +90,18 @@ namespace Echo
 
             var rootProcess = state.RootProcess;
             state.Startup();
-            Asks = state.Asks;
             rootItem = new ActorItem(rootProcess, rootInbox, ProcessFlags.Default);
 
-            Root        = rootItem.Actor.Id;
-            RootJS      = Root["js"];
-            System      = Root[ActorSystemConfig.Default.SystemProcessName];
-            User        = Root[ActorSystemConfig.Default.UserProcessName];
-            Errors      = System[ActorSystemConfig.Default.ErrorsProcessName];
-            DeadLetters = System[ActorSystemConfig.Default.DeadLettersProcessName];
-            NodeName    = cluster.Map(c => c.NodeName).IfNone("user");
-            AskId       = ix => Asks.Count == 0 ? throw new InvalidOperationException() : Asks[(int)(ix % Asks.Count)];
-            Disp        = ProcessId.Top["disp"].SetSystem(SystemName);
-            Scheduler   = System[ActorSystemConfig.Default.SchedulerName];
+            Root            = rootItem.Actor.Id;
+            RootJS          = Root["js"];
+            System          = Root[ActorSystemConfig.Default.SystemProcessName];
+            User            = Root[ActorSystemConfig.Default.UserProcessName];
+            Errors          = System[ActorSystemConfig.Default.ErrorsProcessName];
+            DeadLetters     = System[ActorSystemConfig.Default.DeadLettersProcessName];
+            NodeName        = cluster.Map(c => c.NodeName).IfNone("user");
+            AskId           = System[ActorSystemConfig.Default.AskProcessName];
+            Disp            = ProcessId.Top["disp"].SetSystem(SystemName);
+            Scheduler       = System[ActorSystemConfig.Default.SchedulerName];
 
             userContext = new ActorRequestContext(
                 this,
@@ -131,11 +130,6 @@ namespace Echo
             public string Name;
             public long Timestamp;
         }
-
-        /// <summary>
-        /// Ask actors
-        /// </summary>
-        public Seq<ILocalActorInbox> Asks { get; }
 
         public bool IsActive =>
             disposeState == DisposeState.Active;
@@ -359,34 +353,31 @@ namespace Echo
         public Option<ICluster> Cluster =>
             cluster;
 
-        public IEnumerable<T> AskMany<T>(Seq<ProcessId> pids, object message, int take)
+        public IEnumerable<T> AskMany<T>(IEnumerable<ProcessId> pids, object message, int take)
         {
-            var sessionId = ActorContext.SessionId;
             take = Math.Min(take, pids.Count());
 
-            var responses = AtomHashMap<ProcessId, AskActorRes>();
+            var responses = new List<AskActorRes>();
             using (var handle = new CountdownEvent(take))
             {
                 foreach (var pid in pids)
                 {
                     var req = new AskActorReq(
-                        DateTime.UtcNow.Ticks,
                         message,
                         res =>
                         {
-                            responses.Add(pid, res);
+                            responses.Add(res);
                             handle.Signal();
                         },
                         pid.SetSystem(SystemName),
                         Self,
                         typeof(T));
-
-                    AskId(req.RequestId).Tell(req, Process.Sender, sessionId);
+                    tell(AskId, req);
                 }
 
                 handle.Wait(ActorContext.System(pids.Head()).Settings.Timeout);
             }
-            return responses.Where(r => !r.IsFaulted).Map(r => (T)r.Value.Response);
+            return responses.Where(r => !r.IsFaulted).Map(r => (T)r.Response);
         }
 
         public T Ask<T>(ProcessId pid, object message, ProcessId sender) =>
@@ -394,39 +385,58 @@ namespace Echo
 
         public object Ask(ProcessId pid, object message, Type returnType, ProcessId sender)
         {
-            var sessionId = ActorContext.SessionId;
-            AskActorRes response = null;
-            using (var handle = new AutoResetEvent(false))
+            if (false) //Process.InMessageLoop)
             {
-                var req = new AskActorReq(
-                    DateTime.UtcNow.Ticks,
-                    message,
-                    res => {
-                        response = res;
-                        handle.Set();
-                    },
-                    pid,
-                    sender,
-                    returnType
-                );
-
-                AskId(req.RequestId).Tell(req, sender, sessionId);
-
-                handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
-
-                if (response == null)
+                //return SelfProcess.Actor.ProcessRequest<T>(pid, message);
+            }
+            else
+            {
+                var sessionId = ActorContext.SessionId;
+                AskActorRes response = null;
+                using (var handle = new AutoResetEvent(false))
                 {
-                    throw new TimeoutException("Request timed out");
-                }
-                else
-                {
-                    if (response.IsFaulted)
+                    var req = new AskActorReq(
+                        message,
+                        res => {
+                            response = res;
+                            handle.Set();
+                        },
+                        pid,
+                        sender,
+                        returnType
+                    );
+
+                    var askItem = GetAskItem();
+
+                    askItem.IfSome(
+                        ask =>
+                        {
+                            var inbox = ask.Inbox as ILocalActorInbox;
+                            inbox.Tell(req, sender, sessionId);
+                            handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
+                        });
+
+                    if (askItem)
                     {
-                        throw response.Exception;
+                        if (response == null)
+                        {
+                            throw new TimeoutException("Request timed out");
+                        }
+                        else
+                        {
+                            if (response.IsFaulted)
+                            {
+                                throw response.Exception;
+                            }
+                            else
+                            {
+                                return response.Response;
+                            }
+                        }
                     }
                     else
                     {
-                        return response.Response;
+                        throw new Exception("Ask process doesn't exist");
                     }
                 }
             }
@@ -647,7 +657,7 @@ namespace Echo
         public readonly ProcessId RootJS;
         public readonly ProcessId System;
         private readonly ProcessName NodeName;
-        internal readonly Func<long, ILocalActorInbox> AskId;
+        internal readonly ProcessId AskId;
 
         public Option<ActorItem> GetJsItem()
         {
@@ -662,6 +672,27 @@ namespace Echo
             }
         }
 
+        public Option<ActorItem> GetAskItem()
+        {
+            var children = rootItem?.Actor?.Children ?? HashMap<string, ActorItem>();
+            if (notnull(children) && children.ContainsKey(ActorSystemConfig.Default.SystemProcessName.Value))
+            {
+                var sys = children[ActorSystemConfig.Default.SystemProcessName.Value];
+                children = sys.Actor.Children;
+                if (children.ContainsKey(ActorSystemConfig.Default.AskProcessName.Value))
+                {
+                    return Some(children[ActorSystemConfig.Default.AskProcessName.Value]);
+                }
+                else
+                {
+                    return None;
+                }
+            }
+            else
+            {
+                return None;
+            }
+        }
 
         public Option<ActorItem> GetInboxShutdownItem()
         {
