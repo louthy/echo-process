@@ -5,22 +5,15 @@ using static LanguageExt.Prelude;
 
 namespace Echo.Traits
 {
+    public interface EchoIO
+    {
+    }
+
     public interface HasEcho<RT> where RT : struct, HasCancel<RT>, HasEcho<RT>
     {
         EchoState<RT> EchoState { get; }
         RT MapEchoState(Func<EchoState<RT>, EchoState<RT>> f);
         Eff<RT, EchoIO> EchoEff { get; }
-    }
-
-    public interface EchoIO
-    {
-        // This will be filled in as we add more IO to the Runtime, for now it's a placeholder
-    }
-
-    public class LiveEchoIO : EchoIO
-    {
-        public static readonly EchoIO Default = new LiveEchoIO();
-        // This will be filled in as we add more IO to the Runtime, for now it's a placeholder
     }
 
     /// <summary>
@@ -31,7 +24,7 @@ namespace Echo.Traits
     /// </remarks>
     public class EchoState<RT> where RT : struct, HasCancel<RT>, HasEcho<RT>
     {
-        public static EchoState<RT> Default =>             
+        internal static EchoState<RT> Default =>             
             new EchoState<RT>(
                 ActorContext.SessionId,
                 ActorContext.Request,

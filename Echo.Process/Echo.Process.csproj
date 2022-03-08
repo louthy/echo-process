@@ -10,7 +10,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.1.8-beta</PackageVersion>
+    <PackageVersion>2.1.7-beta</PackageVersion>
     <PackageId>Echo.Process</PackageId>
     <Title>echo-process</Title>
     <Authors>Paul Louth</Authors>
@@ -54,7 +54,6 @@
   <ItemGroup>
     <PackageReference Include="LanguageExt.Core" Version="3.5.64-beta" />
     <PackageReference Include="LanguageExt.Parsec" Version="3.5.64-beta" />
-    <PackageReference Include="LanguageExt.Sys" Version="3.5.64-beta" />
     <PackageReference Include="Newtonsoft.Json" Version="[10.0.2,)" />
     <PackageReference Include="System.Reactive" Version="[4.0,)" />
   </ItemGroup>

@@ -113,22 +113,26 @@ namespace Echo
                     ActorContext.DefaultSystem,
                     ActorContext.Systems);
             
-            static Func<ValueTask<S>> setup(RT runtime, Aff<RT, S> setup) =>
-                async () => (await setup.ReRun(runtime.MapEchoState(static _ => makeState())).ConfigureAwait(false)).ThrowIfFail();
+            Func<ValueTask<S>> setup(RT runtime) =>
+                async () => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()),
+                                                       Setup).ReRun(runtime).ConfigureAwait(false)).ThrowIfFail();
 
-            static Func<S, T, ValueTask<S>> inbox(RT runtime, Func<S, T, Aff<RT, S>> inbox) =>
-                async (s, m) => (await inbox(s, m).Run(runtime.MapEchoState(static _ => makeState())).ConfigureAwait(false)).ThrowIfFail();
+            Func<S, T, ValueTask<S>> inbox(RT runtime) =>
+                async (s, m) => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()), 
+                                                           Inbox(s, m)).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
 
-            static Func<S, ValueTask<Unit>> shut(RT runtime, Func<S, Aff<RT, Unit>> shut) =>
-                async s => await shut(s).RunUnit(runtime.MapEchoState(static _ => makeState())).ConfigureAwait(false);
+            Func<S, ValueTask<Unit>> shut(RT runtime) =>
+                async s => await localAff<RT, RT, Unit>(rt => rt.MapEchoState(_ => makeState()),
+                                                        Shutdown(s)).RunUnit(runtime).ConfigureAwait(false);
 
-            static Func<S, ProcessId, ValueTask<S>> term(RT runtime, Func<S, ProcessId, Aff<RT, S>> terminated) =>
-                async (s, p) => (await terminated(s, p).Run(runtime.MapEchoState(static _ => makeState())).ConfigureAwait(false)).ThrowIfFail();
+            Func<S, ProcessId, ValueTask<S>> term(RT runtime) =>
+                async (s, p) => (await localAff<RT, RT, S>(rt => rt.MapEchoState(_ => makeState()),
+                                                           Terminated(s, p)).Run(runtime).ConfigureAwait(false)).ThrowIfFail();
             
             return Eff<RT, ProcessId>(
                 rt => {
                     var lrt = rt.LocalCancel;
-                    return Process.spawnAsync(Name, setup(lrt, Setup), inbox(lrt, Inbox), Flags, Strategy, MaxMailboxSize, term(lrt, Terminated), shut(lrt, Shutdown), System, Lazy);
+                    return Process.spawnAsync(Name, setup(lrt), inbox(lrt), Flags, Strategy, MaxMailboxSize, term(lrt), shut(lrt), System, Lazy);
                 });
         }
 
