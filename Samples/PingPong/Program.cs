@@ -11,8 +11,6 @@ const int interval = 100000;
 Process.ProcessSystemLog.Subscribe(WriteLine);
 ProcessConfig.initialise();
 
-WriteLine(ConversationId);
-
 var logger = spawn<Stopwatch, string>("logger", loggerSetup, loggerInbox);
 var ping   = spawn<int>("ping", pingInbox, Shutdown: shutdownInbox);
 var pong   = spawn<int>("pong", pongInbox, Shutdown: shutdownInbox);
@@ -44,7 +42,7 @@ static Stopwatch loggerSetup()
 static Stopwatch loggerInbox(Stopwatch sw, string message)
 {
     sw.Stop();
-    WriteLine($"{message}: duration = {sw.ElapsedMilliseconds}ms [{ConversationId}]");
+    WriteLine($"{message}: duration = {sw.ElapsedMilliseconds}ms");
     sw.Restart();
     return sw;
 }

@@ -130,14 +130,14 @@ namespace Echo
         /// <summary>
         /// Posts a user ask into the user queue (non-blocking)
         /// </summary>
-        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
-            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId, conversationId).IfSome(TellUserControl);
+        public Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
 
         /// <summary>
         /// Posts a user tell into the user queue (non-blocking)
         /// </summary>
-        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
-            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId, conversationId).IfSome(TellUserControl);
+        public Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId) =>
+            ActorInboxCommon.PreProcessMessage<T>(sender, actor.Id, message, sessionId).IfSome(msg => TellUserControl(msg, sessionId));
 
         /// <summary>
         /// Posts a message into the system queue (non-blocking)
@@ -154,11 +154,12 @@ namespace Echo
         /// <summary>
         /// Posts a user-control message into the user queue (non-blocking)
         /// </summary>
-        public Unit TellUserControl(UserControlMessage message)
+        public Unit TellUserControl(UserControlMessage message, Option<SessionId> sessionId)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (userInboxQueue.Count >= maxMailboxSize) throw new ProcessInboxFullException(actor.Id, MailboxSize, "user");
             if (shutdownRequested) throw new ProcessShutdownException(actor.Id);
+            message.SessionId ??= sessionId.Map(s => s.Value).IfNoneUnsafe(message.SessionId);
             userInboxQueue.Enqueue(message);
             return DrainUserQueue();
         }
@@ -184,6 +185,7 @@ namespace Echo
                 }
 
                 var msg = MessageSerialiser.DeserialiseMsg(dto, actor.Id);
+
                 if (msg is SystemMessage sysMsg)
                 {
                     sysInboxQueue.Enqueue(sysMsg);

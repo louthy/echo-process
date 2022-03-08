@@ -14,15 +14,13 @@ namespace Echo
         public readonly ILocalActorInbox Inbox;
         public readonly IActor Actor;
         public readonly Option<SessionId> SessionId;
-        public readonly long ConversationId;
 
         public ActorDispatchLocal(ActorItem actor, Option<SessionId> sessionId)
         {
-            SessionId      = sessionId;
-            ConversationId = ActorContext.NextOrCurrentConversationId();
-            Inbox          = actor.Inbox as ILocalActorInbox;
+            SessionId = sessionId;
+            Inbox = actor.Inbox as ILocalActorInbox;
             if (Inbox == null) throw new ArgumentException("Invalid (not local) ActorItem passed to LocalActorDispatch.");
-            Actor          = actor.Actor;
+            Actor = actor.Actor;
         }
 
         public IObservable<T> Observe<T>() =>
@@ -41,25 +39,23 @@ namespace Echo
         public Either<string, bool> CanAccept<T>() =>
             Inbox.CanAcceptMessageType<T>();
 
-        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag) =>
-            LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender, SessionId, ConversationId), message);
-
-        public Unit TellSystem(SystemMessage message, ProcessId sender)
+        public Unit Tell(object message, Schedule schedule, ProcessId sender, Message.TagSpec tag)
         {
-            message.ConversationId = ConversationId;
-            message.SessionId      = SessionId.Map(static x => x.Value).IfNoneUnsafe(message.SessionId);
-            return Inbox.TellSystem(message);
+            var sessionId = ActorContext.SessionId;
+            return LocalScheduler.Push(schedule, Actor.Id, m => Inbox.Tell(Inbox.ValidateMessageType(m, sender), sender, sessionId), message);
         }
+
+        public Unit TellSystem(SystemMessage message, ProcessId sender) =>
+            Inbox.TellSystem(message);
 
         public Unit TellUserControl(UserControlMessage message, ProcessId sender)
         {
-            message.ConversationId = ConversationId;
-            message.SessionId      = SessionId.Map(static x => x.Value).IfNoneUnsafe(message.SessionId);
-            return Inbox.TellUserControl(message);
+            var sessionId = ActorContext.SessionId;
+            return Inbox.TellUserControl(message, sessionId);
         }
 
         public Unit Ask(object message, ProcessId sender) =>
-            Inbox.Ask(message, sender, SessionId, ConversationId);
+            Inbox.Ask(message, sender, ActorContext.SessionId);
 
         public Unit Kill() =>
             TellSystem(new ShutdownProcessMessage(false), ProcessId.NoSender);
@@ -80,7 +76,6 @@ namespace Echo
                 null,
                 SystemMessage.ShutdownProcess(maintainState),
                 None,
-                ConversationId,
                 () => Actor.Shutdown(maintainState)
             );
 

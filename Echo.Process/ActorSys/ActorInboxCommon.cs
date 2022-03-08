@@ -14,16 +14,7 @@ namespace Echo
                 ? None
                 : Some(new SessionId(msg.SessionId));
 
-            return await ActorContext.System(actor.Id)
-                                     .WithContext(
-                                           new ActorItem(actor,inbox,actor.Flags), 
-                                           parent, 
-                                           ProcessId.NoSender, 
-                                           null, 
-                                           msg, 
-                                           session,
-                                           msg.ConversationId,
-                                           async () =>
+            return await ActorContext.System(actor.Id).WithContext(new ActorItem(actor,inbox,actor.Flags), parent, ProcessId.NoSender, null, msg, session, async () =>
             {
                 switch (msg.Tag)
                 {
@@ -107,52 +98,24 @@ namespace Echo
                 case Message.TagSpec.UserAsk:
                     var rmsg = ((ActorRequest)msg).SetSystem(actor.Id.System);
                     return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), 
-                                                          parent, 
-                                                          rmsg.ReplyTo, 
-                                                          rmsg, 
-                                                          msg, 
-                                                          session, 
-                                                          rmsg.ConversationId, 
-                                                          () => actor.ProcessAsk(rmsg))
+                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, rmsg.ReplyTo, rmsg, msg, session, () => actor.ProcessAsk(rmsg))
                                              .ConfigureAwait(false);
 
                 case Message.TagSpec.UserReply:
                     var urmsg = ((ActorResponse)msg).SetSystem(actor.Id.System);
-                    await ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), 
-                                                                    parent, 
-                                                                    urmsg.ReplyFrom, 
-                                                                    null, 
-                                                                    msg, 
-                                                                    session, 
-                                                                    urmsg.ConversationId, 
-                                                                    () => actor.ProcessResponse(urmsg));
+                    await ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, urmsg.ReplyFrom, null, msg, session, () => actor.ProcessResponse(urmsg));
                     return InboxDirective.Default;
 
                 case Message.TagSpec.UserTerminated:
                     var utmsg = ((TerminatedMessage)msg).SetSystem(actor.Id.System);
                     return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), 
-                                                          parent, 
-                                                          utmsg.Id, 
-                                                          null, 
-                                                          msg, 
-                                                          session, 
-                                                          utmsg.ConversationId,
-                                                          () => actor.ProcessTerminated(utmsg.Id))
+                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, utmsg.Id, null, msg, session, () => actor.ProcessTerminated(utmsg.Id))
                                              .ConfigureAwait(false);
 
                 case Message.TagSpec.User:
                     var umsg = ((UserMessage)msg).SetSystem(actor.Id.System);
                     return await ActorContext.System(actor.Id)
-                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), 
-                                                          parent, 
-                                                          umsg.Sender, 
-                                                          null, 
-                                                          msg, 
-                                                          session, 
-                                                          umsg.ConversationId, 
-                                                          () => actor.ProcessMessage(umsg.Content))
+                                             .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, umsg.Sender, null, msg, session, () => actor.ProcessMessage(umsg.Content))
                                              .ConfigureAwait(false);
 
                 case Message.TagSpec.ShutdownProcess:
@@ -164,7 +127,7 @@ namespace Echo
             }
         }
 
-        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message, Option<SessionId> sessionId, long conversationId)
+        public static Option<UserControlMessage> PreProcessMessage<T>(ProcessId sender, ProcessId self, object message, Option<SessionId> sessionId)
         {
             if (message == null)
             {
@@ -206,9 +169,8 @@ namespace Echo
 
             if(rmsg.SessionId == null && sessionId.IsSome)
             {
-                rmsg.SessionId = sessionId.Map(x => x.Value).IfNoneUnsafe(rmsg.SessionId);
+                rmsg.SessionId = sessionId.Map(x => x.Value).IfNoneUnsafe((string)null);
             }
-            rmsg.ConversationId = conversationId;
             return Optional(rmsg);
         }
 
@@ -235,11 +197,12 @@ namespace Echo
                     if (cluster.QueueLength(key) == 0) return None;
                 }
             }
-            while (dto.Tag == 0 || dto.Type == 0);
+            while (dto == null || dto.Tag == 0 || dto.Type == 0);
 
             try
             {
                 msg = MessageSerialiser.DeserialiseMsg(dto, self);
+                msg.SessionId = dto.SessionId;
             }
             catch (Exception e)
             {

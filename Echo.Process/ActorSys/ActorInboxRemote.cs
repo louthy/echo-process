@@ -161,7 +161,6 @@ namespace Echo
                             var msg = MessageSerialiser.DeserialiseMsg(dto, actor.Id);
                             if (msg is SystemMessage sysMsg)
                             {
-                                sysMsg.ConversationId = dto.ConversationId;
                                 // Run the system inbox
                                 switch(await ActorInboxCommon.SystemMessageInbox(actor, this, sysMsg, parent).ConfigureAwait(false))
                                 {
@@ -230,7 +229,6 @@ namespace Echo
                     {
                         var dto = m.Item1;
                         var msg = m.Item2;
-                        msg.ConversationId = dto.ConversationId;
                         try
                         {
                             var directive = msg.MessageType switch
@@ -273,13 +271,7 @@ namespace Echo
                             count--;
                             var session = msg.SessionId == null ? None : Some(new SessionId(msg.SessionId));
                             await ActorContext.System(actor.Id)
-                                              .WithContext(new ActorItem(actor, inbox, actor.Flags), 
-                                                           parent, 
-                                                           dto.Sender, 
-                                                           msg as ActorRequest, 
-                                                           msg, 
-                                                           session, 
-                                                           dto.ConversationId,
+                                              .WithContext(new ActorItem(actor, inbox, actor.Flags), parent, dto.Sender, msg as ActorRequest, msg, session,
                                                            () => replyErrorIfAsked(e).AsValueTask()).ConfigureAwait(false);
 
                             tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, e, "Remote message inbox.", msg));

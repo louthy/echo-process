@@ -38,7 +38,8 @@ namespace Echo
                     Sender,
                     Self,
                     ex,
-                    message));
+                    message
+            ));
 
         /// <summary>
         /// Forward a message to dead-letters (and wrap it in a contextual dead-letter

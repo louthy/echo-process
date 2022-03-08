@@ -87,14 +87,13 @@ namespace Echo
         /// <param name="due"></param>
         static IDisposable StartTimer(string key, Func<object, Unit> action, object message, long due)
         {
-            var savedContext        = ActorContext.Request;
-            var savedSession        = ActorContext.SessionId;
-            var savedConversationId = ActorContext.ConversationId;
+            var savedContext = ActorContext.Request;
+            var savedSession = ActorContext.SessionId;
             
             void onEvent(object _)
             {
                 scheduled.Remove(key);
-                RunAction(savedContext, savedSession, savedConversationId, action, message);
+                RunAction(savedContext, savedSession, action, message);
             }
 
             return new Timer(onEvent, null, due, -1);
@@ -103,7 +102,7 @@ namespace Echo
         /// <summary>
         /// Run the scheduled action in its original context
         /// </summary>
-        static Unit RunAction(ActorRequestContext context, Option<SessionId> sessionId, long savedConversationId, Func<object, Unit> action, object message)
+        static Unit RunAction(ActorRequestContext context, Option<SessionId> sessionId, Func<object, Unit> action, object message)
         {
             try
             {
@@ -116,7 +115,6 @@ namespace Echo
                                context.CurrentRequest,
                                context.CurrentMsg,
                                sessionId,
-                               savedConversationId,
                                () => {
                                    action(message);
                                    return unit;

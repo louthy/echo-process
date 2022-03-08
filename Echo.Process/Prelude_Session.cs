@@ -264,7 +264,6 @@ namespace Echo
                     ActorContext.Request.CurrentRequest,
                     ActorContext.Request.CurrentMsg,
                     Some(sid),
-                    ActorContext.ConversationId,
                     f).ConfigureAwait(false);
             }
             else

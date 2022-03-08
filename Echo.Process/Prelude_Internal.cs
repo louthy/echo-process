@@ -54,10 +54,9 @@ namespace Echo
 
         internal static IDisposable safedelay(Action f, TimeSpan delayFor)
         {
-            var savedContext        = ActorContext.Request;
-            var savedSession        = ActorContext.SessionId;
-            var savedConversationId = ActorContext.ConversationId;
-            var stackTrace          = new System.Diagnostics.StackTrace(true);
+            var savedContext = ActorContext.Request;
+            var savedSession = ActorContext.SessionId;
+            var stackTrace   = new System.Diagnostics.StackTrace(true);
 
             return new System.Threading.Timer(
                 _ => {
@@ -85,7 +84,6 @@ namespace Echo
                                          savedContext.CurrentRequest,
                                          savedContext.CurrentMsg,
                                          savedSession,
-                                         savedConversationId,
                                          () => {
                                              f();
                                              return unit.AsValueTask();

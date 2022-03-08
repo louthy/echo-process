@@ -98,20 +98,6 @@ namespace Echo
             ActorContext.Self;
 
         /// <summary>
-        /// Current conversation ID
-        /// </summary>
-        /// <remarks>
-        /// This should be used from within a process message loop only.  It traces a series of tells/asks etc through
-        /// the network of processes.  Useful for logging the journey of a message, or other more complex behaviours
-        /// like saga management.
-        ///
-        /// A unique conversation ID is generated when a tell or ask originates outside of a process, it is then maintained
-        /// as it flows through any process.
-        /// </remarks>
-        public static long ConversationId =>
-            ActorContext.ConversationId;
-
-        /// <summary>
         /// Parent process ID
         /// </summary>
         /// <remarks>

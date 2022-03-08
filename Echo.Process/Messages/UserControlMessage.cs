@@ -76,7 +76,6 @@ namespace Echo
         public string replyTo;
         public string sender;
         public string sessionId;
-        public long conversationId;
         public long requestId;
     }
 
@@ -94,73 +93,69 @@ namespace Echo
         public string Content;
         public Guid MessageId;
         public string SessionId;
-        public long ConversationId;
         public long Due;
 
-        internal static RemoteMessageDTO Create(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long conversationId, long due) =>
+        internal static RemoteMessageDTO Create(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long due) =>
             map(message as ActorRequest, req =>
                 req == null
                     ? map(message as ActorResponse, res =>
                         res == null
-                            ? CreateMessage(message, to, sender, type, tag, sessionId, conversationId, due)
-                            : CreateResponse(res, to, sender, sessionId, conversationId))
-                    : CreateRequest(req, to, sender, sessionId, conversationId));
+                            ? CreateMessage(message, to, sender, type, tag, sessionId, due)
+                            : CreateResponse(res, to, sender, sessionId))
+                    : CreateRequest(req, to, sender, sessionId));
 
-        internal static RemoteMessageDTO CreateMessage(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long conversationId, long due) =>
+        internal static RemoteMessageDTO CreateMessage(object message, ProcessId to, ProcessId sender, Message.Type type, Message.TagSpec tag, Option<SessionId> sessionId, long due) =>
             new RemoteMessageDTO
             {
-                Type        = (int) type,
-                Tag         = (int) tag,
+                Type        = (int)type,
+                Tag         = (int)tag,
                 To          = to.ToString(),
                 RequestId   = -1,
                 MessageId   = Guid.NewGuid(),
                 Sender      = sender.ToString(),
                 ReplyTo     = sender.ToString(),
                 ContentType = message?.GetType()?.AssemblyQualifiedName,
-                Content = message == null
-                              ? null
-                              : JsonConvert.SerializeObject(message, ActorSystemConfig.Default.JsonSerializerSettings),
-                SessionId      = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null),
-                ConversationId = conversationId,
-                Due            = due
+                Content     = message == null
+                                ? null
+                                : JsonConvert.SerializeObject(message, ActorSystemConfig.Default.JsonSerializerSettings),
+                SessionId   = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null),
+                Due         = due
             };
 
-        internal static RemoteMessageDTO CreateRequest(ActorRequest req, ProcessId to, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
+        internal static RemoteMessageDTO CreateRequest(ActorRequest req, ProcessId to, ProcessId sender, Option<SessionId> sessionId) =>
             new RemoteMessageDTO
             {
-                Type           = (int)Message.Type.User,
-                Tag            = (int)Message.TagSpec.UserAsk,
-                Child          = null,
-                Exception      = null,
-                To             = to.ToString(),
-                RequestId      = req.RequestId,
-                MessageId      = Guid.NewGuid(),
-                Sender         = sender.ToString(),
-                ReplyTo        = req.ReplyTo.ToString(),
-                ContentType    = req.Message.GetType().AssemblyQualifiedName,
-                Content        = JsonConvert.SerializeObject(req.Message, ActorSystemConfig.Default.JsonSerializerSettings),
-                ConversationId = conversationId,
-                SessionId      = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null)
+                Type        = (int)Message.Type.User,
+                Tag         = (int)Message.TagSpec.UserAsk,
+                Child       = null,
+                Exception   = null,
+                To          = to.ToString(),
+                RequestId   = req.RequestId,
+                MessageId   = Guid.NewGuid(),
+                Sender      = sender.ToString(),
+                ReplyTo     = req.ReplyTo.ToString(),
+                ContentType = req.Message.GetType().AssemblyQualifiedName,
+                Content     = JsonConvert.SerializeObject(req.Message, ActorSystemConfig.Default.JsonSerializerSettings),
+                SessionId  = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null)
             };
 
-        internal static RemoteMessageDTO CreateResponse(ActorResponse res, ProcessId to, ProcessId sender, Option<SessionId> sessionId, long conversationId) =>
+        internal static RemoteMessageDTO CreateResponse(ActorResponse res, ProcessId to, ProcessId sender, Option<SessionId> sessionId) =>
             new RemoteMessageDTO
             {
-                Type           = (int)Message.Type.User,
-                Tag            = (int)Message.TagSpec.UserReply,
-                Child          = null,
-                Exception      = res.IsFaulted
-                                  ? "RESPERR"
-                                  : null,
-                To             = to.ToString(),
-                RequestId      = res.RequestId,
-                MessageId      = Guid.NewGuid(),
-                Sender         = res.ReplyFrom.ToString(),
-                ReplyTo        = res.ReplyTo.ToString(),
-                ContentType    = res.Message.GetType().AssemblyQualifiedName,
-                Content        = JsonConvert.SerializeObject(res.Message, ActorSystemConfig.Default.JsonSerializerSettings),
-                ConversationId = conversationId,
-                SessionId      = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null)
+                Type        = (int)Message.Type.User,
+                Tag         = (int)Message.TagSpec.UserReply,
+                Child       = null,
+                Exception   = res.IsFaulted
+                                ? "RESPERR"
+                                : null,
+                To          = to.ToString(),
+                RequestId   = res.RequestId,
+                MessageId   = Guid.NewGuid(),
+                Sender      = res.ReplyFrom.ToString(),
+                ReplyTo     = res.ReplyTo.ToString(),
+                ContentType = res.Message.GetType().AssemblyQualifiedName,
+                Content     = JsonConvert.SerializeObject(res.Message, ActorSystemConfig.Default.JsonSerializerSettings),
+                SessionId   = sessionId.Map(s => s.Value).IfNoneUnsafe(() => null)
             };
     }
 }
