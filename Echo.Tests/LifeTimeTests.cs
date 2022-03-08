@@ -29,16 +29,15 @@ namespace Echo.Tests
         [Collection("no-parallelism")]
         public class LifeTimeIssues : IClassFixture<ProcessFixture>
         {
-            private static void WaitForKill(ProcessId pid)
+            private static void WaitForActor(ProcessId pid)
             {
                 using (var mre = new ManualResetEvent(false))
                 {
-                    if(exists(pid))
+                    using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
                     {
-                        using (observeStateUnsafe<Unit>(pid).Subscribe(_ => { }, () => mre.Set()))
+                        if (mre.WaitOne(5000))
                         {
-                            mre.WaitOne(300);
-                            // not throwing if we took 300ms - the process is too quick and we probably missed the OnCompleted 
+                            throw new TimeoutException($"State not changed within 10s: {pid}");
                         }
                     }
 
@@ -46,9 +45,9 @@ namespace Echo.Tests
                     // actor is in shutdown, wait a very short time
                     while (exists(pid))
                     {
-                        if ((DateTime.Now - start).TotalMilliseconds > 300)
+                        if ((DateTime.Now - start).TotalSeconds > 5)
                         {
-                            throw new TimeoutException($"{pid} still exists after 10s");
+                            throw new TimeoutException($"PID still exists after 10s: {pid}");
                         }
 
                         Task.Delay(1).Wait();
@@ -80,7 +79,7 @@ namespace Echo.Tests
                     });
                 tell(actor, "inbox1"); // inbox1 might arrive before StartUp-System-Message (but doesn't matter)
                 tell(actor, "inbox2"); // msg inbox2 will arrive before kill is executed
-                WaitForKill(actor);
+                WaitForActor(actor);
                 Assert.False(Process.exists(actor));
                 Assert.Equal(List("setup", "inbox1", "dispose"), events.Freeze());
             }
@@ -111,7 +110,7 @@ namespace Echo.Tests
                 var answer2task = Task.Run(() => ask<string>(actor, "request2")); // request will arrive before kill is executed
                 Task.Delay(50 * milliseconds).Wait();
                 kill(actor);
-                WaitForKill(actor);
+                WaitForActor(actor);
                 Assert.False(Process.exists(actor));
                 Assert.Equal("request1answer", answer1Task.Result);
                 Assert.Equal(List("setup", "request1", "request1answer", "dispose"), events.Freeze());
@@ -176,7 +175,7 @@ namespace Echo.Tests
                 
                 // kill and make sure it is gone
                 kill(actor);
-                WaitForKill(actor);
+                WaitForActor(actor);
                 Assert.False(children(User()).Contains(actor));
                 
                 // start and check it is running with a correct startup number
@@ -204,7 +203,7 @@ namespace Echo.Tests
                         if (msg == "kill")
                         {
                             kill(child);
-                            WaitForKill(child);
+                            WaitForActor(child);
                         }
                         else
                         {
