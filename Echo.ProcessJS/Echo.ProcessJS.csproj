@@ -7,7 +7,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
-    <PackageVersion>2.1.9-beta</PackageVersion>
+    <PackageVersion>2.1.8-beta</PackageVersion>
     <PackageId>Echo.ProcessJS</PackageId>
     <Title>echo-process Javascript Client</Title>
     <Authors>Paul Louth</Authors>
@@ -42,9 +42,8 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="3.5.64-beta" />
-    <PackageReference Include="LanguageExt.Parsec" Version="3.5.64-beta" />
-    <PackageReference Include="LanguageExt.Sys" Version="3.5.64-beta" />
+    <PackageReference Include="LanguageExt.Core" Version="[3.5.18-beta,)" />
+    <PackageReference Include="LanguageExt.Parsec" Version="[3.5.18-beta,)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
