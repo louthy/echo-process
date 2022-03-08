@@ -193,17 +193,6 @@ namespace Echo
         public readonly ProcessId ReplyTo;
         public readonly Type ReplyType;
 
-        public AskActorReq(long requestId, long created, object msg, Action<AskActorRes> complete, ProcessId to, ProcessId replyTo, Type replyType)
-        {
-            RequestId = requestId;
-            Created   = created;
-            Complete  = complete;
-            Message   = msg;
-            To        = to;
-            ReplyTo   = replyTo;
-            ReplyType = replyType;
-        }
-
         public AskActorReq(long created, object msg, Action<AskActorRes> complete, ProcessId to, ProcessId replyTo, Type replyType)
         {
             RequestId = Interlocked.Increment(ref RequestIndex);
