@@ -382,6 +382,7 @@ namespace Echo
 
                 var askPid = ActorContext.System(pid).System.Child($"ask-{req.RequestId % AskActor.Actors}");
                 tell(askPid, req);
+
                 handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
 
                 if (response == null)

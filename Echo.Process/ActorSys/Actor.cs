@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using Echo.Config;
 using LanguageExt.ClassInstances;
 using LanguageExt;
-using OpenTracing;
 
 namespace Echo
 {
@@ -36,7 +35,7 @@ namespace Echo
     /// <typeparam name="T">Message type</typeparam>
     class Actor<S, T> : IActor
     {
-        readonly Func<S, T, ValueTask<S>> inboxFn;
+        readonly Func<S, T, ValueTask<S>> actorFn;
         readonly Func<S, ProcessId, ValueTask<S>> termFn;
         readonly Func<IActor, ValueTask<S>> setupFn;
         readonly Func<S, ValueTask<Unit>> shutdownFn;
@@ -52,14 +51,12 @@ namespace Echo
         bool remoteSubsAcquired;
         volatile int astatus;
         volatile int mstatus;
-        readonly ISpanBuilder traceSetup;
-        readonly ISpanBuilder traceInbox;
 
         internal Actor(
             Option<ICluster> cluster,
             ActorItem parent,
             ProcessName name,
-            Func<S, T, ValueTask<S>> inbox,
+            Func<S, T, ValueTask<S>> actor,
             Func<IActor, ValueTask<S>> setup,
             Func<S, ValueTask<Unit>> shutdown,
             Func<S, ProcessId, ValueTask<S>> term,
@@ -69,36 +66,36 @@ namespace Echo
             IActorSystem sys
             )
         {
-            astatus      = AState.Shutdown;
-            mstatus      = MState.Paused;
-            setupFn      = setup ?? throw new ArgumentNullException(nameof(setup));
-            inboxFn      = inbox ?? throw new ArgumentNullException(nameof(inbox));
-            this.sys     = sys;
-            Id           = parent.Actor.Id[name];
-            traceSetup   = ProcessConfig.Tracer?.BuildSpan($"{Id}.setup");
-            traceInbox   = ProcessConfig.Tracer?.BuildSpan($"{Id}.inbox");
-            this.cluster = cluster;
-            this.flags   = flags == ProcessFlags.Default
-                               ? settings.GetProcessFlags(Id)
-                               : flags;
-            termFn       = term;
-            Parent       = parent;
-            Name         = name;
-            Strategy     = strategy;
-            
+            astatus    = AState.Shutdown;
+            mstatus    = MState.Paused;
+            setupFn    = setup ?? throw new ArgumentNullException(nameof(setup));
+            actorFn    = actor ?? throw new ArgumentNullException(nameof(actor));
+            shutdownFn = shutdown ?? (_ => unit.AsValueTask());
             shutdownFn = async (S s) =>
-                         {
-                             try
-                             {
-                                 if(shutdown != null) await shutdown(s).ConfigureAwait(false);
-                             }
-                             catch (Exception e)
-                             {
-                                 logErr(e);
-                             }
-                             return unit;
-                         };
+            {
+                try
+                {
+                    await shutdown(s).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    logErr(e);
+                }
+                return unit;
+            };
+
+            this.sys = sys;
+            Id = parent.Actor.Id[name];
+            this.cluster = cluster;
+            this.flags = flags == ProcessFlags.Default
+                ? settings.GetProcessFlags(Id)
+                : flags;
             
+            termFn = term;
+            
+            Parent = parent;
+            Name = name;
+            Strategy = strategy;
             SetupRemoteSubscriptions(cluster, flags);
         }
 
@@ -122,7 +119,7 @@ namespace Echo
                 ActorContext.Request.CurrentRequest = null;
                 ActorContext.Request.ProcessFlags = flags;
                 ActorContext.Request.CurrentMsg = null;
-                
+
                 var stateValue = await GetState().ConfigureAwait(false);
                 try
                 {
@@ -276,7 +273,6 @@ namespace Echo
         {
             S state;
 
-            var span = traceSetup?.StartActive();
             try
             {
                 SetupRemoteSubscriptions(cluster, flags);
@@ -288,8 +284,8 @@ namespace Echo
                         logInfo($"Restoring state: {StateKey}");
 
                         state = cluster.IfNoneUnsafe(() => null).Exists(StateKey)
-                                    ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
-                                    : await setupFn(this).ConfigureAwait(false);
+                            ? cluster.IfNoneUnsafe(() => null).GetValue<S>(StateKey)
+                            : await setupFn(this).ConfigureAwait(false);
 
                     }
                     catch (Exception e)
@@ -306,10 +302,6 @@ namespace Echo
             catch (Exception e)
             {
                 throw new ProcessSetupException(Id.Path, e);
-            }
-            finally
-            {
-                span?.Dispose();
             }
 
             try
@@ -579,12 +571,6 @@ namespace Echo
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedReq = ActorContext.Request.CurrentRequest;
 
-            var span = traceInbox?.WithTag("type", "ask")
-                                  .WithTag("message-type", request?.Message?.GetType().FullName)
-                                  .WithTag("conversation-id", request?.ConversationId ?? 0)
-                                  .WithTag("request-id", request?.RequestId ?? 0)
-                                  .WithTag("reply-to", request?.ReplyTo.ToString() ?? "" )
-                                  .StartActive();
             try
             {
                 ActorContext.Request.CurrentRequest = request;
@@ -597,7 +583,7 @@ namespace Echo
                         Some: async tmsg =>
                         {
                             var stateIn = await GetState().ConfigureAwait(false);
-                            var stateOut = await inboxFn(stateIn, tmsg).ConfigureAwait(false);
+                            var stateOut = await actorFn(stateIn, tmsg).ConfigureAwait(false);
                             try
                             {
                                 if (!default(EqDefault<S>).Equals(stateOut, stateIn))
@@ -622,7 +608,7 @@ namespace Echo
                 else if (request.Message is T msg)
                 {
                     var stateIn  = await GetState().ConfigureAwait(false);
-                    var stateOut = await inboxFn(stateIn, msg).ConfigureAwait(false);
+                    var stateOut = await actorFn(stateIn, msg).ConfigureAwait(false);
                     try
                     {
                         if (!default(EqDefault<S>).Equals(stateOut, stateIn))
@@ -664,15 +650,12 @@ namespace Echo
             }
             finally
             {
-                span?.Dispose();
- 
                 ActorContext.Request.CurrentMsg = savedMsg;
                 ActorContext.Request.ProcessFlags = savedFlags;
                 ActorContext.Request.CurrentRequest = savedReq;
-                
+
                 // Go back to waiting for a message
                 Interlocked.CompareExchange(ref mstatus, MState.WaitingForMessage, MState.ProcessingMessage);
-
             }
 
             return InboxDirective.Default;
@@ -710,10 +693,6 @@ namespace Echo
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedMsg   = ActorContext.Request.CurrentMsg;
 
-            var span = traceInbox?.WithTag("type", "terminated")
-                                  .WithTag("pid", pid.ToString())
-                                  .StartActive();
-            
             try
             {
                 ActorContext.Request.CurrentRequest = null;
@@ -750,7 +729,6 @@ namespace Echo
             }
             finally
             {
-                span?.Dispose();
                 ActorContext.Request.CurrentRequest = savedReq;
                 ActorContext.Request.ProcessFlags   = savedFlags;
                 ActorContext.Request.CurrentMsg     = savedMsg;
@@ -796,11 +774,6 @@ namespace Echo
             var savedFlags = ActorContext.Request.ProcessFlags;
             var savedMsg   = ActorContext.Request.CurrentMsg;
 
-            var span = traceInbox?.WithTag("type", "tell")
-                                  .WithTag("message-type", message?.GetType().FullName)
-                                  .WithTag("conversation-id", savedReq.ConversationId)
-                                  .WithTag("reply-to", savedReq?.ReplyTo.ToString() ?? "")
-                                  .StartActive();
             try
             {
                 ActorContext.Request.CurrentRequest = null;
@@ -810,7 +783,7 @@ namespace Echo
                 if (message is T)
                 {
                     var stateIn  = await GetState().ConfigureAwait(false);
-                    var stateOut = await inboxFn(stateIn, (T) message).ConfigureAwait(false);
+                    var stateOut = await actorFn(stateIn, (T) message).ConfigureAwait(false);
                     state = stateOut;
                     try
                     {
@@ -830,7 +803,7 @@ namespace Echo
                     state = await PreProcessMessageContent(message).ToAsync().MatchAsync(
                                 Some: async tmsg => {
                                           var stateIn  = await GetState().ConfigureAwait(false);
-                                          var stateOut = await inboxFn(stateIn, tmsg).ConfigureAwait(false);
+                                          var stateOut = await actorFn(stateIn, tmsg).ConfigureAwait(false);
                                           try
                                           {
                                               if (!default(EqDefault<S>).Equals(stateOut, stateIn))
@@ -871,7 +844,6 @@ namespace Echo
             }
             finally
             {
-                span?.Dispose();
                 ActorContext.Request.CurrentRequest = savedReq;
                 ActorContext.Request.ProcessFlags   = savedFlags;
                 ActorContext.Request.CurrentMsg     = savedMsg;

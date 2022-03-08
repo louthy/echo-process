@@ -5,8 +5,6 @@ using Echo.Config;
 using static LanguageExt.Prelude;
 using static Echo.Process;
 using LanguageExt;
-using OpenTracing;
-
 #if !NETSTANDARD
 using System.Web;
 #endif
@@ -15,8 +13,45 @@ namespace Echo
 {
     public static class ProcessConfig
     {
-        static readonly object sync = new object();
-        internal static ITracer Tracer; 
+        static object sync = new object();
+
+#if !NETSTANDARD
+
+        /// <summary>
+        /// Process system configuration initialisation
+        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
+        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
+        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() by 
+        /// ProcessConfig.initialiseWeb(...)
+        /// </summary>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(() => { }, strategyFuncs);
+
+        /// <summary>
+        /// Process system configuration initialisation
+        /// This will look for cluster.conf and process.conf files in the web application folder, you should call this
+        /// function from within Application_BeginRequest of Global.asax.  It can run multiple times, once the config 
+        /// has loaded the system won't re-load the config until you call ProcessConfig.unload() followed by 
+        /// ProcessConfig.initialiseWeb(...)
+        /// 
+        /// NOTE: If a cluster is specified in the cluster.conf and its 'node-name' matches the host name of the web-
+        /// application (i.e. www.example.com), then those settings will be used to connect to the cluster.  
+        /// This allows for different staging environments to be setup.
+        /// </summary>
+        /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
+        /// happen once only.</param>
+        /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
+        public static Unit initialiseWeb(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
+        {
+            lock (sync)
+            {
+                if (HttpContext.Current == null) throw new NotSupportedException("There must be a valid HttpContext.Current to call ProcessConfig.initialiseWeb()");
+                return initialiseFileSystem(hostName(HttpContext.Current), setup, strategyFuncs, AppDomain.CurrentDomain.BaseDirectory);
+            }
+        }
+#endif
+
 
         /// <summary>
         /// Process system configuration initialisation
@@ -56,9 +91,8 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null) =>
-            initialiseWeb(nodeName, () => { }, strategyFuncs, tracer);
+        public static Unit initialiseWeb(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null) =>
+            initialiseWeb(nodeName, () => { }, strategyFuncs);
 
         /// <param name="nodeName">
         /// <para>Web-site host-name: i.e. `www.example.com` - you would usually call this when you 
@@ -117,13 +151,11 @@ namespace Echo
         /// </para>
         /// </param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="appPath">Path to the application where the conf files are</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null, ITracer tracer = null)
+        public static Unit initialiseWeb(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(nodeName, setup, strategyFuncs, appPath, tracer);
+                return initialiseFileSystem(nodeName, setup, strategyFuncs, appPath);
             }
         }
 
@@ -140,12 +172,11 @@ namespace Echo
         /// those settings will be used to connect to the cluster.  This allows for different staging environments to be 
         /// setup.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseFileSystem(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null)
+        public static Unit initialiseFileSystem(string nodeName, IEnumerable<FuncSpec> strategyFuncs = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(nodeName, () => { }, strategyFuncs, tracer);
+                return initialiseFileSystem(nodeName, () => { }, strategyFuncs);
             }
         }
 
@@ -158,12 +189,11 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseFileSystem(Action setup, IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null)
+        public static Unit initialiseFileSystem(Action setup, IEnumerable<FuncSpec> strategyFuncs = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(null, setup, strategyFuncs, tracer: tracer);
+                return initialiseFileSystem(null, setup, strategyFuncs);
             }
         }
 
@@ -174,12 +204,11 @@ namespace Echo
         /// by ProcessConfig.initialiseFileSystem(...), so it's safe to not surround it with ifs.
         /// </summary>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseFileSystem(IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null)
+        public static Unit initialiseFileSystem(IEnumerable<FuncSpec> strategyFuncs = null)
         {
             lock (sync)
             {
-                return initialiseFileSystem(null, () => { }, strategyFuncs, tracer: tracer);
+                return initialiseFileSystem(null, () => { }, strategyFuncs);
             }
         }
 
@@ -198,13 +227,15 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="appPath">Path to the application where the conf files are</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null, ITracer tracer = null)
+        public static Unit initialiseFileSystem(string nodeName, Action setup, IEnumerable<FuncSpec> strategyFuncs = null, string appPath = null)
         {
             lock (sync)
             {
-                appPath ??= AppDomain.CurrentDomain.BaseDirectory;
+#if !NETSTANDARD
+                appPath = appPath ?? AppDomain.CurrentDomain.BaseDirectory;
+#endif
+
+                appPath = appPath ?? "";
                 var clusterPath = Path.Combine(appPath, "cluster.conf");
                 var processPath = Path.Combine(appPath, "process.conf");
 
@@ -225,9 +256,8 @@ namespace Echo
         /// Process system initialisation
         /// Initialises am in-memory only Process system
         /// </summary>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        public static Unit initialise(ITracer tracer = null) =>
-            initialise("", None, () => { }, tracer: tracer);
+        public static Unit initialise() =>
+            initialise("", None, () => { });
 
         /// <summary>
         /// Initialise without a config file or text
@@ -238,7 +268,6 @@ namespace Echo
         /// <param name="providerName"></param>
         /// <param name="connectionString"></param>
         /// <param name="catalogueName"></param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
         /// <returns></returns>
         public static Unit initialise(
             SystemName systemName,
@@ -246,14 +275,12 @@ namespace Echo
             ProcessName nodeName,
             string connectionString,
             string catalogueName,
-            string providerName = "redis",
-            ITracer tracer = null
+            string providerName = "redis"
             )
         {
             lock (sync)
             {
                 var types = new Types();
-                Tracer = tracer;
 
                 StartFromConfig(new ProcessSystemConfig(
                     systemName,
@@ -291,13 +318,10 @@ namespace Echo
         /// <param name="setup">A setup function to call on successful loading of the configuration files - this will
         /// happen once only.</param>
         /// <param name="strategyFuncs">Plugin extra strategy behaviours by passing in a list of FuncSpecs.</param>
-        /// <param name="tracer">Optional support for Open Tracing</param>
-        /// <param name="configText">Configuration source text</param>
-        public static Unit initialise(string configText, Option<string> nodeName, Action setup = null, IEnumerable<FuncSpec> strategyFuncs = null, ITracer tracer = null)
+        public static Unit initialise(string configText, Option<string> nodeName, Action setup = null, IEnumerable<FuncSpec> strategyFuncs = null)
         {
             lock (sync)
             {
-                Tracer = tracer;
                 var parser = new ProcessSystemConfigParser(nodeName.IfNone(""), new Types(), strategyFuncs);
                 var configs = String.IsNullOrWhiteSpace(configText)
                     ? HashMap(Tuple(new SystemName(""), ProcessSystemConfig.Empty))
@@ -311,7 +335,7 @@ namespace Echo
             }
         }
 
-        static void StartFromConfig(ProcessSystemConfig config)
+        private static void StartFromConfig(ProcessSystemConfig config)
         {
             lock (sync)
             {

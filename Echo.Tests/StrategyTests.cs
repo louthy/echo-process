@@ -43,8 +43,9 @@ namespace Echo.Tests
 
                 var actor = spawn<Unit, string>(nameof(FirstFailureTime), () => ignore(spawn("sub", (string msg) =>
                 {
-                    err += $"{DateTimeOffset.Now}: {msg}\n";
+
                     throw new Exception();
+                    err += $"{DateTimeOffset.Now}: {msg}\n";
                 })), (dummyUnit, _) => tellChild("sub", _), Strategy: MyStrategy());
 
                 tell(actor, "test");
