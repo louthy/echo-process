@@ -16,11 +16,6 @@ namespace Echo
         SystemName Name { get; }
 
         /// <summary>
-        /// True if the actor system isn't shutting down
-        /// </summary>
-        bool IsActive { get; }
-
-        /// <summary>
         /// Cluster
         /// </summary>
         Option<ICluster> Cluster { get; }

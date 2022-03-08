@@ -165,36 +165,6 @@ namespace Echo
                 return DefaultSystem;
             }
         }
-        
-        public static Option<ActorSystem> SystemSafe(ProcessId pid) =>
-            SystemSafe(pid.System);
-
-        public static Option<ActorSystem> SystemSafe(SystemName system)
-        {
-            ActorSystem asys = null;
-            if (system.IsValid)
-            {
-                asys = FindSystem(system);
-                if (asys != null)
-                {
-                    return asys;
-                }
-                else
-                {
-                    return None;
-                }
-            }
-            else
-            {
-                return DefaultSystem;
-            }
-        }
-
-        public static bool IsSystemActive(SystemName name) =>
-            SystemSafe(name).Map(static s => s.IsActive).IfNone(false);
-
-        public static bool IsSystemActive(ProcessId pid) =>
-            SystemSafe(pid).Map(static s => s.IsActive).IfNone(false);
 
         public static ActorSystem DefaultSystem
         {

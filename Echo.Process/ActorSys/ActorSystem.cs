@@ -20,11 +20,11 @@ namespace Echo
         public static Func<S, Unit> NoShutdown<S>() => (S s) => unit;
         public static Func<S, ValueTask<Unit>> NoShutdownAsync<S>() => (S s) => unit.AsValueTask();
 
-        public static class DisposeState
+        enum DisposeState
         {
-            public const int Active = 1;
-            public const int Disposing = 2;
-            public const int Disposed = 4;
+            Active,
+            Disposing,
+            Disposed
         }
 
         ActorRequestContext userContext;
@@ -37,7 +37,7 @@ namespace Echo
         ProcessSystemConfig settings;
         public AppProfile appProfile;
         ActorItem rootItem;
-        volatile int disposeState = DisposeState.Active;
+        DisposeState disposeState;
 
         readonly object sync = new object();
         readonly Option<ICluster> cluster;
@@ -112,7 +112,7 @@ namespace Echo
                 null,
                 ProcessFlags.Default,
                 null);
-            rootInbox.Startup(rootProcess, this, parent, cluster, settings.GetProcessMailboxSize(rootProcess.Id));
+            rootInbox.Startup(rootProcess, parent, cluster, settings.GetProcessMailboxSize(rootProcess.Id));
         }
 
         public void Initialise()
@@ -130,9 +130,6 @@ namespace Echo
             public string Name;
             public long Timestamp;
         }
-
-        public bool IsActive =>
-            disposeState == DisposeState.Active;
 
         IDisposable NotifyCluster(Option<ICluster> cluster, long timestamp) =>
             cluster.Map(c =>
@@ -182,59 +179,45 @@ namespace Echo
 
         public void Dispose()
         {
-            if (Interlocked.CompareExchange(ref disposeState, DisposeState.Disposing, DisposeState.Active) == DisposeState.Active)
+            if (disposeState != DisposeState.Active) return;
+            lock (sync)
             {
-                try
+                if (disposeState != DisposeState.Active) return;
+                disposeState = DisposeState.Disposing;
+
+                if (rootItem != null)
                 {
-                    if (rootItem != null)
+                    try
                     {
-                        try
-                        {
-                            Ping.Dispose();
-                        }
-                        catch (Exception e)
-                        {
-                            logErr(e);
-                        }
-
-                        try
-                        {
-                            startupSubscription?.Dispose();
-                            startupSubscription = null;
-                        }
-                        catch (Exception e)
-                        {
-                            logErr(e);
-                        }
-
-                        try
-                        {
-                            if (rootItem.Actor.Children.Find(ActorSystemConfig.Default.UserProcessName.Value).Case is ActorItem u)
-                            {
-                                u.Actor.Shutdown(true);
-                            }
-                            if (rootItem.Actor.Children.Find("js").Case is ActorItem js)
-                            {
-                                js.Actor.Shutdown(true);
-                            }
-                            if (rootItem.Actor.Children.Find(ActorSystemConfig.Default.SystemProcessName.Value).Case is ActorItem sys)
-                            {
-                                sys.Actor.Shutdown(true);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            logErr(e);
-                        }
-
-                        cluster.IfSome(c => c?.Dispose());
+                        Ping.Dispose();
                     }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
+                    try
+                    {
+                        startupSubscription?.Dispose();
+                        startupSubscription = null;
+                    }
+                    catch (Exception e)
+                    {
+                        logErr(e);
+                    }
+                    try
+                    {
+                        rootItem.Actor.Children.Values
+                            .OrderByDescending(c => c.Actor.Id == User) // shutdown "user" first
+                            .Iter(c => c.Actor.Shutdown(true));
+                    }
+                    catch(Exception e)
+                    {
+                        logErr(e);
+                    }
+                    cluster.IfSome(c => c?.Dispose());
                 }
-                finally
-                {
-                    rootItem = null;
-                    disposeState = DisposeState.Disposed;
-                }
+                rootItem = null;
+                disposeState = DisposeState.Disposed;
             }
         }
 
@@ -632,7 +615,7 @@ namespace Echo
 
             try
             {
-                inbox.Startup(actor, this, parent, cluster, maxMailboxSize);
+                inbox.Startup(actor, parent, cluster, maxMailboxSize);
                 if (!lazy)
                 {
                     TellSystem(actor.Id, SystemMessage.StartupProcess(false));

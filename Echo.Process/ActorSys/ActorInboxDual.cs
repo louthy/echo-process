@@ -30,7 +30,6 @@ namespace Echo
         readonly ConcurrentQueue<SystemMessage> sysInboxQueue = new();
         ICluster cluster;
         Actor<S, T> actor;
-        IActorSystem system;
         ActorItem parent;
         int maxMailboxSize;
         int paused = 1;
@@ -39,13 +38,12 @@ namespace Echo
         volatile int drainingSystemQueue = 0;
         volatile int checkingRemoteInbox = 0;
 
-        public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
+        public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             if (cluster.IsNone) throw new Exception("Remote inboxes not supported when there's no cluster");
 
-            this.actor   = (Actor<S, T>)process;
-            this.system  = system; 
-            this.parent  = parent;
+            this.actor = (Actor<S, T>)process;
+            this.parent = parent;
             this.cluster = cluster.IfNoneUnsafe(() => null);
             this.maxMailboxSize = maxMailboxSize == -1 
                 ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id) 
@@ -61,10 +59,10 @@ namespace Echo
             SubscribeToUserInboxChannel();
 
             Unpause();
-
-            DrainSystemQueue();
+            
             DrainUserQueue();
- 
+            DrainSystemQueue();
+            
             return unit;
         }
 
@@ -83,8 +81,6 @@ namespace Echo
             cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id))
                    .Subscribe(msg => DrainRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(actor.Id)));
             cluster.PublishToChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id), Guid.NewGuid().ToString());
-            DrainUserQueue();
-            DrainRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(actor.Id));
         }
 
         /// <summary>
@@ -221,8 +217,7 @@ namespace Echo
         /// </summary>
         void DrainRemoteInbox(string key)
         {
-            if (system.IsActive && 
-                cluster.QueueLength(key) > 0 &&
+            if (cluster.QueueLength(key) > 0 &&
                 Interlocked.CompareExchange(ref checkingRemoteInbox, 1, 0) == 0)
             {
                 DoDrainRemoteInbox(key);
@@ -238,7 +233,7 @@ namespace Echo
             {
                 int count = cluster.QueueLength(key);
 
-                while (!IsPaused && !shutdownRequested && system.IsActive && count > 0 )
+                while (count > 0 && !IsPaused && !shutdownRequested)
                 {
                     var pair = ActorInboxCommon.GetNextMessage(cluster, actor.Id, key);
                     pair.IfSome(x => cluster.Dequeue<RemoteMessageDTO>(key));
@@ -288,7 +283,6 @@ namespace Echo
         {
             if (!shutdownRequested && 
                 !IsPaused && 
-                system.IsActive &&
                 userInboxQueue.Count > 0 &&
                 Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
@@ -303,7 +297,6 @@ namespace Echo
         Unit DrainSystemQueue()
         {
             if (sysInboxQueue.Count > 0 &&
-                system.IsActive &&
                 Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
                 Task.Run(DrainSystemQueueAsync);
@@ -320,10 +313,7 @@ namespace Echo
             {
                 while (true)
                 {
-                    if (!shutdownRequested && 
-                        !IsPaused &&
-                        system.IsActive &&
-                        userInboxQueue.TryPeek(out var msg))
+                    if (!shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
                     {
                         try
                         {
@@ -352,7 +342,7 @@ namespace Echo
                         }
                         catch (Exception e)
                         {
-                            logSysErr($"{actor.Id}", e);
+                            logSysErr(e);
                         }
                     }
                     else
@@ -360,6 +350,7 @@ namespace Echo
                         return unit;
                     }
                 }
+                return unit;
             }
             finally
             {
@@ -377,9 +368,7 @@ namespace Echo
             {
                 while (true)
                 {
-                    if (!shutdownRequested && 
-                        system.IsActive &&
-                        sysInboxQueue.TryDequeue(out var msg))
+                    if (!shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
                     {
                         try
                         {
@@ -403,6 +392,7 @@ namespace Echo
                         return unit;
                     }
                 }
+                return unit;
             }
             finally
             {

@@ -192,7 +192,7 @@ namespace Echo
             try
             {
                 parent.Actor.LinkChild(item);
-                inbox.Startup(actor, System, actor.Parent, Cluster, 
+                inbox.Startup(actor, actor.Parent, Cluster, 
                     maxMailboxSize == -1 
                         ? Settings.GetProcessMailboxSize(actor.Id)
                         : maxMailboxSize

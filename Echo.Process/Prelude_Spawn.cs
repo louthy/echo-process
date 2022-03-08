@@ -37,8 +37,6 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
-        /// <param name="MaxMailboxSize">Maximum number of messages to queue</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<T>(
             ProcessName Name,
@@ -46,7 +44,6 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-            Func<Unit> Shutdown = null,
             Action<ProcessId> Terminated = null
             ) =>
             spawn<Unit, T>(
@@ -62,8 +59,7 @@ namespace Echo
                 (state, pid) => {
                     Terminated?.Invoke(pid);
                     return state;
-                },
-                Shutdown: _ => Shutdown?.Invoke() ?? default
+                }
             );
 
         /// <summary>
@@ -79,8 +75,6 @@ namespace Echo
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
-        /// <param name="MaxMailboxSize">Maximum number of messages to queue</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawnUnit<T>(
             ProcessName Name,
@@ -88,21 +82,9 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-            Func<ProcessId, Unit> Terminated = null,
-            Func<Unit> Shutdown = null
+            Func<ProcessId, Unit> Terminated = null
             ) =>
-            spawn<Unit, T>(Name, 
-                           () => unit, 
-                           (state, msg) => { 
-                               Inbox(msg); 
-                               return state; 
-                           }, 
-                           Flags, 
-                           Strategy, 
-                           MaxMailboxSize, 
-                           (state, pid) => { Terminated?.Invoke(pid); return state; },
-                           _ => Shutdown?.Invoke() ?? default
-                );
+            spawn<Unit, T>(Name, () => unit, (state, msg) => { Inbox(msg); return state; }, Flags, Strategy, MaxMailboxSize, (state, pid) => { Terminated(pid); return state; });
 
         /// <summary>
         /// Create a new process by name.  
@@ -120,9 +102,6 @@ namespace Echo
         /// watches] terminates</param>
         /// <param name="Lazy">If set to true actor will not start automatically, you need to
         /// startup(processId) manually</param>
-        /// <param name="MaxMailboxSize">Maximum number of messages to queue</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
-        /// <param name="System">Echo process system to spawn in</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static ProcessId spawn<S, T>(
             ProcessName Name,
@@ -165,7 +144,6 @@ namespace Echo
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="MaxMailboxSize">Maximum inbox size</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -176,10 +154,9 @@ namespace Echo
             ProcessFlags Flags = ProcessFlags.Default,
             State<StrategyContext, Unit> Strategy = null,
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-            Func<Unit> Shutdown = null,
             Action<ProcessId> Terminated = null
             ) =>
-            Range(0, Count).Map(n => spawn($"{Name}-{n}", Inbox, Flags, Strategy, MaxMailboxSize, Shutdown, Terminated)).ToList();
+            Range(0, Count).Map(n => spawn($"{Name}-{n}", Inbox, Flags, Strategy, MaxMailboxSize, Terminated)).ToList();
 
         /// <summary>
         /// Create N child processes.
@@ -189,7 +166,6 @@ namespace Echo
         /// then the new processes will be a children of the current process.  If it is called from
         /// outside of a process, then they will be made a child of the root 'user' process.
         /// </summary>
-        /// <typeparam name="S">Type of process's aggregate state</typeparam>
         /// <typeparam name="T">Type of messages that the child-process can accept</typeparam>
         /// <param name="Count">Number of processes to spawn</param>
         /// <param name="Setup">Startup and restart function</param>
@@ -198,7 +174,6 @@ namespace Echo
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="MaxMailboxSize">Maximum inbox size</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -213,18 +188,7 @@ namespace Echo
             Func<S, Unit> Shutdown = null,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            Range(0, Count).Map(n => ActorContext.System(default(SystemName))
-                                                 .ActorCreate(
-                                                      ActorContext.SelfProcess, 
-                                                      $"{Name}-{n}", 
-                                                      Inbox, 
-                                                      Setup, 
-                                                      Shutdown, 
-                                                      Terminated, 
-                                                      Strategy, 
-                                                      Flags, 
-                                                      MaxMailboxSize, 
-                                                      false)).ToList();
+            Range(0, Count).Map(n => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{n}", Inbox, Setup, Shutdown, Terminated, Strategy, Flags, MaxMailboxSize, false)).ToList();
 
         /// <summary>
         /// Create N child processes.
@@ -242,7 +206,6 @@ namespace Echo
         /// <param name="Flags">Process flags</param>
         /// <param name="Strategy">Failure supervision strategy</param>
         /// <param name="MaxMailboxSize">Maximum inbox size</param>
-        /// <param name="Shutdown">Optional shutdown function</param>
         /// <param name="Terminated">Message function to call when a Process [that this Process
         /// watches] terminates</param>
         /// <returns>ProcessId IEnumerable</returns>
@@ -256,17 +219,7 @@ namespace Echo
             Func<S, Unit> Shutdown = null,
             Func<S, ProcessId, S> Terminated = null
             ) =>
-            Spec.Map((id,state) => ActorContext.System(default(SystemName))
-                                               .ActorCreate(ActorContext.SelfProcess, 
-                                                            $"{Name}-{id}", 
-                                                            Inbox, 
-                                                            state, 
-                                                            Shutdown, 
-                                                            Terminated, 
-                                                            Strategy, 
-                                                            Flags, 
-                                                            MaxMailboxSize, 
-                                                            false)).Values.ToList();
+            Spec.Map((id,state) => ActorContext.System(default(SystemName)).ActorCreate(ActorContext.SelfProcess, $"{Name}-{id}", Inbox, state, Shutdown, Terminated, Strategy, Flags, MaxMailboxSize, false)).Values.ToList();
 
         /// <summary>
         /// Spawn by type
@@ -319,11 +272,11 @@ namespace Echo
             ProxyBuilder.Build<TProcess>(pid);
 
         /// <summary>
-        /// Spawn by interface type.  You must provide a Setup function that returns
+        /// Spawn by iterface type.  You must provide a Setup function that returns
         /// the concrete implementation of TProcessInterface. 
         /// Communication is via a generated proxy: the returned TProcessInterface.
         /// </summary>
-        /// <typeparam name="TProcessInterface">Process type</typeparam>
+        /// <typeparam name="TProcess">Process type</typeparam>
         /// <param name="Name">Name of process to spawn</param>
         /// <param name="Setup">You must provide a Setup function that returns
         /// the concrete implementation of TProcessInterface</param>
