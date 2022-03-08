@@ -556,12 +556,6 @@ namespace Echo
             echoState.Map(es => es.System.ClusterState?.Members.ToHashMap() ?? HashMap<ProcessName, ClusterNode>());
 
         /// <summary>
-        /// Get a list of cluster nodes that have been alive in the past 24 hours
-        /// </summary>
-        public static Eff<RT, HashMap<ProcessName, ClusterNode>> ClusterNodes24 =>
-            echoState.Map(es => es.System.ClusterState?.Members24.ToHashMap() ?? HashMap<ProcessName, ClusterNode>());
-
-        /// <summary>
         /// List of system names running on this node
         /// </summary>
         public static Eff<RT, Seq<SystemName>> Systems =>

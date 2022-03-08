@@ -77,7 +77,7 @@ namespace Echo
 
             var root = ProcessId.Top.Child(GetRootProcessName(cluster));
 
-            ClusterState = ClusterMonitor.State.Create(AtomHashMap<ProcessName, ClusterNode>(), AtomHashMap<ProcessName, ClusterNode>(), this);
+            ClusterState = ClusterMonitor.State.Create(AtomHashMap<ProcessName, ClusterNode>(), this);
             
             (rootProcess, rootInbox, parent) = ActorSystemBootstrap2.Boot(
                 countdown,

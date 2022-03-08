@@ -15,7 +15,6 @@ namespace Echo
         public const string MembersKey = "sys-cluster-members";
         static readonly Time HeartbeatFreq = 1*seconds;
         static readonly Time OfflineCutoff = 4*seconds;
-        static readonly Time OfflineCutoff24 = 24*hours;
 
         public enum MsgTag
         {
@@ -36,24 +35,16 @@ namespace Echo
         public class State
         {
             public readonly AtomHashMap<ProcessName, ClusterNode> Members;
-            public readonly AtomHashMap<ProcessName, ClusterNode> Members24;
             public readonly IActorSystem System;
 
-            public static State Create(
-                AtomHashMap<ProcessName, ClusterNode> members, 
-                AtomHashMap<ProcessName, ClusterNode> members24,
-                IActorSystem system) =>
-                new State(members, members24, system);
+            public static State Create(AtomHashMap<ProcessName, ClusterNode> members, IActorSystem system) =>
+                new State(members, system);
 
-            State(AtomHashMap<ProcessName, ClusterNode> members, 
-                AtomHashMap<ProcessName, ClusterNode> members24,
-                IActorSystem system)
+            State(AtomHashMap<ProcessName, ClusterNode> members, IActorSystem system)
             {
                 members.FilterInPlace(node => node != null);
-                members24.FilterInPlace(node => node != null);
-                Members   = members;
-                Members24 = members24;
-                System    = system;
+                Members = members;
+                System  = system;
             }
 
             public State SetMember(ProcessName nodeName, ClusterNode state)
@@ -61,12 +52,10 @@ namespace Echo
                 if (state == null)
                 {
                     Members.Remove(nodeName);
-                    Members24.Remove(nodeName);
                 }
                 else
                 {
                     Members.AddOrUpdate(nodeName, state);
-                    Members24.AddOrUpdate(nodeName, state);
                 }
                 return this;
             }
@@ -74,7 +63,6 @@ namespace Echo
             public State RemoveMember(ProcessName nodeName)
             {
                 Members.Remove(nodeName);
-                Members24.Remove(nodeName);
                 return this;
             }
         }
@@ -133,15 +121,13 @@ namespace Echo
                     try
                     {
                         var cutOff = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff);
-                        var cutOff24 = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff24);
 
                         state.Members.Swap(
                             oldState => {
                                 c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role));
-
-                                var s        = c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s));
-                                var newState = s.Where(m => m.LastHeartbeat > cutOff);
-                                state.Members24.Swap(_ => s.Where(m => m.LastHeartbeat > cutOff24));
+                                
+                                var newState = c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s))
+                                                .Where(m => m.LastHeartbeat > cutOff);
 
                                 var (offline, online) = DiffState(oldState, newState);
 
