@@ -19,6 +19,7 @@ namespace Echo
         }
 
         static readonly AsyncLocal<Option<SessionId>> sessionId = new AsyncLocal<Option<SessionId>>();
+
         static readonly AsyncLocal<ActorRequestContext> request = new AsyncLocal<ActorRequestContext>();
 
         static SystemName defaultSystem;
@@ -41,6 +42,8 @@ namespace Echo
 
                 try
                 {
+                    asystem.Initialise();
+
                     // Set the default system if the 'default: yes' setting is in the ProcessSystemConfig
                     defaultSystem = defaultSystem.IsValid
                         ? (from c in config.Cluster
@@ -48,8 +51,6 @@ namespace Echo
                            select system)
                           .IfNone(defaultSystem)
                         : system;
-                    
-                    asystem.Initialise();
                 }
                 catch
                 {

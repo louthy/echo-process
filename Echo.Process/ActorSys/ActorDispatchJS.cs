@@ -12,14 +12,16 @@ namespace Echo
         public readonly ProcessId ProcessId;
         public readonly ClientConnectionId Id;
         public readonly Option<SessionId> SessionId;
+        readonly bool transactionalIO;
 
-        public ActorDispatchJS(ProcessId pid, Option<SessionId> sessionId)
+        public ActorDispatchJS(ProcessId pid, Option<SessionId> sessionId, bool transactionalIO)
         {
             Id = ClientConnectionId.New(pid.Skip(2).Take(1).Name.Value);
             ProcessHub.Connections.Find(Id).IfNone(() => { throw new ClientDisconnectedException(Id); });
             
             ProcessId = pid;
             SessionId = sessionId;
+            this.transactionalIO = transactionalIO;
         }
 
         public HashMap<string, ProcessId> GetChildren()

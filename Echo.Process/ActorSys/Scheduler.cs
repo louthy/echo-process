@@ -6,134 +6,103 @@ using System.Linq;
 
 namespace Echo
 {
-    /// <summary>
-    /// Persistent scheduler
-    /// </summary>
     internal static class Scheduler
     {
         static readonly Schedule schedule = Schedule.Ephemeral(TimeSpan.FromSeconds(0.1), "loop");
 
-        public static Option<State> Setup()
+        public static State Inbox(State state, Msg msg)
         {
-            tellSelf(Msg.Check, schedule);
-            return None;
-        }
+            try
+            {
+                state = ActorContext.System(Self).Cluster.Fold(state, (s, cluster) =>
+                {
+                    if (s.Scheduled.IsNone)
+                    {
+                        // Lazily load any items in the persistent store, once
+                        s = new State(GetScheduled(cluster));
+                    }
 
-        public static Option<State> Inbox(Option<State> state, Msg msg)
-        {
-            var cluster = (ICluster) ActorContext.System(Self).Cluster.Case;
-            if (cluster == null) return state;
+                    switch (msg)
+                    {
+                        case Msg.CheckMsg m: return Check(s, cluster);
+                        case Msg.AddToScheduleMsg m: return AddToSchedule(s, m, cluster);
+                        case Msg.RescheduleMsg m: return Reschedule(s, m, cluster);
+                        case Msg.RemoveFromScheduleMsg m: return RemoveFromSchedule(s, m, cluster);
+                        default: return s;
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    logErr(e);
+                }
+                catch { }
+            }
 
-            var nstate = LoadScheduledIfNone(state, cluster);
-
-            return msg switch
-                   {
-                       Msg.CheckMsg m              => Check(nstate, cluster),
-                       Msg.AddToScheduleMsg m      => AddToSchedule(nstate, m, cluster),
-                       Msg.RescheduleMsg m         => Reschedule(nstate, m, cluster),
-                       Msg.RemoveFromScheduleMsg m => RemoveFromSchedule(nstate, m, cluster),
-                       _                           => nstate
-                   };
+            if (msg is Msg.CheckMsg)
+            {
+                tellSelf(Msg.Check, schedule);
+            }
+            return state;
         }
 
         static State RemoveFromSchedule(State state, Msg.RemoveFromScheduleMsg msg, ICluster cluster)
         {
-            var pkey  = MakePersistentKey(cluster);
-            var field = $"{msg.InboxKey}::{msg.Id}";
- 
-            cluster.DeleteHashField(pkey, field);
+            cluster.DeleteHashField(msg.InboxKey, msg.Id);
             return state.Delete(msg.InboxKey, msg.Id);
         }
 
         static State AddToSchedule(State state, Msg.AddToScheduleMsg msg, ICluster cluster)
         {
-            var pkey  = MakePersistentKey(cluster);
-            var field = $"{msg.InboxKey}::{msg.Id}";
- 
-            cluster.HashFieldAddOrUpdate(pkey, field, msg.Message);
+            cluster.HashFieldAddOrUpdate(msg.InboxKey, msg.Id, msg.Message);
             return state.Add(msg.InboxKey, msg.Id, msg.Message);
         }
 
-        static State Reschedule(State state, Msg.RescheduleMsg msg, ICluster cluster)
-        {
-            var pkey  = MakePersistentKey(cluster);
-            var field = $"{msg.InboxKey}::{msg.Id}";
-
-            return cluster.GetHashField<RemoteMessageDTO>(pkey, field)
-                          .Map(dto => {
-                                   dto.Due = msg.When.Ticks;
-                                   cluster.HashFieldAddOrUpdate(pkey, field, dto);
-                                   return state.Delete(msg.InboxKey, msg.Id).Add(msg.InboxKey, msg.Id, dto);
-                               })
-                          .IfNone(state);
-        }
+        static State Reschedule(State state, Msg.RescheduleMsg msg, ICluster cluster) =>
+            cluster.GetHashField<RemoteMessageDTO>(msg.InboxKey, msg.Id).Map(dto =>
+            {
+                dto.Due = msg.When.Ticks;
+                cluster.HashFieldAddOrUpdate(msg.InboxKey, msg.Id, dto);
+                return state.Delete(msg.InboxKey, msg.Id).Add(msg.InboxKey, msg.Id, dto);
+            })
+            .IfNone(state);
 
         static State Check(State state, ICluster cluster)
         {
             var now = DateTime.UtcNow.Ticks;
 
-            foreach (var inbox in state.Scheduled)
+            foreach (var map in state.Scheduled)
             {
-                foreach (var (key, value) in inbox.Value)
+                foreach (var outerKeyValue in map)
                 {
-                    if (value.Due < now)
+                    foreach (var kv in outerKeyValue.Value)
                     {
-                        var inboxKey       = ActorInboxCommon.ClusterInboxKey(value.To, "user");
-                        var inboxNotifyKey = ActorInboxCommon.ClusterInboxNotifyKey(value.To, "user");
-                        
-                        // Enqueue the scheduled item in the process' message queue
-                        if (cluster.Enqueue(inboxKey, value) > 0)
+                        if (kv.Value.Due < now)
                         {
-                            var pkey  = MakePersistentKey(cluster);
-                            var field = $"{inbox.Key}::{key}";
-
-                            // Wipe the scheduled item from Redis
-                            cluster.DeleteHashField(pkey, field);
-                            
-                            // Wipe the scheduled item from memory
-                            state = state.Delete(inbox.Key, key);
-                            
-                            // Notify the process that it has a new message
-                            cluster.PublishToChannel(inboxNotifyKey, value.MessageId);
+                            var inboxKey = ActorInboxCommon.ClusterInboxKey(kv.Value.To, "user");
+                            var inboxNotifyKey = ActorInboxCommon.ClusterInboxNotifyKey(kv.Value.To, "user");
+                            if (cluster.Enqueue(inboxKey, kv.Value) > 0)
+                            {
+                                cluster.DeleteHashField(outerKeyValue.Key, kv.Key);
+                                state = state.Delete(outerKeyValue.Key, kv.Key);
+                                cluster.PublishToChannel(inboxNotifyKey, kv.Value.MessageId);
+                            }
                         }
                     }
                 }
             }
-            
-            // We should always keep checking
-            tellSelf(Msg.Check, schedule);
-
             return state;
         }
 
-        static Option<(string InboxKey, string Key)> GetParts(string key)
-        {
-            var ix = key.IndexOf("::", StringComparison.InvariantCulture);
-            if (ix == -1) return None;
-            var inboxKey = key.Substring(0, ix);
-            key = key.Substring(ix + 2);
-            return (inboxKey, key);
-        }
+        static HashMap<string, HashMap<string, RemoteMessageDTO>> GetScheduled(ICluster cluster) =>
+            cluster.QueryScheduleKeys(cluster.NodeName.Value)
+                   .ToList()
+                   .Fold(HashMap<string, HashMap<string, RemoteMessageDTO>>(), 
+                    (s, key) =>
+                        s.AddOrUpdate(key, cluster.GetHashFields<RemoteMessageDTO>(key)));
 
-        static State LoadScheduledIfNone(Option<State> state, ICluster cluster) =>
-            state.Case switch
-            {
-                State s => s,
-                _       => GetScheduled(cluster)
-            };
-
-        static string MakePersistentKey(ICluster cluster) =>
-            $"/__schedule/{cluster.NodeName.Value}";
-
-        static State GetScheduled(ICluster cluster) =>
-            new State(cluster.GetHashFields<RemoteMessageDTO>(MakePersistentKey(cluster))
-                             .AsEnumerable()
-                             .Sequence(static p => GetParts(p.Key).Map(np => (np.InboxKey, np.Key, p.Value)))
-                             .Map(static ps => ps.ToSeq())
-                             .IfNone(Empty)
-                             .Fold(HashMap<string, HashMap<string, RemoteMessageDTO>>(),
-                                   (s, triple) => s.AddOrUpdate(triple.InboxKey, triple.Key, triple.Value)));
- 
         public class Msg
         {
             public static Msg AddToSchedule(string inboxKey, string id, RemoteMessageDTO message) =>
@@ -190,15 +159,21 @@ namespace Echo
             }
         }
 
-        public record State(HashMap<string, HashMap<string, RemoteMessageDTO>> Scheduled)
+        public class State
         {
-            public static readonly State Empty = new State(HashMap<string, HashMap<string, RemoteMessageDTO>>());
+            public static readonly State Empty = new State(None);
 
-            public State Add(string inboxKey, string key, RemoteMessageDTO msg) =>
-                this with { Scheduled = Scheduled.AddOrUpdate(inboxKey, key, msg)};
+            public readonly Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> Scheduled;
+            public State(Option<HashMap<string, HashMap<string, RemoteMessageDTO>>> scheduled)
+            {
+                Scheduled = scheduled;
+            }
 
-            public State Delete(string inboxKey, string key) =>
-                this with { Scheduled = Scheduled.Remove(inboxKey, key) };
+            public State Add(string key, string innerKey, RemoteMessageDTO msg) =>
+                new State(Scheduled.Map(s => s.AddOrUpdate(key, innerKey, msg)));
+
+            public State Delete(string key, string innerKey) =>
+                new State(Scheduled.Map(s => s.Remove(key, innerKey)));
         }
     }
 }

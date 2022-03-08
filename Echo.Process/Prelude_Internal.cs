@@ -2,7 +2,6 @@
 using System.Threading.Tasks;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Threading;
 using static LanguageExt.Prelude;
 using LanguageExt;
 
@@ -58,26 +57,26 @@ namespace Echo
             var savedSession = ActorContext.SessionId;
             var stackTrace   = new System.Diagnostics.StackTrace(true);
 
-            return new System.Threading.Timer(
-                _ => {
-                    if (savedContext == null)
+            return Observable.Timer(delayFor).Do(_ =>
+            {
+                if (savedContext == null)
+                {
+                    f();
+                }
+                else
+                {
+                    ActorSystem system;
+                    try
                     {
-                        f();
+
+                        system = ActorContext.System(savedContext.Self.Actor.Id);
                     }
-                    else
+                    catch (Exception e)
                     {
-                        ActorSystem system;
-                        try
-                        {
+                        throw new ProcessSystemException(e, stackTrace);
+                    }
 
-                            system = ActorContext.System(savedContext.Self.Actor.Id);
-                        }
-                        catch (Exception e)
-                        {
-                            throw new ProcessSystemException(e, stackTrace);
-                        }
-
-                        Task.Run(() => system.WithContext(
+                    Task.Run(() => system.WithContext(
                                          savedContext.Self,
                                          savedContext.Parent,
                                          savedContext.Sender,
@@ -86,13 +85,14 @@ namespace Echo
                                          savedSession,
                                          () => {
                                              f();
+
+                                             // Run the operations that affect the settings and sending of tells
+                                             // in the order which they occured in the actor
+                                             ActorContext.Request?.Ops?.Run();
                                              return unit.AsValueTask();
                                          }));
-                    }
-                },
-                null,
-                delayFor.Ticks,
-                -1);
+                }
+            }).Subscribe(onNext: _ => { }, onCompleted: () => { }, onError: logErr);
         }
 
         internal static IDisposable safedelay(Action f, DateTime delayUntil) =>

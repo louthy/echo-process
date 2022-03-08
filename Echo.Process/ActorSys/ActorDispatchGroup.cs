@@ -11,10 +11,12 @@ namespace Echo
     {
         readonly ProcessId[] group;
         readonly int count;
+        readonly bool transactionalIO;
 
-        public ActorDispatchGroup(IEnumerable<ProcessId> group)
+        public ActorDispatchGroup(IEnumerable<ProcessId> group, bool transactionalIO)
         {
             this.group = group.ToArray();
+            this.transactionalIO = transactionalIO;
             this.count = this.group.Length;
             if( this.group.Length == 0 )
             {

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Echo
 {
-    internal interface ILocalActorInbox : IActorInbox 
+    internal interface ILocalActorInbox
     {
         Unit Ask(object message, ProcessId sender, Option<SessionId> sessionId);
         Unit Tell(object message, ProcessId sender, Option<SessionId> sessionId);

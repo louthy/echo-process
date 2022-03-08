@@ -21,13 +21,10 @@ namespace Echo
         /// <summary>
         /// Ask process setup
         /// </summary>
-        public static AskActorState Setup(CountdownEvent countdown)
+        public static AskActorState Setup()
         {
-            countdown.Signal();
             TellFlushExpired();
-            
             return AskActorState.Empty;
-            
         }
 
         /// <summary>

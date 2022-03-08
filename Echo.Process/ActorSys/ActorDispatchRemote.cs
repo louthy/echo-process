@@ -16,13 +16,15 @@ namespace Echo
         public readonly ICluster Cluster;
         public readonly Option<SessionId> SessionId;
         public readonly Ping Pinger;
+        readonly bool transactionalIO;
 
-        public ActorDispatchRemote(Ping ping, ProcessId pid, ICluster cluster, Option<SessionId> sessionId)
+        public ActorDispatchRemote(Ping ping, ProcessId pid, ICluster cluster, Option<SessionId> sessionId, bool transactionalIO)
         {
             Pinger = ping;
             ProcessId = pid;
             Cluster = cluster;
             SessionId = sessionId;
+            this.transactionalIO = transactionalIO;
         }
 
         public HashMap<string, ProcessId> GetChildren() =>
@@ -91,13 +93,23 @@ namespace Echo
             Tell(message, Schedule.Immediate, sender, "user", Message.Type.UserControl, message.Tag);
 
         public Unit TellSystem(SystemMessage message, ProcessId sender) =>
-            ignore(Cluster.PublishToChannel(
-                       ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
-                       RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0)));
+            transactionalIO
+                ? ignore(Cluster.PublishToChannel(
+                      ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
+                      RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0)))
+                : ProcessOp.IO(() =>
+                  {
+                      var clientsReached = Cluster.PublishToChannel(
+                          ActorInboxCommon.ClusterSystemInboxNotifyKey(ProcessId),
+                          RemoteMessageDTO.Create(message, ProcessId, sender, Message.Type.System, message.Tag, SessionId, 0));
+                      return unit;
+                  });
 
         public Unit Tell(object message, Schedule schedule, ProcessId sender, string inbox, Message.Type type, Message.TagSpec tag) =>
             schedule == Schedule.Immediate
-                ? TellNoIO(message, sender, inbox, type, tag)
+                ? transactionalIO
+                    ? TellNoIO(message, sender, inbox, type, tag)
+                    : ProcessOp.IO(() => TellNoIO(message, sender, inbox, type, tag))
                 : schedule.Type == Schedule.PersistenceType.Ephemeral
                     ? LocalScheduler.Push(schedule, ProcessId, m => TellNoIO(m, sender, inbox, type, tag), message)
                     : DoSchedule(message, schedule, sender, type, tag);
@@ -114,7 +126,9 @@ namespace Echo
         }
 
         Unit DoSchedule(object message, Schedule schedule, ProcessId sender, Message.Type type, Message.TagSpec tag) =>
-            DoScheduleNoIO(message, sender, schedule, type, tag);
+            transactionalIO
+                ? DoScheduleNoIO(message, sender, schedule, type, tag)
+                : ProcessOp.IO(() => DoScheduleNoIO(message, sender, schedule, type, tag));
 
         Unit DoScheduleNoIO(object message, ProcessId sender, Schedule schedule, Message.Type type, Message.TagSpec tag)
         {
@@ -147,7 +161,9 @@ namespace Echo
             TellNoIO(message, sender, "user", Message.Type.User, Message.TagSpec.UserAsk);
 
         public Unit Publish(object message) =>
-            ignore(Cluster.PublishToChannel(ActorInboxCommon.ClusterPubSubKey(ProcessId), message));
+            transactionalIO
+                ? ignore(Cluster.PublishToChannel(ActorInboxCommon.ClusterPubSubKey(ProcessId), message))
+                : ProcessOp.IO(() => Cluster.PublishToChannel(ActorInboxCommon.ClusterPubSubKey(ProcessId), message));
 
         public Unit Kill() =>
             TellSystem(SystemMessage.ShutdownProcess(false), Self);
