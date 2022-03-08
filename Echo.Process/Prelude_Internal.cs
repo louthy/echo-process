@@ -76,21 +76,22 @@ namespace Echo
                         throw new ProcessSystemException(e, stackTrace);
                     }
 
-                    Task.Run(() => system.WithContext(
-                                         savedContext.Self,
-                                         savedContext.Parent,
-                                         savedContext.Sender,
-                                         savedContext.CurrentRequest,
-                                         savedContext.CurrentMsg,
-                                         savedSession,
-                                         () => {
-                                             f();
+                    system.WithContext(
+                                  savedContext.Self,
+                                  savedContext.Parent,
+                                  savedContext.Sender,
+                                  savedContext.CurrentRequest,
+                                  savedContext.CurrentMsg,
+                                  savedSession,
+                                  () =>
+                                  {
+                                      f();
 
-                                             // Run the operations that affect the settings and sending of tells
-                                             // in the order which they occured in the actor
-                                             ActorContext.Request?.Ops?.Run();
-                                             return unit.AsValueTask();
-                                         }));
+                                      // Run the operations that affect the settings and sending of tells
+                                      // in the order which they occured in the actor
+                                      ActorContext.Request?.Ops?.Run();
+                                      return unit.AsValueTask();
+                                  });
                 }
             }).Subscribe(onNext: _ => { }, onCompleted: () => { }, onError: logErr);
         }

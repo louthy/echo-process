@@ -21,7 +21,7 @@ namespace Echo
         readonly ConcurrentQueue<RemoteMessageDTO> sysInboxQueue = new();
         volatile int drainingUserQueue = 0;
         volatile int drainingSystemQueue = 0;
-        volatile int paused = 1;
+        volatile int paused = 0;
 
         public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
@@ -35,16 +35,14 @@ namespace Echo
 
             this.parent = parent;
 
+            SubscribeToSysInboxChannel();
+            SubscribeToUserInboxChannel();
+
             this.cluster.SetValue(ActorInboxCommon.ClusterMetaDataKey(actor.Id),
                                   new ProcessMetaData(
                                       new[] {typeof(T).AssemblyQualifiedName},
                                       typeof(S).AssemblyQualifiedName,
                                       typeof(S).GetTypeInfo().ImplementedInterfaces.Map(x => x.AssemblyQualifiedName).ToArray()));
-
-            SubscribeToSysInboxChannel();
-            SubscribeToUserInboxChannel();
-
-            Unpause();
 
             return unit;
         }
@@ -197,14 +195,11 @@ namespace Echo
 
         Unit DrainUserQueue()
         {
-            var key = ActorInboxCommon.ClusterUserInboxKey(actor.Id); 
-            
             if (!shutdownRequested && 
                 !IsPaused && 
-                (cluster?.QueueLength(key) ?? 0) > 0 &&
                 Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
-                Task.Run(() => DrainUserQueueAsync(key));
+                Task.Run(() => DrainUserQueueAsync(ActorInboxCommon.ClusterUserInboxKey(actor.Id)));
             }
             return unit;
         }
@@ -244,14 +239,12 @@ namespace Echo
                                     count--; 
                                     break;
                                 case InboxDirective.Pause:              
-                                    cluster?.Dequeue<RemoteMessageDTO>(key);
                                     return Pause();
                                 
                                 case InboxDirective.PushToFrontOfQueue: 
                                     break;
                                 
                                 case InboxDirective.Shutdown:           
-                                    cluster?.Dequeue<RemoteMessageDTO>(key);
                                     return Shutdown();
                                 
                                 default:
@@ -271,6 +264,11 @@ namespace Echo
                             logSysErr(e);
                         }
                     }
+
+                    if (count <= 0)
+                    {
+                        count = cluster?.QueueLength(key) ?? 0;
+                    }
                 }
 
                 return unit;
@@ -278,7 +276,6 @@ namespace Echo
             finally
             {
                 Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
-                DrainUserQueue();
             }
         }
 
