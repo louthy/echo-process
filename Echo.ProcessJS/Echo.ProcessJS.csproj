@@ -4,9 +4,9 @@
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
-    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
+    <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
     <PackageVersion>2.1.7-beta</PackageVersion>
     <PackageId>Echo.ProcessJS</PackageId>
     <Title>echo-process Javascript Client</Title>
@@ -20,7 +20,7 @@
     <License>https://github.com/louthy/echo-process/blob/master/LICENSE.md</License>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <OutputType>library</OutputType>
-    <LangVersion>default</LangVersion>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
       <None Include="..\Images\echo icon small.png">

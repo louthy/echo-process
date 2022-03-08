@@ -3,8 +3,7 @@
         <FileVersion>2.0.0.0</FileVersion>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>
         <LangVersion>default</LangVersion>
-        <TargetFramework>net48</TargetFramework>
-        <OutputType>Library</OutputType>
+        <TargetFramework>netstandard2.1</TargetFramework>
     </PropertyGroup>
     <ItemGroup>
         <None Remove="Echo.Tests.nuget.props" />
@@ -16,7 +15,7 @@
         <PackageReference Include="System.Net.Http" Version="[4.3.4,)" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.5.0" />
         <PackageReference Include="xunit" Version="2.4.1" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.1">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
