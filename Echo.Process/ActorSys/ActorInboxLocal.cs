@@ -136,61 +136,54 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainUserQueueAsync()
         {
-            while (userInboxQueue.Count > 0 &&
-                   !shutdownRequested &&
-                   !IsPaused &&
-                   system.IsActive &&
-                   Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
+            try
             {
-                try
+                while (true)
                 {
-                    while (true)
+                    if (system.IsActive && !shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
                     {
-                        if (system.IsActive && !shutdownRequested && !IsPaused && userInboxQueue.TryPeek(out var msg))
+                        try
                         {
-                            try
+                            switch (await ActorInboxCommon.UserMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
                             {
-                                switch (await ActorInboxCommon.UserMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
-                                {
-                                    case InboxDirective.Default:
-                                        userInboxQueue.TryDequeue(out _);
-                                        break;
-
-                                    case InboxDirective.Pause:
-                                        userInboxQueue.TryDequeue(out _);
-                                        Pause();
-                                        return unit;
-
-                                    case InboxDirective.PushToFrontOfQueue:
-                                        break;
-
-                                    case InboxDirective.Shutdown:
-                                        userInboxQueue.TryDequeue(out _);
-                                        Shutdown();
-                                        return unit;
-
-                                    default:
-                                        throw new InvalidOperationException("unknown directive");
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                userInboxQueue.TryDequeue(out _);
-                                logSysErr(e);
+                                case InboxDirective.Default:
+                                    userInboxQueue.TryDequeue(out _);
+                                    break;
+                                
+                                case InboxDirective.Pause:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Pause();
+                                    return unit;
+                                
+                                case InboxDirective.PushToFrontOfQueue: 
+                                    break;
+                                
+                                case InboxDirective.Shutdown:
+                                    userInboxQueue.TryDequeue(out _);
+                                    Shutdown();
+                                    return unit;
+                                
+                                default: 
+                                    throw new InvalidOperationException("unknown directive");
                             }
                         }
-                        else
+                        catch (Exception e)
                         {
-                            return unit;
+                            userInboxQueue.TryDequeue(out _);
+                            logSysErr(e);
                         }
                     }
-                }
-                finally
-                {
-                    Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
+                    else
+                    {
+                        return unit;
+                    }
                 }
             }
-            return unit;
+            finally
+            {
+                Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
+                DrainUserQueue();
+            }
         }
         
         /// <summary>
@@ -198,45 +191,43 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainSystemQueueAsync()
         {
-            while (sysInboxQueue.Count > 0 &&
-                   system.IsActive &&
-                   Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+            try
             {
-                try
+                while (true)
                 {
-                    while (true)
+                    if (system.IsActive && !shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
                     {
-                        if (system.IsActive && !shutdownRequested && sysInboxQueue.TryDequeue(out var msg))
+                        try
                         {
-                            try
+                            switch (await ActorInboxCommon.SystemMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
                             {
-                                switch (await ActorInboxCommon.SystemMessageInbox(actor, this, msg, parent).ConfigureAwait(false))
-                                {
-                                    case InboxDirective.Pause:
-                                        Pause();
-                                        return unit;
-                                    case InboxDirective.Shutdown:
-                                        Shutdown();
-                                        return unit;
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                logSysErr(e);
+                                case InboxDirective.Pause:
+                                    Pause();
+                                    return unit;
+                                case InboxDirective.Shutdown:
+                                    Shutdown();
+                                    return unit;
                             }
                         }
-                        else
+                        catch (Exception e)
                         {
-                            return unit;
+                            logSysErr(e);
                         }
                     }
-                }
-                finally
-                {
-                    Interlocked.CompareExchange(ref drainingSystemQueue, 0, 1);
+                    else
+                    {
+                        return unit;
+                    }
                 }
             }
-            return unit;
+            finally
+            {
+                Interlocked.CompareExchange(ref drainingSystemQueue, 0, 1);
+                if (sysInboxQueue.Count > 0)
+                {
+                    DrainSystemQueue();
+                }
+            }
         }        
 
         /// <summary>
