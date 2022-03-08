@@ -232,12 +232,10 @@ namespace Echo
         /// </summary>
         public void DoDrainRemoteInbox(string key)
         {
-            bool first = true;
             while (system.IsActive &&
                    cluster.QueueLength(key) > 0 &&
-                   (first || Interlocked.CompareExchange(ref checkingRemoteInbox, 1, 0) == 0))
+                   Interlocked.CompareExchange(ref checkingRemoteInbox, 1, 0) == 0)
             {
-                first = false;
                 try
                 {
                     int count = cluster.QueueLength(key);
@@ -282,9 +280,6 @@ namespace Echo
                 {
                     Interlocked.CompareExchange(ref checkingRemoteInbox, 0, 1);
                 }
-
-                // If we're processing a lot, let's give the scheduler a chance to do something else
-                Thread.Yield();
             }
         }
 
@@ -323,14 +318,12 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainUserQueueAsync()
         {
-            bool first = true;
             while (!shutdownRequested &&
                    !IsPaused &&
                    system.IsActive &&
                    userInboxQueue.Count > 0 &&
-                   (first || Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0))
+                   Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
-                first = false;
                 try
                 {
                     while (true)
@@ -372,7 +365,7 @@ namespace Echo
                         }
                         else
                         {
-                            break;
+                            return unit;
                         }
                     }
                 }
@@ -380,9 +373,6 @@ namespace Echo
                 {
                     Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
                 }
-
-                // If we're processing a lot, let's give the scheduler a chance to do something else
-                Thread.Yield();
             }
 
             return unit;
@@ -393,12 +383,10 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainSystemQueueAsync()
         {
-            bool first = true;
             while (sysInboxQueue.Count > 0 &&
                    system.IsActive &&
-                   (first || Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0))
+                   Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
-                first = false;
                 try
                 {
                     while (true)
@@ -426,7 +414,7 @@ namespace Echo
                         }
                         else
                         {
-                            break;
+                            return unit;
                         }
                     }
                 }

@@ -136,15 +136,12 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainUserQueueAsync()
         {
-            bool first = true;
             while (userInboxQueue.Count > 0 &&
                    !shutdownRequested &&
                    !IsPaused &&
                    system.IsActive &&
-                   (first || Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0))
+                   Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
             {
-                first = false;
-                
                 try
                 {
                     while (true)
@@ -184,7 +181,7 @@ namespace Echo
                         }
                         else
                         {
-                            break;
+                            return unit;
                         }
                     }
                 }
@@ -192,9 +189,6 @@ namespace Echo
                 {
                     Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
                 }
-
-                // If we're processing a lot, let's give the scheduler a chance to do something else
-                Thread.Yield();
             }
             return unit;
         }
@@ -204,12 +198,10 @@ namespace Echo
         /// </summary>
         async ValueTask<Unit> DrainSystemQueueAsync()
         {
-            bool first = true;
             while (sysInboxQueue.Count > 0 &&
                    system.IsActive &&
-                   (first || Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0))
+                   Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
             {
-                first = false;
                 try
                 {
                     while (true)
@@ -235,7 +227,7 @@ namespace Echo
                         }
                         else
                         {
-                            break;
+                            return unit;
                         }
                     }
                 }
