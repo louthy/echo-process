@@ -520,6 +520,7 @@ namespace Echo
                 DisposeState();
 
                 sys.DispatchTerminate(Id);
+                Parent.Actor.Children.Find(Name.Value).IfSome(_ => Parent.Actor.UnlinkChild(Id));
             }
             finally
             {
