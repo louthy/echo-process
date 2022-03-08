@@ -485,6 +485,7 @@ namespace Echo
             {
                 // Shutdown children
                 var kids = Children;
+                Parent.Actor.Children.Find(Name.Value).IfSome(_ => Parent.Actor.UnlinkChild(Id));
                 children.Clear();
                 foreach (var child in kids)
                 {
@@ -520,7 +521,6 @@ namespace Echo
                 DisposeState();
 
                 sys.DispatchTerminate(Id);
-                Parent.Actor.Children.Find(Name.Value).IfSome(_ => Parent.Actor.UnlinkChild(Id));
             }
             finally
             {

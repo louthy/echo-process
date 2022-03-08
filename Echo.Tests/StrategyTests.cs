@@ -26,8 +26,7 @@ namespace Echo.Tests
 
             public void Dispose() => shutdownAll();
         }
-        
-        [Collection("no-parallelism")]
+
         public class StrategyStateProperties : IClassFixture<ProcessFixture>
         {
             [Fact]
@@ -57,7 +56,6 @@ namespace Echo.Tests
         }
 
         /*
-        [Collection("no-parallelism")]
         public class StrategyRestartDelayIssue : IClassFixture<ProcessFixture>
         {
             [Fact(Timeout = 10000)]
