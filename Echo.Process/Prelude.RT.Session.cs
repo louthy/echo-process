@@ -38,8 +38,19 @@ namespace Echo
         /// </summary>
         /// <param name="sid">Session ID</param>
         /// <param name="timeout">Session timeout</param>
+        public static Aff<RT, SessionId> sessionStart(SessionId sid, Time timeout, SystemName system) =>
+            Eff(() => Process.sessionStart(sid, timeout, system));
+
+        /// <summary>
+        /// Starts a new session in the Process system.  This variant must be called from
+        /// within a Process, use the variant where you specify the SystemName to use it
+        /// from outside
+        /// </summary>
+        /// <param name="sid">Session ID</param>
+        /// <param name="timeout">Session timeout</param>
+        /// <returns>sid</returns>
         public static Aff<RT, SessionId> sessionStart(SessionId sid, Time timeout) =>
-            CurrentSystem.Map(sn => Process.sessionStart(sid, timeout, sn));
+            Eff(() => Process.sessionStart(sid, timeout));
         
         /// <summary>
         /// Starts a new session in the Process system.  This variant must be called from

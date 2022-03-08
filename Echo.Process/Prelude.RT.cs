@@ -186,19 +186,7 @@ namespace Echo
         /// <summary>
         /// Get the child processes of the process ID provided
         /// </summary>
-        public static Aff<RT, HashMap<string, ProcessId>> children(Eff<RT, ProcessId> pid) =>
-            pid.Bind(p => echoState.Map(es => es.GetSystem(p).GetChildren(p)));
-
-        /// <summary>
-        /// Get the child processes of the process ID provided
-        /// </summary>
         public static Aff<RT, Map<string, ProcessId>> childrenInOrder(ProcessId pid) =>
-            children(pid).Map(static hm => hm.ToMap());
-
-        /// <summary>
-        /// Get the child processes of the process ID provided
-        /// </summary>
-        public static Aff<RT, Map<string, ProcessId>> childrenInOrder(Eff<RT, ProcessId> pid) =>
             children(pid).Map(static hm => hm.ToMap());
 
         /// <summary>
@@ -241,7 +229,7 @@ namespace Echo
         /// <remarks>
         /// This should be used from within a process' message loop only
         /// </remarks>
-        public static Eff<RT, Unit> killSelf =>
+        public static Eff<RT, Unit> kill() =>
             echoState.Map(es => es.InMessageLoop
                                     ? raise<Unit>(new ProcessKillException())
                                     : Process.raiseUseInMsgLoopOnlyException<Unit>(nameof(kill)));
@@ -253,7 +241,7 @@ namespace Echo
         /// state will have its state maintained for future spawns.  If you wish 
         /// for the data to be dropped then call Process.kill()
         /// </summary>
-        public static Aff<RT, Unit> shutdownSelf =>
+        public static Aff<RT, Unit> shutdown() =>
             Self.Bind(shutdown);
 
         /// <summary>
@@ -270,29 +258,10 @@ namespace Echo
             Eff(() => Process.kill(pid));
 
         /// <summary>
-        /// Kill a specified running process.
-        /// Forces the specified Process to shutdown.  The kill message jumps 
-        /// ahead of any messages already in the process's queue.  Any Process
-        /// that has a persistent inbox or state will also have its persistent
-        /// data wiped.  If the Process is registered it will also its 
-        /// registration revoked.
-        /// If you wish for the data to be maintained for future
-        /// spawns then call Process.shutdown(pid);
-        /// </summary>
-        public static Aff<RT, Unit> kill(Eff<RT, ProcessId> pid) =>
-            pid.Bind(kill);
-
-        /// <summary>
         /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
         /// </summary>
         public static Aff<RT, Unit> startup(ProcessId pid) =>
             Eff(() => Process.startup(pid));
-
-        /// <summary>
-        /// Send StartupProcess message to a process that isn't running (e.g. spawned with Lazy = true)
-        /// </summary>
-        public static Aff<RT, Unit> startup(Eff<RT, ProcessId> pid) =>
-            pid.Bind(startup);
 
         /// <summary>
         /// Shutdown a specified running process.
@@ -306,17 +275,6 @@ namespace Echo
             Eff(() => Process.shutdown(pid));
 
         /// <summary>
-        /// Shutdown a specified running process.
-        /// Forces the specified Process to shutdown.  The shutdown message jumps 
-        /// ahead of any messages already in the process's queue.  Any Process
-        /// that has a persistent inbox or state will have its state maintained
-        /// for future spawns.  If you wish for the data to be dropped then call
-        /// Process.kill(pid)
-        /// </summary>
-        public static Aff<RT, Unit> shutdown(Eff<RT, ProcessId> pid) =>
-            pid.Bind(shutdown);
-
-        /// <summary>
         /// Shutdown all processes on the specified process-system
         /// </summary>
         public static Aff<RT, Unit> shutdownSystem(SystemName system) =>
@@ -325,7 +283,7 @@ namespace Echo
         /// <summary>
         /// Shutdown all processes on all process-systems
         /// </summary>
-        public static Aff<RT, Unit> shutdownAll =>
+        public static Aff<RT, Unit> shutdownAll() =>
             Eff(Process.shutdownAll);
 
         /// <summary>
@@ -334,13 +292,6 @@ namespace Echo
         /// </summary>
         public static Aff<RT, Unit> restart(ProcessId pid) =>
             Eff(() => Process.restart(pid));
-
-        /// <summary>
-        /// Forces a running process to restart.  This will reset its state and drop
-        /// any subscribers, or any of its subscriptions.
-        /// </summary>
-        public static Aff<RT, Unit> restart(Eff<RT, ProcessId> pid) =>
-            pid.Bind(restart);
 
         /// <summary>
         /// Pauses a running process.  Messages will still be accepted into the Process'
@@ -354,15 +305,6 @@ namespace Echo
         /// <summary>
         /// Pauses a running process.  Messages will still be accepted into the Process'
         /// inbox (unless the inbox is full); but they won't be processed until the
-        /// Process is unpaused: <see cref="unpause(ProcessId)"/>
-        /// </summary>
-        /// <param name="pid">Process to pause</param>
-        public static Aff<RT, Unit> pause(Eff<RT, ProcessId> pid) =>
-            pid.Bind(pause);
-
-        /// <summary>
-        /// Pauses a running process.  Messages will still be accepted into the Process'
-        /// inbox (unless the inbox is full); but they won't be processed until the
         /// Process is unpaused: <see cref="unpause(ProcessId)"/> manually, or until the 
         /// delay expires.
         /// </summary>
@@ -371,30 +313,12 @@ namespace Echo
             Eff(() => Process.pauseFor(pid, delay));
 
         /// <summary>
-        /// Pauses a running process.  Messages will still be accepted into the Process'
-        /// inbox (unless the inbox is full); but they won't be processed until the
-        /// Process is unpaused: <see cref="unpause(ProcessId)"/> manually, or until the 
-        /// delay expires.
-        /// </summary>
-        /// <param name="pid">Process to pause</param>
-        public static Aff<RT, IDisposable> pauseFor(Eff<RT, ProcessId> pid, Time delay) =>
-            pid.Bind(p => pauseFor(p, delay));
-
-        /// <summary>
         /// Un-pauses a paused process.  Messages that have built-up in the inbox whilst
         /// the Process was paused will be Processed immediately.
         /// </summary>
         /// <param name="pid">Process to un-pause</param>
-        public static Aff<RT, Unit> unpause(ProcessId pid) =>
+        public static Eff<RT, Unit> unpause(ProcessId pid) =>
             Eff(() => Process.unpause(pid));
-
-        /// <summary>
-        /// Un-pauses a paused process.  Messages that have built-up in the inbox whilst
-        /// the Process was paused will be Processed immediately.
-        /// </summary>
-        /// <param name="pid">Process to un-pause</param>
-        public static Aff<RT, Unit> unpause(Eff<RT, ProcessId> pid) =>
-            pid.Bind(unpause);
 
         /// <summary>
         /// Find out if a process exists
@@ -412,21 +336,6 @@ namespace Echo
             Eff(() => Process.exists(pid));
 
         /// <summary>
-        /// Find out if a process exists
-        /// 
-        ///     Rules:
-        ///         * Local processes   - the process must actually be alive and in-memory
-        ///         * Remote processes  - the process must have an inbox to receive messages 
-        ///                               and may be active, but it's not required.
-        ///         * Dispatchers/roles - at least one process in the collection must exist(pid)
-        ///         * JS processes      - not current supported
-        /// </summary>
-        /// <param name="pid">Process ID to check</param>
-        /// <returns>True if exists</returns>
-        public static Aff<RT, bool> exists(Eff<RT, ProcessId> pid) =>
-            pid.Bind(exists);
-
-        /// <summary>
         /// Find out if a process exists and is alive
         /// 
         ///     Rules:
@@ -441,20 +350,6 @@ namespace Echo
             Eff(() => Process.ping(pid));
 
         /// <summary>
-        /// Find out if a process exists and is alive
-        /// 
-        ///     Rules:
-        ///         * Local processes   - the process must actually be running
-        ///         * Remote processes  - the process must actually be running
-        ///         * Dispatchers/roles - at least one process in the collection must be running
-        ///         * JS processes      - not current supported
-        /// </summary>
-        /// <param name="pid">Process ID to check</param>
-        /// <returns>True if exists</returns>
-        public static Aff<RT, bool> ping(Eff<RT, ProcessId> pid) =>
-            pid.Bind(ping);
-
-        /// <summary>
         /// Watch another Process in case it terminates
         /// </summary>
         /// <param name="pid">Process to watch</param>
@@ -462,25 +357,11 @@ namespace Echo
             Eff(() => Process.watch(pid));
 
         /// <summary>
-        /// Watch another Process in case it terminates
-        /// </summary>
-        /// <param name="pid">Process to watch</param>
-        public static Aff<RT, Unit> watch(Eff<RT, ProcessId> pid) =>
-            pid.Bind(watch);
-
-        /// <summary>
         /// Un-watch another Process that this Process has been watching
         /// </summary>
         /// <param name="pid">Process to watch</param>
         public static Aff<RT, Unit> unwatch(ProcessId pid) =>
             Eff(() => Process.unwatch(pid));
-
-        /// <summary>
-        /// Un-watch another Process that this Process has been watching
-        /// </summary>
-        /// <param name="pid">Process to watch</param>
-        public static Aff<RT, Unit> unwatch(Eff<RT, ProcessId> pid) =>
-            pid.Bind(unwatch);
 
         /// <summary>
         /// Watch for the death of the watching process and tell the watcher
@@ -492,18 +373,6 @@ namespace Echo
             Eff(() => Process.watch(watcher, watching));
 
         /// <summary>
-        /// Watch for the death of the watching process and tell the watcher
-        /// process when that happens.
-        /// </summary>
-        /// <param name="watcher">Watcher</param>
-        /// <param name="watching">Watched</param>
-        public static Aff<RT, Unit> watch(Eff<RT, ProcessId> watcher, Eff<RT, ProcessId> watching) =>
-            from w1 in watcher
-            from w2 in watching
-            from rt in watch(w1, w2)
-            select unit;
-
-        /// <summary>
         /// Stop watching for the death of the watching process
         /// </summary>
         /// <param name="watcher">Watcher</param>
@@ -512,31 +381,12 @@ namespace Echo
             Eff(() => Process.unwatch(watcher, watching));
 
         /// <summary>
-        /// Stop watching for the death of the watching process
-        /// </summary>
-        /// <param name="watcher">Watcher</param>
-        /// <param name="watching">Watched</param>
-        public static Aff<RT, Unit> unwatch(Eff<RT, ProcessId> watcher, Eff<RT, ProcessId> watching) =>
-            from w1 in watcher
-            from w2 in watching
-            from rt in unwatch(w1, w2)
-            select unit;
-
-        /// <summary>
         /// Find the number of items in the Process inbox
         /// </summary>
         /// <param name="pid">Process</param>
         /// <returns>Number of items in the Process inbox</returns>
         public static Aff<RT, int> inboxCount(ProcessId pid) =>
             Eff(() => Process.inboxCount(pid));
-
-        /// <summary>
-        /// Find the number of items in the Process inbox
-        /// </summary>
-        /// <param name="pid">Process</param>
-        /// <returns>Number of items in the Process inbox</returns>
-        public static Aff<RT, int> inboxCount(Eff<RT, ProcessId> pid) =>
-            pid.Bind(inboxCount);
 
         /// <summary>
         /// Return True if the message sent is a Tell and not an Ask
@@ -562,12 +412,6 @@ namespace Echo
             echoState.Map(es => es.SystemNames.ToSeq());
 
         /// <summary>
-        /// Contextual system name
-        /// </summary>
-        public static Eff<RT, SystemName> CurrentSystem =>
-            echoState.Map(es => es.System.SystemName);
-
-        /// <summary>
         /// Return True if the message sent is an Ask and not a Tell
         /// </summary>
         /// <remarks>
@@ -590,19 +434,6 @@ namespace Echo
             Eff(() => ActorContext.System(pid).ResolveProcessIdSelection(pid));
 
         /// <summary>
-        /// Resolves a ProcessId into the absolute ProcessIds that it represents
-        /// This allows live resolution of role-based ProcessIds to their real node
-        /// ProcessIds.  
-        /// </summary>
-        /// <remarks>Mostly useful for debugging, but could be useful for layering
-        /// additional logic to any message dispatch.
-        /// </remarks>
-        /// <param name="pid"></param>
-        /// <returns>Enumerable of resolved ProcessIds - could be zero length</returns>
-        public static Eff<RT, IEnumerable<ProcessId>> resolve(Eff<RT, ProcessId> pid) =>
-            pid.Bind(resolve);
-
-        /// <summary>
         /// Get the types of messages that the provided ProcessId accepts.  Returns
         /// an empty list if it can't be resolved for whatever reason (process doesn't
         /// exist/JS process/etc.).
@@ -613,25 +444,9 @@ namespace Echo
             Eff(() => ActorContext.System(pid).GetDispatcher(pid).GetValidMessageTypes());
 
         /// <summary>
-        /// Get the types of messages that the provided ProcessId accepts.  Returns
-        /// an empty list if it can't be resolved for whatever reason (process doesn't
-        /// exist/JS process/etc.).
-        /// </summary>
-        /// <param name="pid">Process ID to query</param>
-        /// <returns>List of types</returns>
-        public static Aff<RT, IEnumerable<Type>> validMessageTypes(Eff<RT, ProcessId> pid) =>
-            pid.Bind(validMessageTypes);
-
-        /// <summary>
         /// Cancel an already scheduled message
         /// </summary>
         public static Aff<RT, Unit> cancelScheduled(ProcessId pid, string key) =>
             Eff(() => Process.cancelScheduled(pid, key));
-
-        /// <summary>
-        /// Cancel an already scheduled message
-        /// </summary>
-        public static Aff<RT, Unit> cancelScheduled(Eff<RT, ProcessId> pid, string key) =>
-            pid.Bind(p => cancelScheduled(p, key));
     }
 }

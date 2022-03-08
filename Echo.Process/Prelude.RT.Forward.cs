@@ -33,23 +33,8 @@ namespace Echo
         /// Forward a message
         /// </summary>
         /// <param name="pid">Process ID to send to</param>
-        /// <param name="message">Message to send</param>
-        public static Aff<RT, Unit> fwd<T>(Eff<RT, ProcessId> pid, T message) =>
-            pid.Bind(p => fwd(p, message));
-
-        /// <summary>
-        /// Forward a message
-        /// </summary>
-        /// <param name="pid">Process ID to send to</param>
         public static Aff<RT, Unit> fwd(ProcessId pid) =>
             Eff(() => Process.fwd(pid));
-
-        /// <summary>
-        /// Forward a message
-        /// </summary>
-        /// <param name="pid">Process ID to send to</param>
-        public static Aff<RT, Unit> fwd(Eff<RT, ProcessId> pid) =>
-            pid.Bind(fwd);
 
         /// <summary>
         /// Forward a message to a named child process

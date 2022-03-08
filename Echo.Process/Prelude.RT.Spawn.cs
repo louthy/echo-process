@@ -55,6 +55,7 @@ namespace Echo
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<ProcessId, Aff<RT, Unit>> Terminated = null,
             Func<Aff<RT, Unit>> Shutdown = null,
+            SystemName System = default(SystemName),
             bool Lazy = false) =>
             spawn<Unit, T>(
                 Name,
@@ -65,6 +66,7 @@ namespace Echo
                 MaxMailboxSize,
                 (_, p) => (Terminated ??= (_ => unitAff))(p).Map(static _ => unit),
                 _ => (Shutdown ??= (() => unitAff))().Map(static _ => unit),
+                System,
                 Lazy);
 
         /// <summary>
@@ -87,6 +89,7 @@ namespace Echo
         /// startup(processId) manually</param>
         /// <param name="MaxMailboxSize">Maximum number of messages to queue</param>
         /// <param name="Shutdown">Optional shutdown function</param>
+        /// <param name="System">Echo process system to spawn in</param>
         /// <returns>A ProcessId that identifies the child</returns>
         public static Eff<RT, ProcessId> spawn<S, T>(
             ProcessName Name,
@@ -97,6 +100,7 @@ namespace Echo
             int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
             Func<S, ProcessId, Aff<RT, S>> Terminated = null,
             Func<S, Aff<RT, Unit>> Shutdown = null,
+            SystemName System = default(SystemName),
             bool Lazy = false)
         {
             Shutdown   ??= (s => unitAff);
@@ -124,17 +128,7 @@ namespace Echo
             return Eff<RT, ProcessId>(
                 rt => {
                     var lrt = rt.LocalCancel;
-                    return Process.spawnAsync(
-                        Name, 
-                        setup(lrt, Setup), 
-                        inbox(lrt, Inbox), 
-                        Flags, 
-                        Strategy, 
-                        MaxMailboxSize, 
-                        term(lrt, Terminated), 
-                        shut(lrt, Shutdown), 
-                        lrt.EchoState.System.SystemName, 
-                        Lazy);
+                    return Process.spawnAsync(Name, setup(lrt, Setup), inbox(lrt, Inbox), Flags, Strategy, MaxMailboxSize, term(lrt, Terminated), shut(lrt, Shutdown), System, Lazy);
                 });
         }
 
