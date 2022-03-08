@@ -8,7 +8,7 @@ using static Echo.Process<Echo.Runtime>;
 using static LanguageExt.Prelude;
 using static LanguageExt.Sys.Console<Echo.Runtime>;
 
-const int interval = 1000;  
+const int interval = 100000;  
 
 // Simple logging of errors
 Process.ProcessSystemLog.Subscribe(System.Console.WriteLine);
@@ -21,6 +21,7 @@ var runtime = Runtime.New(EchoState<Runtime>.Default);
 
 
 // Launch three processes
+
 var application = from logger in spawn<D.Stopwatch, string>("logger", startWatch(), loggerInbox)
                   from ping   in spawn<int>("ping", pingInbox, Shutdown: shutdownInbox)
                   from pong   in spawn<int>("pong", pongInbox, Shutdown: shutdownInbox)
@@ -31,6 +32,7 @@ var application = from logger in spawn<D.Stopwatch, string>("logger", startWatch
                   from _3     in writeLine("Shutting down...")
                   
                   from _4     in shutdownAll
+                  
                   from _5     in writeLine("Goodbye!")
                   
                   select unit;
@@ -39,7 +41,8 @@ await application.Run(runtime);
 
 // Ping process inbox 
 Aff<Runtime, Unit> pingInbox(int n) =>
-    from _1 in when(n % interval == 0, tell(User.Child("logger"), $"{n}"))
+    from lg in User.Map(u => u.Child("logger"))
+    from _1 in when(n % interval == 0, tell(lg, $"{n}"))
     from _2 in tell(Sender, n + 1)
     select unit;
 
