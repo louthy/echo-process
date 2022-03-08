@@ -204,7 +204,7 @@ namespace Echo
             var nodes24 = ClusterNodes24(system);
             for (var i = -1; i >= -24; i--)
             {
-                nodes = nodes24.Filter(node => node.LastHeartbeat > now.AddHours(i) && node.Role == leaf.Take(1).Name);
+                nodes = nodes24.Filter(node => node.LastHeartbeat > now.AddHours(i));
                 if (nodes.Count != 0) return nodes;
             }
             return Empty;
