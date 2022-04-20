@@ -14,7 +14,6 @@ namespace OwinWebTest
     {
         public void Configuration(IAppBuilder app)
         {
-            ProcessConfig.initialise();
             ProcessOwin.initialise(app);
         }
     }

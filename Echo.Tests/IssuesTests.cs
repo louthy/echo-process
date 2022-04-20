@@ -10,6 +10,7 @@ namespace Echo.Tests
 {
     public class IssuesTests
     {
+        [Collection("Initialise")]
         public class Issue31
         {
             public class AskFixture : IDisposable
@@ -33,7 +34,7 @@ namespace Echo.Tests
                 public void Dispose() => shutdownAll();
             }
 
-            [Collection("no-parallelism")]
+
             public class AskError : IClassFixture<AskFixture>, IDisposable
             {
                 //public readonly ITestOutputHelper Output;
@@ -66,8 +67,7 @@ namespace Echo.Tests
             }
         }
     }
-    
-    [Collection("no-parallelism")]
+
     public class Issue69ForKill
     {
         [Fact(Timeout = 5000)]
@@ -86,7 +86,6 @@ namespace Echo.Tests
             var res = ask<int>(parent, "ask");
 
             Assert.True(res == 1);
-            shutdownAll();
         }
 
         static void ParentInbox(string cmd) =>
@@ -102,7 +101,6 @@ namespace Echo.Tests
                 (s, _) => s);
     }
 
-    [Collection("no-parallelism")]
     public class Issue69ForShutdown
     {
         [Fact(Timeout = 5000)]
@@ -125,7 +123,6 @@ namespace Echo.Tests
             var res = ask<int>(pid, -1);
 
             Assert.True(res == 1);
-            shutdownAll();
         }
 
         static void ParentInbox(int id) =>

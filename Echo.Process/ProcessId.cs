@@ -83,7 +83,7 @@ namespace Echo
 
         public static Either<Exception, ProcessId> TryParse(string path)
         {
-            if (string.IsNullOrEmpty(path))
+            if (path == null || path.Length == 0)
             {
                 return new InvalidProcessIdException();
             }
@@ -94,7 +94,7 @@ namespace Echo
             {
                 var end = path.IndexOf(Sep, 2);
                 end = end == -1
-                    ? path.IndexOf("@", 2, StringComparison.Ordinal)
+                    ? path.IndexOf("@", 2)
                     : end;
 
                 if(end == -1)
@@ -313,7 +313,9 @@ namespace Echo
         /// </summary>
         [JsonIgnore]
         public bool IsSelection =>
-            value != null && value.Parts.Length != 0 && value.Parts[0].IsSelection;
+            value == null || value.Parts.Length == 0
+                ? false
+                : value.Parts[0].IsSelection;
 
         /// <summary>
         /// If this ProcessId represents a selection of N process paths then

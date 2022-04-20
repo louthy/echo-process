@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 using static Echo.Process;
 using static LanguageExt.Prelude;
-using System.Collections.Concurrent;
+//using Microsoft.FSharp.Control;
 using Echo.ActorSys;
 using LanguageExt;
 
@@ -14,21 +12,17 @@ namespace Echo
     class ActorInboxRemote<S,T> : IActorInbox
     {
         ICluster cluster;
+        PausableBlockingQueue<string> userNotify;
         Actor<S, T> actor;
-        IActorSystem system;
         ActorItem parent;
         int maxMailboxSize;
-        bool shutdownRequested = false;
-        readonly ConcurrentQueue<RemoteMessageDTO> sysInboxQueue = new();
-        volatile int drainingUserQueue = 0;
-        volatile int drainingSystemQueue = 0;
-        volatile int paused = 1;
+        int scheduledItems;
+        object sync = new object();
 
-        public Unit Startup(IActor process, IActorSystem system, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
+        public Unit Startup(IActor process, ActorItem parent, Option<ICluster> cluster, int maxMailboxSize)
         {
             if (cluster.IsNone) throw new Exception("Remote inboxes not supported when there's no cluster");
-            this.actor   = (Actor<S, T>)process;
-            this.system  = system; 
+            this.actor = (Actor<S, T>)process;
             this.cluster = cluster.IfNoneUnsafe(() => null);
 
             this.maxMailboxSize = maxMailboxSize == -1
@@ -37,300 +31,209 @@ namespace Echo
 
             this.parent = parent;
 
-            this.cluster.SetValue(ActorInboxCommon.ClusterMetaDataKey(actor.Id),
-                                  new ProcessMetaData(
-                                      new[] {typeof(T).AssemblyQualifiedName},
-                                      typeof(S).AssemblyQualifiedName,
-                                      typeof(S).GetTypeInfo().ImplementedInterfaces.Map(x => x.AssemblyQualifiedName).ToArray()));
+            userNotify = new PausableBlockingQueue<string>(this.maxMailboxSize);
+
+            var obj = new ThreadObj { Actor = actor, Inbox = this, Parent = parent };
+            userNotify.ReceiveAsync(obj, (state, msg) => { CheckRemoteInbox(ActorInboxCommon.ClusterUserInboxKey(state.Actor.Id), true); return InboxDirective.Default; });
 
             SubscribeToSysInboxChannel();
             SubscribeToUserInboxChannel();
 
-            Unpause();
+            this.cluster.SetValue(ActorInboxCommon.ClusterMetaDataKey(actor.Id), new ProcessMetaData(
+                new[] { typeof(T).AssemblyQualifiedName },
+                typeof(S).AssemblyQualifiedName,
+                typeof(S).GetTypeInfo().ImplementedInterfaces.Map(x => x.AssemblyQualifiedName).ToArray()
+                ));
 
-            DrainSystemQueue();
-            DrainUserQueue();
- 
             return unit;
         }
+
+        class ThreadObj
+        {
+            public Actor<S, T> Actor;
+            public ActorInboxRemote<S, T> Inbox;
+            public ActorItem Parent;
+        }
+
+        int MailboxSize =>
+            maxMailboxSize < 0
+                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
+                : maxMailboxSize;
 
         void SubscribeToSysInboxChannel()
         {
             // System inbox is just listening to the notifications, that means that system
             // messages don't persist.
             cluster.UnsubscribeChannel(ActorInboxCommon.ClusterSystemInboxNotifyKey(actor.Id));
-            cluster.SubscribeToChannel<RemoteMessageDTO>(ActorInboxCommon.ClusterSystemInboxNotifyKey(actor.Id)).Subscribe(PostSysInbox);
-            DrainSystemQueue();
+            cluster.SubscribeToChannel<RemoteMessageDTO>(ActorInboxCommon.ClusterSystemInboxNotifyKey(actor.Id)).Subscribe(SysInbox);
         }
 
         void SubscribeToUserInboxChannel()
         {
             cluster.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
-            cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id)).Subscribe(_ => DrainUserQueue());
-            DrainUserQueue();
+            cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id)).Subscribe(msg => userNotify.Post(msg));
+            // We want the check done asyncronously, in case the setup function creates child processes that
+            // won't exist if we invoke directly.
+            cluster.PublishToChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id), Guid.NewGuid().ToString());
         }
 
-        /// <summary>
-        /// Size of user mailbox
-        /// </summary>
-        int MailboxSize =>
-            maxMailboxSize < 0
-                ? ActorContext.System(actor.Id).Settings.GetProcessMailboxSize(actor.Id)
-                : maxMailboxSize;
+        void SubscribeToScheduleInboxChannel()
+        {
+            cluster.UnsubscribeChannel(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id));
+            cluster.SubscribeToChannel<string>(ActorInboxCommon.ClusterScheduleNotifyKey(actor.Id)).Subscribe(msg => scheduledItems++);
+            // We want the check done asyncronously, in case the setup function creates child processes that
+            // won't exist if we invoke directly.
 
-        /// <summary>
-        /// True if paused
-        /// </summary>
-        public bool IsPaused =>
-            paused == 1;
+            // TODO: Consider the implications of race condition here --- will probably need some large 'clear out' process that does a query
+            //       on the cluster.  Or maybe this internal counter isn't the best approach.
+            scheduledItems = cluster.GetHashFields(ActorInboxCommon.ClusterScheduleKey(actor.Id)).Count; 
+        }
 
-        /// <summary>
-        /// Pause the inbox
-        /// </summary>
+        public bool IsPaused
+        {
+            get;
+            private set;
+        }
+
         public Unit Pause()
         {
-            if (Interlocked.CompareExchange(ref paused, 1, 0) == 0)
+            lock (sync)
             {
-                cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
+                if (!IsPaused)
+                {
+                    IsPaused = true;
+                    cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
+                }
             }
             return unit;
         }
 
-        /// <summary>
-        /// Unpause the inbox
-        /// </summary>
         public Unit Unpause()
         {
-            if (Interlocked.CompareExchange(ref paused, 0, 1) == 1)
+            lock (sync)
             {
-                SubscribeToUserInboxChannel();
-                DrainUserQueue();
+                if (IsPaused)
+                {
+                    IsPaused = false;
+                    SubscribeToUserInboxChannel();
+                }
             }
             return unit;
         }
 
         /// <summary>
-        /// Enqueues the system message and wakes up the system-queue process-loop if necessary
+        /// TODO: This is a combination of code in ActorCommon.GetNextMessage and
+        ///       CheckRemoteInbox.  Some factoring is needed.
         /// </summary>
-        void PostSysInbox(RemoteMessageDTO msg)
+        void SysInbox(RemoteMessageDTO dto)
         {
-            sysInboxQueue.Enqueue(msg);
-            DrainSystemQueue();
-        }
-
-        /// <summary>
-        /// If the draining of the queue isn't running, fire it off asynchronously
-        /// </summary>
-        Unit DrainSystemQueue()
-        {
-            if (system.IsActive && 
-                sysInboxQueue.Count > 0 &&
-                Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0)
+            try
             {
-                Task.Run(DrainSystemQueueAsync);
-            }
-            return unit;
-        }
+                if (dto == null)
+                {
+                    // Failed to deserialise properly
+                    return;
+                }
+                if (dto.Tag == 0 && dto.Type == 0)
+                {
+                    // Message is bad
+                    tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, null, "Failed to deserialise message: ", dto));
+                    return;
+                }
+                var msg = MessageSerialiser.DeserialiseMsg(dto, actor.Id);
 
-        /// <summary>
-        /// System inbox
-        /// </summary>
-        async ValueTask<Unit> DrainSystemQueueAsync()
-        {
-            bool first = true;
-            while (system.IsActive &&
-                   sysInboxQueue.Count > 0 &&
-                   (first || Interlocked.CompareExchange(ref drainingSystemQueue, 1, 0) == 0))
-            {
-                first = false;
                 try
                 {
-                    // Keep processing whilst we're not shutdown or there's something in the queue
-                    while (!shutdownRequested && system.IsActive)
+                    lock(sync)
                     {
-                        if (sysInboxQueue.TryDequeue(out var dto))
-                        {
-                            if (dto == null)
-                            {
-                                // Failed to deserialise properly
-                                continue;
-                            }
-
-                            if (dto.Tag == 0 && dto.Type == 0)
-                            {
-                                // Message is bad
-                                tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, null, "Failed to deserialise message: ", dto));
-                                return unit;
-                            }
-
-                            try
-                            {
-                                var msg = MessageSerialiser.DeserialiseMsg(dto, actor.Id);
-                                if (msg is SystemMessage sysMsg)
-                                {
-                                    sysMsg.ConversationId = dto.ConversationId;
-
-                                    // Run the system inbox
-                                    switch (await ActorInboxCommon.SystemMessageInbox(actor, this, sysMsg, parent).ConfigureAwait(false))
-                                    {
-                                        case InboxDirective.Pause:
-                                            Pause();
-                                            return unit;
-                                        case InboxDirective.Shutdown:
-                                            Shutdown();
-                                            return unit;
-                                        default: continue;
-                                    }
-                                }
-                                else
-                                {
-                                    // Failed to deal with the message, it's not a SystemMessage, so post to dead letters
-                                    tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, "Remote message inbox: not a system message.", msg));
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                // Failed to deal with the message, so post to dead letters
-                                tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, e, "Remote message inbox.", dto));
-                                logSysErr(e);
-                            }
-                        }
-                        else
-                        {
-                            // Nothing left in the queue, so return
-                            break;
-                        }
+                        ActorInboxCommon.SystemMessageInbox(actor, this, (SystemMessage)msg, parent);
                     }
                 }
                 catch (Exception e)
                 {
+                    var session = msg.SessionId == null
+                        ? None
+                        : Some(new SessionId(msg.SessionId));
+
+                    ActorContext.System(actor.Id).WithContext(new ActorItem(actor, this, actor.Flags), parent, dto.Sender, msg as ActorRequest, msg, session, () => replyErrorIfAsked(e));
+                    tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, e, "Remote message inbox.", msg));
                     logSysErr(e);
                 }
-                finally
-                {
-                    Interlocked.CompareExchange(ref drainingSystemQueue, 0, 1);
-                }
             }
-
-            return unit;
+            catch (Exception e)
+            {
+                logSysErr(e);
+            }
         }
 
-        Unit DrainUserQueue()
+        void CheckRemoteInbox(string key, bool pausable)
         {
-            var key = ActorInboxCommon.ClusterUserInboxKey(actor.Id); 
-            
-            if (!shutdownRequested && 
-                !IsPaused && 
-                system.IsActive && 
-                (cluster?.QueueLength(key) ?? 0) > 0 &&
-                Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0)
-            {
-                Task.Run(() => DrainUserQueueAsync(key));
-            }
-            return unit;
-        }
+            var inbox = this;
+            var count = cluster?.QueueLength(key) ?? 0;
 
-        async ValueTask<Unit> DrainUserQueueAsync(string key)
-        {
-            bool first = true;
-            while (!shutdownRequested &&
-                   !IsPaused &&
-                   system.IsActive &&
-                   (cluster?.QueueLength(key) ?? 0) > 0 &&
-                   (first || Interlocked.CompareExchange(ref drainingUserQueue, 1, 0) == 0))
+            while (count > 0 && (!pausable || !IsPaused))
             {
-                first = false;
-                try
-                {
-                    var inbox = this;
-                    var count = cluster?.QueueLength(key) ?? 0;
+                var directive = InboxDirective.Default;
 
-                    while (!IsPaused && !shutdownRequested && system.IsActive && count > 0)
+                ActorInboxCommon.GetNextMessage(cluster, actor.Id, key).IfSome(
+                    x => iter(x, (dto, msg) =>
                     {
-                        if (ActorInboxCommon.GetNextMessage(cluster, actor.Id, key).Case is ValueTuple<RemoteMessageDTO, Message> m)
+                        try
                         {
-                            var dto = m.Item1;
-                            var msg = m.Item2;
-                            msg.ConversationId = dto.ConversationId;
-                            try
+                            switch (msg.MessageType)
                             {
-                                var directive = msg.MessageType switch
-                                                {
-                                                    Message.Type.User =>
-                                                        await ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage) msg, parent)
-                                                                              .ConfigureAwait(false),
-
-                                                    Message.Type.UserControl =>
-                                                        await ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage) msg, parent)
-                                                                              .ConfigureAwait(false),
-
-                                                    _ => InboxDirective.Default
-                                                };
-
-                                switch (directive)
-                                {
-                                    case InboxDirective.Default:
-                                        cluster?.Dequeue<RemoteMessageDTO>(key);
-                                        count--;
-                                        break;
-                                    case InboxDirective.Pause:
-                                        cluster?.Dequeue<RemoteMessageDTO>(key);
-                                        return Pause();
-
-                                    case InboxDirective.PushToFrontOfQueue:
-                                        break;
-
-                                    case InboxDirective.Shutdown:
-                                        cluster?.Dequeue<RemoteMessageDTO>(key);
-                                        return Shutdown();
-
-                                    default:
-                                        throw new InvalidOperationException("unknown directive");
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                cluster?.Dequeue<RemoteMessageDTO>(key);
-                                count--;
-                                var session = msg.SessionId == null ? None : Some(new SessionId(msg.SessionId));
-                                await ActorContext.System(actor.Id)
-                                                  .WithContext(new ActorItem(actor, inbox, actor.Flags),
-                                                               parent,
-                                                               dto.Sender,
-                                                               msg as ActorRequest,
-                                                               msg,
-                                                               session,
-                                                               dto.ConversationId,
-                                                               () => replyErrorIfAsked(e).AsValueTask()).ConfigureAwait(false);
-
-                                tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, e, "Remote message inbox.", msg));
-                                logSysErr(e);
+                                case Message.Type.User:        directive = ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
+                                case Message.Type.UserControl: directive = ActorInboxCommon.UserMessageInbox(actor, inbox, (UserControlMessage)msg, parent); break;
                             }
                         }
-                    }
-                }
-                finally
-                {
-                    Interlocked.CompareExchange(ref drainingUserQueue, 0, 1);
-                }
+                        catch (Exception e)
+                        {
+                            var session = msg.SessionId == null
+                                ? None
+                                : Some(new SessionId(msg.SessionId));
 
-                // If we're processing a lot, let's give the scheduler a chance to do something else
-                Thread.Yield();
+                            ActorContext.System(actor.Id).WithContext(new ActorItem(actor, inbox, actor.Flags), parent, dto.Sender, msg as ActorRequest, msg, session, () => replyErrorIfAsked(e));
+                            tell(ActorContext.System(actor.Id).DeadLetters, DeadLetter.create(dto.Sender, actor.Id, e, "Remote message inbox.", msg));
+                            logSysErr(e);
+                        }
+                        finally
+                        {
+                            if ((directive & InboxDirective.Pause) != 0)
+                            {
+                                IsPaused = true;
+                                directive = directive & (~InboxDirective.Pause);
+                            }
+
+                            if (directive == InboxDirective.Default)
+                            {
+                                cluster?.Dequeue<RemoteMessageDTO>(key);
+                            }
+                        }
+                    }));
+
+                if (directive == InboxDirective.Default)
+                {
+                    count--;
+                }
             }
-            return unit;
         }
 
         public Unit Shutdown()
         {
-            shutdownRequested = true;
             Dispose();
             return unit;
         }
 
         public void Dispose()
         {
-            cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id));
-            cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterSystemInboxNotifyKey(actor.Id));
+            //tokenSource?.Cancel();
+            //tokenSource?.Dispose();
+            //tokenSource = null;
+
+            userNotify.Cancel();
+
+            try { cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterUserInboxNotifyKey(actor.Id)); } catch { };
+            try { cluster?.UnsubscribeChannel(ActorInboxCommon.ClusterSystemInboxNotifyKey(actor.Id)); } catch { };
             cluster = null;
         }
     }

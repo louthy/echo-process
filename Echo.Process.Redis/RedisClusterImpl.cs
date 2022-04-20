@@ -17,10 +17,13 @@ namespace Echo
     {
         const int TimeoutRetries = 5;
         readonly ClusterConfig config;
-        readonly object sync = new object();
+
+        object sync = new object();
         int databaseNumber;
         ConnectionMultiplexer redis;
-        readonly AtomHashMap<string, Subject<RedisValue>> subscriptions = AtomHashMap<string, Subject<RedisValue>>();
+
+        HashMap<string, Subject<RedisValue>> subscriptions = HashMap<string, Subject<RedisValue>>();
+        object subsync = new object();
 
         /// <summary>
         /// Ctor
@@ -44,7 +47,6 @@ namespace Echo
                 {
                     r.Close();
                 }
-
                 r.Dispose();
                 redis = null;
             }
@@ -79,12 +81,14 @@ namespace Echo
         {
             var databaseNumber = parseUInt(Config.CatalogueName).IfNone(() => raise<uint>(new ArgumentException("Parsing CatalogueName as a number that is 0 or greater, failed.")));
 
+            if (databaseNumber < 0) throw new ArgumentException(nameof(databaseNumber) + " should be 0 or greater.", nameof(databaseNumber));
+
             lock (sync)
             {
                 if (redis == null)
                 {
                     Retry(() => redis = ConnectionMultiplexer.Connect(Config.ConnectionString));
-                    this.databaseNumber = (int) databaseNumber;
+                    this.databaseNumber = (int)databaseNumber;
                 }
             }
         }
@@ -109,30 +113,38 @@ namespace Echo
         /// Publish data to a named channel
         /// </summary>
         public int PublishToChannel(string channelName, object data) =>
-            Retry(() => (int) redis.GetSubscriber().Publish(
-                      channelName + Config.CatalogueName,
-                      JsonConvert.SerializeObject(data)
-                  ));
+            Retry(() => (int)redis.GetSubscriber().Publish(
+                channelName + Config.CatalogueName,
+                JsonConvert.SerializeObject(data)
+            ));
 
         Subject<RedisValue> GetSubject(string channelName)
         {
             channelName += Config.CatalogueName;
-            
-            return subscriptions.FindOrAdd(
-                channelName,
-                () => {
-                    var subject = new Subject<RedisValue>();
-                    redis.GetSubscriber()
-                         .Subscribe(channelName,
-                                    (channel, value) => {
-                                        if (channel == channelName && !value.IsNullOrEmpty)
-                                        {
-                                            subject.OnNext(value);
-                                        }
-                                    });
-                    
-                    return subject;
-                });
+            Subject<RedisValue> subject = null;
+            lock (subsync)
+            {
+                if (subscriptions.ContainsKey(channelName))
+                {
+                    subject = subscriptions[channelName];
+                }
+                else
+                {
+                    subject = new Subject<RedisValue>();
+                    subscriptions = subscriptions.Add(channelName, subject);
+
+                    Retry(() =>redis.GetSubscriber().Subscribe(
+                        channelName,
+                        (channel, value) =>
+                        {
+                            if (channel == channelName && !value.IsNullOrEmpty)
+                            {
+                                subject.OnNext(value);
+                            }
+                        }));
+                }
+            }
+            return subject;
         }
 
         /// <summary>
@@ -140,47 +152,53 @@ namespace Echo
         /// </summary>
         public IObservable<Object> SubscribeToChannel(string channelName, Type type) =>
             GetSubject(channelName)
-               .Select(value => {
-                           try
-                           {
-                               return Some(Deserialise(value, type));
-                           }
-                           catch
-                           {
-                               return None;
-                           }
-                       })
-               .Where(x => x.IsSome)
-               .Select(x => x.IfNoneUnsafe(Ignore<Object>));
-
+                .Select(value => {
+                    try
+                    {
+                        return Some(Deserialise(value, type));
+                    }
+                    catch
+                    {
+                        return None;
+                    }
+                 })
+                .Where(x => x.IsSome)
+                .Select(x => x.IfNoneUnsafe(Ignore<Object>));
+ 
         public IObservable<T> SubscribeToChannel<T>(string channelName) =>
             GetSubject(channelName)
-               .Select(value => {
-                           try
-                           {
-                               return Some(JsonConvert.DeserializeObject<T>(value));
-                           }
-                           catch
-                           {
-                               return None;
-                           }
-                       })
-               .Where(x => x.IsSome)
-               .Select(x => x.IfNoneUnsafe(Ignore<T>));
+                .Select(value => {
+                    try
+                    {
+                        return Some(JsonConvert.DeserializeObject<T>(value));
+                    }
+                    catch
+                    {
+                        return None;
+                    }
+                 })
+                .Where(x => x.IsSome)
+                .Select(x => x.IfNoneUnsafe(Ignore<T>));
 
-        T Ignore<T>() =>
-            default(T);
+        T Ignore<T>() => default(T);
 
         public void UnsubscribeChannel(string channelName)
         {
             channelName += Config.CatalogueName;
+
             Retry(() => redis.GetSubscriber().Unsubscribe(channelName));
-            if (subscriptions.Find(channelName).Case is Subject<RedisValue> ch) ch.OnCompleted();
-            subscriptions.Remove(channelName);
+            lock (subsync)
+            {
+                if (subscriptions.ContainsKey(channelName))
+                {
+                    subscriptions[channelName].OnCompleted();
+                    subscriptions = subscriptions.Remove(channelName);
+                }
+            }
         }
 
         public void SetValue(string key, object value) =>
-            Retry(() => Db.StringSet(key, JsonConvert.SerializeObject(value), TimeSpan.FromDays(RedisCluster.maxDaysToPersistProcessState)));
+            Retry(() => Db.StringSet(key, JsonConvert.SerializeObject(value),TimeSpan.FromDays(RedisCluster.maxDaysToPersistProcessState)));
 
         public T GetValue<T>(string key) =>
             Retry(() => JsonConvert.DeserializeObject<T>(Db.StringGet(key)));
@@ -195,13 +213,13 @@ namespace Echo
             DeleteMany(keys.AsEnumerable());
 
         public bool DeleteMany(IEnumerable<string> keys) =>
-            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey) k).ToArray()) == keys.Count());
+            Retry(() => Db.KeyDelete(keys.Map(k => (RedisKey)k).ToArray()) == keys.Count());
 
         public int QueueLength(string key) =>
-            Retry(() => (int) Db.ListLength(key));
+            Retry(() => (int)Db.ListLength(key));
 
         public int Enqueue(string key, object value) =>
-            Retry(() => (int) Db.ListRightPush(key, JsonConvert.SerializeObject(value)));
+            Retry(() => (int)Db.ListRightPush(key, JsonConvert.SerializeObject(value)));
 
         public T Peek<T>(string key)
         {
@@ -222,7 +240,7 @@ namespace Echo
             {
                 return Retry(() => JsonConvert.DeserializeObject<T>(Db.ListLeftPop(key)));
             }
-            catch
+            catch 
             {
                 return default(T);
             }
@@ -236,20 +254,15 @@ namespace Echo
             if (Exists(key))
             {
                 return Retry(() =>
-                                 Db.ListRange(key)
-                                   .Select(x => {
-                                               try
-                                               {
-                                                   return SomeUnsafe(JsonConvert.DeserializeObject<T>(x));
-                                               }
-                                               catch
-                                               {
-                                                   return OptionUnsafe<T>.None;
-                                               }
-                                           })
-                                   .Where(x => x.IsSome)
-                                   .Select(x => x.IfNoneUnsafe(Ignore<T>))
-                                   .ToList());
+                           Db.ListRange(key)
+                             .Select(x =>
+                             {
+                                 try { return SomeUnsafe(JsonConvert.DeserializeObject<T>(x)); }
+                                 catch { return OptionUnsafe<T>.None; }
+                             })
+                             .Where( x => x.IsSome)
+                             .Select( x => x.IfNoneUnsafe(Ignore<T>) )
+                             .ToList());
             }
             else
             {
@@ -258,76 +271,85 @@ namespace Echo
         }
 
         public bool SetExpire(string key, TimeSpan time) =>
-            Retry(() => Db.KeyExpire(key, time));
+            Retry(() =>
+                Db.KeyExpire(key, time));
 
         public void SetAddOrUpdate<T>(string key, T value) =>
-            Retry(() => Db.SetAdd(key, JsonConvert.SerializeObject(value)));
+            Retry(() =>
+                Db.SetAdd(key, JsonConvert.SerializeObject(value)));
 
         public Set<T> GetSet<T>(string key) =>
-            Retry(() => toSet(Db.SetMembers(key).Map(x => JsonConvert.DeserializeObject<T>(x))));
+            Retry(() =>
+                toSet(Db.SetMembers(key).Map(x => JsonConvert.DeserializeObject<T>(x))));
 
         public void SetRemove<T>(string key, T value) =>
-            Retry(() => Db.SetRemove(key, JsonConvert.SerializeObject(value)));
+            Retry(() =>
+                Db.SetRemove(key, JsonConvert.SerializeObject(value)));
 
         public bool SetContains<T>(string key, T value) =>
-            Retry(() => Db.SetContains(key, JsonConvert.SerializeObject(value)));
+            Retry(() =>
+                Db.SetContains(key, JsonConvert.SerializeObject(value)));
 
         public bool HashFieldExists(string key, string field) =>
-            Retry(() => Db.HashExists(key, field));
+            Retry(() =>
+                Db.HashExists(key, field));
 
         public void HashFieldAddOrUpdate<T>(string key, string field, T value) =>
-            Retry(() => Db.HashSet(key, field, JsonConvert.SerializeObject(value)));
+            Retry(() =>
+                Db.HashSet(key, field, JsonConvert.SerializeObject(value)));
 
         public void HashFieldAddOrUpdate<T>(string key, HashMap<string, T> fields) =>
             Retry(() =>
-                      Db.HashSet(
-                          key,
-                          fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
-                      ));
+                Db.HashSet(
+                    key, 
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
+                    ));
 
         public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, string field, T value) =>
-            Retry(() => {
-                      var trans = Db.CreateTransaction();
-                      trans.AddCondition(Condition.KeyExists(key));
-                      trans.HashSetAsync(key, field, JsonConvert.SerializeObject(value));
-                      return trans.Execute();
-                  });
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(key, field, JsonConvert.SerializeObject(value));
+                return trans.Execute();
+            });
 
         public bool HashFieldAddOrUpdateIfKeyExists<T>(string key, HashMap<string, T> fields) =>
-            Retry(() => {
-                      var trans = Db.CreateTransaction();
-                      trans.AddCondition(Condition.KeyExists(key));
-                      trans.HashSetAsync(
-                          key,
-                          fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
-                      );
+            Retry(() =>
+            {
+                var trans = Db.CreateTransaction();
+                trans.AddCondition(Condition.KeyExists(key));
+                trans.HashSetAsync(
+                    key,
+                    fields.Map((_, v) => new HashEntry(v.Key, JsonConvert.SerializeObject(v.Value))).ToArray()
+                    );
 
-                      return trans.Execute();
-                  });
+                return trans.Execute();
+            });
 
         public bool DeleteHashField(string key, string field) =>
             Retry(() =>
-                      Db.HashDelete(key, field));
+                Db.HashDelete(key, field));
 
         public int DeleteHashFields(string key, IEnumerable<string> fields) =>
             Retry(() =>
-                      (int) Db.HashDelete(key, fields.Map(x => (RedisValue) x).ToArray()));
+                (int)Db.HashDelete(key, fields.Map(x => (RedisValue)x).ToArray()));
 
         public HashMap<string, object> GetHashFields(string key) =>
             Retry(() =>
-                      Db.HashGetAll(key)
-                        .Fold(
-                             HashMap<string, object>(),
-                             (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value)))
-                        .Filter(notnull));
+                Db.HashGetAll(key)
+                  .Fold(
+                    HashMap<string, object>(),
+                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject(e.Value)))
+                  .Filter((object v) => notnull(v)));
 
         public HashMap<string, T> GetHashFields<T>(string key) =>
             Retry(() =>
-                      Db.HashGetAll(key)
-                        .Fold(
-                             HashMap<string, T>(),
-                             (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
-                        .Filter(notnull<T>));
+                Db.HashGetAll(key)
+                  .Fold(
+                    HashMap<string, T>(),
+                    (m, e) => m.Add(e.Name, JsonConvert.DeserializeObject<T>(e.Value)))
+                  .Filter(v => notnull<T>(v)));
 
         /// <summary>
         /// tries to deserialise redis object (hash field) to T, if fail, the object is skipped.
@@ -339,7 +361,7 @@ namespace Echo
         {
             var res = Retry(() => Db.HashGet(key, field));
 
-            if (res.IsNullOrEmpty)
+            if(res.IsNullOrEmpty)
             {
                 return None;
             }
@@ -348,19 +370,19 @@ namespace Echo
             {
                 return Optional(JsonConvert.DeserializeObject<T>(res));
             }
-            catch (JsonException)
+            catch(JsonException)
             {
                 return None;
             }
         }
 
-        public HashMap<K, T> GetHashFields<K, T>(string key, Func<string, K> keyBuilder) =>
+        public HashMap<K, T> GetHashFields<K, T>(string key, Func<string,K> keyBuilder) =>
             Retry(() =>
-                      Db.HashGetAll(key)
-                        .Fold(
-                             HashMap<K, T>(),
-                             (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value)))
-                        .Filter(notnull<T>));
+                Db.HashGetAll(key)
+                  .Fold(
+                    HashMap<K, T>(),
+                    (m, e) => m.Add(keyBuilder(e.Name), JsonConvert.DeserializeObject<T>(e.Value)))
+                  .Filter(v => notnull<T>(v)));
 
         public Option<T> GetHashField<T>(string key, string field)
         {
@@ -371,18 +393,18 @@ namespace Echo
 
         public HashMap<string, T> GetHashFields<T>(string key, IEnumerable<string> fields) =>
             Retry(() =>
-                      Db.HashGet(key, fields.Map(x => (RedisValue) x).ToArray())
-                        .Zip(fields)
-                        .Filter(x => !x.Item1.IsNullOrEmpty)
-                        .Fold(
-                             HashMap<string, T>(),
-                             (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1)))
-                        .Filter(notnull<T>));
+                Db.HashGet(key, fields.Map(x => (RedisValue)x).ToArray())
+                  .Zip(fields)
+                  .Filter(x => !x.Item1.IsNullOrEmpty)
+                  .Fold(
+                      HashMap<string, T>(),
+                      (m, e) => m.Add(e.Item2, JsonConvert.DeserializeObject<T>(e.Item1)))
+                  .Filter(v => notnull<T>(v)));
 
         // TODO: These facts exist elsewhere - normalise
         const string userInboxSuffix = "-user-inbox";
-        const string metaDataSuffix = "-metadata";
-        const string regdPrefix = "/__registered/";
+        const string metaDataSuffix  = "-metadata";
+        const string regdPrefix      = "/__registered/";
 
         /// <summary>
         /// Runs a query on all servers in the Redis cluster for the key specified
@@ -393,14 +415,13 @@ namespace Echo
         /// </remarks>
         IEnumerable<string> QueryKeys(string keyQuery, string prefix, string suffix) =>
             Retry(() =>
-                      from keys in map($"{prefix}{keyQuery}{suffix}",
-                                       ibxkey =>
-                                           redis.GetEndPoints()
-                                                .Map(ep => redis.GetServer(ep))
-                                                .Map(sv => sv.Keys(databaseNumber, ibxkey)))
-                      from redisKey in keys
-                      let strKey = (string) redisKey
-                      select strKey);
+                from keys in map($"{prefix}{keyQuery}{suffix}", ibxkey =>
+                        redis.GetEndPoints()
+                            .Map(ep => redis.GetServer(ep))
+                            .Map(sv => sv.Keys(databaseNumber, ibxkey)))
+                from redisKey in keys
+                let strKey = (string)redisKey
+                select strKey);
 
         /// <summary>
         /// Finds all schedule keys
@@ -423,10 +444,9 @@ namespace Echo
         /// <param name="keyQuery">Key query.  * is a wildcard</param>
         /// <returns>Registered names</returns>
         public IEnumerable<ProcessName> QueryRegistered(string role, string keyQuery) =>
-            map($"{regdPrefix}{role}-",
-                prefix =>
-                    from strKey in QueryKeys(keyQuery, prefix, "")
-                    select new ProcessName(strKey.Substring(prefix.Length)));
+            map($"{regdPrefix}{role}-", prefix =>
+                from strKey in QueryKeys(keyQuery, prefix, "")
+                select new ProcessName(strKey.Substring(prefix.Length)));
 
         /// <summary>
         /// Finds all the processes based on the search pattern provided.  Note the returned
@@ -447,13 +467,10 @@ namespace Echo
         /// <returns>Map of ProcessId to ProcessMetaData</returns>
         public HashMap<ProcessId, ProcessMetaData> QueryProcessMetaData(string keyQuery) =>
             toHashMap(
-                map(QueryKeys(keyQuery, "", metaDataSuffix)
-                   .Map(x => (RedisKey) x)
-                   .ToArray(),
-                    keys =>
-                        keys.Map(x => (string) x)
-                            .Map(x => (ProcessId) x.Substring(0, x.Length - metaDataSuffix.Length))
-                            .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
+                map(QueryKeys(keyQuery, "", metaDataSuffix).Map(x => (RedisKey)x).ToArray(), keys =>
+                    keys.Map(x => (string)x)
+                        .Map( x => (ProcessId)x.Substring(0 ,x.Length - metaDataSuffix.Length))
+                        .Zip(Retry(() => Db.StringGet(keys)).Map(x => JsonConvert.DeserializeObject<ProcessMetaData>(x)))));
 
         /// <summary>
         /// retrieves all hash values for a list of keys
@@ -465,8 +482,8 @@ namespace Echo
             var batch = Db.CreateBatch();
             var tasks = keys.Map(key => batch.HashGetAllAsync(key)
                                              .Map(h =>
-                                                      (Key: key, Value: toHashMap(h.Map(r =>
-                                                                                            ((string) r.Name, JsonConvert.DeserializeObject(r.Value)))))))
+                                                (Key: key, Value: toHashMap(h.Map(r =>
+                                                    ((string)r.Name, JsonConvert.DeserializeObject(r.Value)))))))
                             .Strict();
 
             batch.Execute();
@@ -474,50 +491,52 @@ namespace Echo
             return toHashMap(await Task.WhenAll(tasks));
         }
 
-        IDatabase Db =>
+        IDatabase Db => 
             redis.GetDatabase(databaseNumber);
 
         static readonly Func<Type, MethodInfo> DeserialiseFunc =
-            memo<Type, MethodInfo>(type =>
-                                       typeof(JsonConvert).GetMethods()
-                                                          .Filter(m => m.IsGenericMethod)
-                                                          .Filter(m => m.Name == "DeserializeObject")
-                                                          .Filter(m => m.GetParameters().Length == 1)
-                                                          .Head()
-                                                          .MakeGenericMethod(type));
+           memo<Type, MethodInfo>(type =>
+                typeof(JsonConvert).GetMethods()
+                                   .Filter(m => m.IsGenericMethod)
+                                   .Filter(m => m.Name == "DeserializeObject")
+                                   .Filter(m => m.GetParameters().Length == 1)
+                                   .Head()
+                                   .MakeGenericMethod(type));
 
         public static object Deserialise(string value, Type type) =>
-            DeserialiseFunc(type).Invoke(null, new[] {value});
+            DeserialiseFunc(type).Invoke(null, new[] { value });
 
         static T Retry<T>(Func<T> f)
         {
-            static T retry(Func<T> fn)
+            T retry()
             {
-                using var ev = new AutoResetEvent(false);
-                for (var i = 0; ; i++)
+                using (var ev = new AutoResetEvent(false))
                 {
-                    try
+                    for (int i = 0; ; i++)
                     {
-                        return fn();
-                    }
-                    catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
-                    {
-                        if (i == TimeoutRetries)
+                        try
                         {
-                            throw;
+                            return f();
                         }
+                        catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
+                        {
+                            if (i == TimeoutRetries)
+                            {
+                                throw;
+                            }
 
-                        // Backing off wait time
-                        // 0 - immediately
-                        // 1 - 100 ms
-                        // 2 - 400 ms
-                        // 3 - 900 ms
-                        // 4 - 1600 ms
-                        // Maximum wait == 3000ms
-                        ev.WaitOne(i * i * 100);
+                            // Backing off wait time
+                            // 0 - immediately
+                            // 1 - 100 ms
+                            // 2 - 400 ms
+                            // 3 - 900 ms
+                            // 4 - 1600 ms
+                            // Maximum wait == 3000ms
+                            ev.WaitOne(i * i * 100);
+                        }
                     }
                 }
-            }
+            };
 
             try
             {
@@ -525,7 +544,7 @@ namespace Echo
             }
             catch (Exception ex) when (ex is TimeoutException || ex is RedisConnectionException || ex is RedisServerException)
             {
-                return retry(f);
+                return retry();
             }
         }
 

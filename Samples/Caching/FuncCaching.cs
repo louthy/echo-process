@@ -37,9 +37,9 @@ namespace Caching
 
             Console.WriteLine(count);
 
-            Cache.Add(pid, "a", "X");
-            Cache.Add(pid, "b", "Y");
-            Cache.Add(pid, "c", "Z");
+            Cache.Add(pid, "a", "1");
+            Cache.Add(pid, "b", "2");
+            Cache.Add(pid, "c", "3");
 
             // Find the number of items
             count = Cache.Count(pid);
@@ -100,17 +100,14 @@ namespace Caching
         public static CacheState Setup() => default(CacheState);
 
         public static CacheState Inbox(CacheState state, object msg) =>
-            msg switch
-            {
-                Add a      => Add(state, ((string, string)) a),
-                Remove r   => Remove(state, r),
-                Show s     => Show(state, s),
-                Get g      => Get(state, ((string, string)) g),
-                int i      => GetIndex(state, i),
-                Unit _     => GetCount(state),
-                DateTime d => Flush(state, d),
-                _          => state
-            };
+            msg is Add a      ? Add(state, ((string, string))a)
+          : msg is Remove r   ? Remove(state, r)
+          : msg is Show s     ? Show(state, s)
+          : msg is Get g      ? Get(state, ((string, string))g)
+          : msg is int i      ? GetIndex(state, i)
+          : msg is Unit _     ? GetCount(state)
+          : msg is DateTime d ? Flush(state, d)
+          : state;
 
         static CacheState Add(CacheState state, (string key, string value) pair) =>
             state.AddOrUpdate(pair.key, (pair.value, DateTime.UtcNow));
@@ -158,6 +155,6 @@ namespace Caching
         }
 
         static CacheState Flush(Map<string, (string, DateTime time)> state, DateTime cutOff) =>
-            state.Filter(item => cutOff < item.time);
+            state.Filter(item => item.time < cutOff);
      }
 }
