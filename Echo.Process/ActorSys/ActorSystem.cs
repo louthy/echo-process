@@ -376,9 +376,12 @@ namespace Echo
                 AskActorRes response = null;
                 using (var handle = new AutoResetEvent(false))
                 {
+                    var notWaitingAnymore = false;
                     var req = new AskActorReq(
                         message,
                         res => {
+                            // to avoid accessing a disposed 'handle' once the message is too late
+                            if (notWaitingAnymore) return;
                             response = res;
                             handle.Set();
                         },
@@ -396,7 +399,9 @@ namespace Echo
                             inbox.Tell(req, sender, sessionId);
                             handle.WaitOne(ActorContext.System(pid).Settings.Timeout);
                         });
-
+                    
+                    notWaitingAnymore = true;
+                    
                     if (askItem)
                     {
                         if (response == null)
