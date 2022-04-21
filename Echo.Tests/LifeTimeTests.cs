@@ -145,6 +145,55 @@ namespace Echo.Tests
                 kill(actor);
                 Assert.Equal(0, inboxResult);
             }
+
+            [Fact(Timeout = 35000)]
+            public void TimeoutDoesNotKillAskInboxState()
+            {
+                /* The idea is that one 'ask' fails on TimeoutException and this
+                 * does not affect the second 'ask' that is processing the message
+                 * while the first 'ask' failed.
+                 *
+                 * The problem was that the 'ask actor' state was lost because
+                 * there was an ObjectDisposedException in it's inbox.
+                 */
+                
+                var slow = spawn<Unit>(
+                    $"slow",
+                    _ =>
+                    {
+                        Task.Delay(31000).Wait();
+                        reply(unit);
+                    });
+
+                var quick = spawn<Unit>(
+                    $"quick",
+                    _ =>
+                    {
+                        Task.Delay(5000).Wait();
+                        reply(true);
+                    });
+
+                var askSlow = spawn<Unit>(
+                    $"ask-slow",
+                    _ => ask<Unit>(slow, unit));
+
+
+                var askedFine = false;
+                var askQuick = spawn<Unit>(
+                    $"ask-quicker",
+                    _ => askedFine = ask<bool>(quick, unit));
+
+                // Asking the slow process...that one will fail in 30s timeout - that is expected
+                tell(askSlow, unit);
+                // "Waiting 28s
+                Thread.Sleep(28000);
+                // "After 28s asking the quicker process - that one should reply within 5s (the slow one times out in the meanwhile).
+                tell(askQuick, unit);
+                // "Waiting 6s
+                Thread.Sleep(6000);
+                // "The TimeoutException in the slow process should not affect the quick process, so we should have 'done' here.
+                Assert.True(askedFine);
+            }
         }
     }
 }
