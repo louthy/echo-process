@@ -491,6 +491,12 @@ namespace Echo
             return toHashMap(await Task.WhenAll(tasks));
         }
 
+        public async Task<Unit> FlushCluster()
+        {
+            await this.redis.GetServer(this.redis.GetEndPoints().First()).FlushDatabaseAsync(this.databaseNumber);
+            return unit;
+        }
+
         IDatabase Db => 
             redis.GetDatabase(databaseNumber);
 
