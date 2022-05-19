@@ -491,11 +491,11 @@ namespace Echo
             return toHashMap(await Task.WhenAll(tasks));
         }
 
-        public async Task<Unit> FlushCluster()
-        {
-            await this.redis.GetServer(this.redis.GetEndPoints().First()).FlushDatabaseAsync(this.databaseNumber);
-            return unit;
-        }
+        public async Task<Unit> FlushCluster() =>
+            await redis.GetEndPoints()
+                       .Map(ep => redis.GetServer(ep).FlushDatabaseAsync(this.databaseNumber).ToUnit())
+                       .SequenceParallel()
+                       .Map(ignore);
 
         IDatabase Db => 
             redis.GetDatabase(databaseNumber);
