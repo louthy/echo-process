@@ -14,4 +14,9 @@
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="LanguageExt.Core" Version="4.2.7" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.2.5" />
+  </ItemGroup>
+
 </Project>
