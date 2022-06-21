@@ -419,6 +419,12 @@ namespace Echo
             ActorContext.System(system).ClusterState?.Members ?? HashMap<ProcessName, ClusterNode>();
 
         /// <summary>
+        /// Get a list of cluster nodes that have been alive in the past 24 hours
+        /// </summary>
+        public static HashMap<ProcessName, ClusterNode> ClusterNodes24(SystemName system = default(SystemName)) =>
+            ActorContext.System(system).ClusterState?.Members24.ToHashMap() ?? HashMap<ProcessName, ClusterNode>();
+
+        /// <summary>
         /// List of system names running on this node
         /// </summary>
         public static Lst<SystemName> Systems =>

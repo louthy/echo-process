@@ -16,6 +16,7 @@ namespace Echo
         public const string MembersKey = "sys-cluster-members";
         static readonly Time HeartbeatFreq = 1*seconds;
         static readonly Time OfflineCutoff = 3*seconds;
+        static readonly Time OfflineCutoff24 = 24*hours;
 
         public enum MsgTag
         {
@@ -36,23 +37,33 @@ namespace Echo
         public class State
         {
             public readonly HashMap<ProcessName, ClusterNode> Members;
+            public readonly HashMap<ProcessName, ClusterNode> Members24;
             public readonly IActorSystem System;
 
-            public static State Empty(IActorSystem system) => new State(HashMap<ProcessName, ClusterNode>(), system);
+            public static State Empty(IActorSystem system) => new State(
+                HashMap<ProcessName, ClusterNode>(),
+                HashMap<ProcessName, ClusterNode>(),
+                system);
 
-            public State(HashMap<ProcessName, ClusterNode> members, IActorSystem system)
+            public State(
+                HashMap<ProcessName, ClusterNode> members, 
+                HashMap<ProcessName, ClusterNode> members24,
+                IActorSystem system)
             {
                 Members = members.Filter(node => node != null);
+                Members24 = members24.Filter(node => node != null);
                 System = system;
             }
 
             public State SetMember(ProcessName nodeName, ClusterNode state) =>
                 state == null
                     ? RemoveMember(nodeName)
-                    : new State(Members.AddOrUpdate(nodeName, state), System);
+                    : new State(Members.AddOrUpdate(nodeName, state),
+                                Members24.AddOrUpdate(nodeName, state),
+                                System);
 
             public State RemoveMember(ProcessName nodeName) =>
-                new State(Members.Remove(nodeName), System);
+                new State(Members.Remove(nodeName), Members24.Remove(nodeName), System);
         }
 
         /// <summary>
@@ -102,10 +113,14 @@ namespace Echo
                     try
                     {
                         var cutOff = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff);
+                        var cutOff24 = DateTime.UtcNow.Add(0 * seconds - OfflineCutoff24);
 
                         c.HashFieldAddOrUpdate(MembersKey, c.NodeName.Value, new ClusterNode(c.NodeName, DateTime.UtcNow, c.Role));
-                        var newState = new State(c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s))
-                                                  .Where(m => m.LastHeartbeat > cutOff), state.System);
+                        var s = c.GetHashFields<ProcessName, ClusterNode>(MembersKey, s => new ProcessName(s));
+                        var newState = new State(
+                            members: s.Where(m => m.LastHeartbeat > cutOff),
+                            members24: s.Where(m => m.LastHeartbeat > cutOff24),
+                            system: state.System);
                         var diffs = DiffState(state, newState);
 
                         diffs.Item1.Iter(offline => publish(state.Members[offline]));
