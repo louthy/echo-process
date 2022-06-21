@@ -33,13 +33,11 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LanguageExt.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\..\packages\LanguageExt.Core.4.0.4\lib\netstandard2.0\LanguageExt.Core.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="LanguageExt.Core, Version=4.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\LanguageExt.Core.4.2.5\lib\netstandard2.0\LanguageExt.Core.dll</HintPath>
     </Reference>
-    <Reference Include="LanguageExt.Parsec, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\..\packages\LanguageExt.Parsec.4.0.4\lib\netstandard2.0\LanguageExt.Parsec.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="LanguageExt.Parsec, Version=4.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\LanguageExt.Parsec.4.2.5\lib\netstandard2.0\LanguageExt.Parsec.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=5.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
       <HintPath>..\..\packages\Microsoft.Bcl.AsyncInterfaces.5.0.0\lib\net461\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>netcoreapp3.0</TargetFrameworks>
         <FileVersion>2.0.0.0</FileVersion>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>
-        <LangVersion>7.3</LangVersion>
+        <LangVersion>default</LangVersion>
+        <TargetFramework>net5.0</TargetFramework>
     </PropertyGroup>
     <ItemGroup>
         <None Remove="Echo.Tests.nuget.props" />
@@ -21,8 +21,8 @@
         </PackageReference>
         <PackageReference Include="System.Dynamic.Runtime" Version="[4.3.0,)" />
         <PackageReference Include="Microsoft.CSharp" Version="[4.7.0,)" />
-        <PackageReference Include="LanguageExt.Core" Version="4.0.4" />
-        <PackageReference Include="LanguageExt.Parsec" Version="4.0.4" />
+        <PackageReference Include="LanguageExt.Core" Version="4.2.5" />
+        <PackageReference Include="LanguageExt.Parsec" Version="4.2.5" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />

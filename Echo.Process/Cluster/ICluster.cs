@@ -213,5 +213,6 @@ namespace Echo
         bool SetContains<T>(string key, T value);
         bool SetExpire(string key, TimeSpan time);
         Task<HashMap<string, HashMap<string, object>>> GetAllHashFieldsInBatch(Seq<string> keys);
+        Task<Unit> FlushCluster();
     }
 }

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -12,6 +12,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Echo.Process.Redis\Echo.Process.Redis.csproj" />
     <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LanguageExt.Core" Version="4.2.7" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.2.5" />
   </ItemGroup>
 
 </Project>
