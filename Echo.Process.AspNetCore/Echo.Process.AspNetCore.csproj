@@ -5,8 +5,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="LanguageExt.Core" Version="4.2.7" />
-      <PackageReference Include="LanguageExt.Parsec" Version="4.2.5" />
+      <PackageReference Include="LanguageExt.Core" Version="4.3.2-beta" />
+      <PackageReference Include="LanguageExt.Parsec" Version="4.3.2-beta" />
       <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
       <PackageReference Include="Microsoft.AspNetCore.WebSockets" Version="2.2.1" />
     </ItemGroup>
