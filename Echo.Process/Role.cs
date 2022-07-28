@@ -1,4 +1,5 @@
-﻿using LanguageExt.ClassInstances;
+﻿using System;
+using LanguageExt.ClassInstances;
 using System.Collections.Generic;
 using System.Linq;
 using static LanguageExt.Prelude;
@@ -188,9 +189,27 @@ namespace Echo
 
         public static IEnumerable<ProcessId> NodeIds(ProcessId leaf) =>
             Nodes(leaf).Values.Map(node => ProcessId.Top[node.NodeName].Append(leaf.Skip(1)));
+        
+        public static HashMap<ProcessName, ClusterNode> Nodes(ProcessId leaf, SystemName system = default(SystemName))
+        {
+            // Look for online nodes
+            var nodes = ClusterNodes(system).Filter(node => node.Role == leaf.Take(1).Name);
+            if (nodes.Count != 0) return nodes;
 
-        public static HashMap<ProcessName, ClusterNode> Nodes(ProcessId leaf, SystemName system = default(SystemName)) =>
-            ClusterNodes(system).Filter(node => node.Role == leaf.Take(1).Name);
+            // There aren't any online nodes.  So look for nodes that were online recently, backing off one hour at a
+            // time until we find something.  After 24 hours, give up, because they've been down for too long and are
+            // probably not coming back.
+            
+            var now     = DateTime.UtcNow;
+            var nodes24 = ClusterNodes24(system);
+            for (var i = -1; i >= -24; i--)
+            {
+                nodes = nodes24.Filter(node => node.LastHeartbeat > now.AddHours(i) && node.Role == leaf.Take(1).Name);
+                if (nodes.Count != 0) return nodes;
+            }
+            return Empty;
+        }
+
 
         static readonly ProcessId nextRoot;
         static readonly ProcessId prevRoot;
