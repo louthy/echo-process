@@ -19,7 +19,7 @@ Documention | Description
 [ProcessId](https://github.com/louthy/echo-process/wiki/ProcessId) |  `Process` address/location mechansim
 [Routers](https://github.com/louthy/echo-process/wiki/Routers) | A router is a `Process`  that manage sets of 'worker' processes by routing the received messages, following pre-defined behaviours, e.g. Round-robin, broadcast, etc.
 [Dispatchers](https://github.com/louthy/echo-process/wiki/Dispatchers) | Similar to routers but without the need for a router process, all routing is done by the sender
-[Registered processes](https://github.com/echo-process/language-ext/wiki/Registered-processes) | A sort of DNS for Processes, can also register dispatchers
+[Registered processes](https://github.com/louthy/echo-process/wiki/Registered-processes) | A sort of DNS for Processes, can also register dispatchers
 [Roles](https://github.com/louthy/echo-process/wiki/Roles) | A special type of dispatcher that's aware of the aliveness of cluster nodes and what their roles are
 
 ### Getting started
