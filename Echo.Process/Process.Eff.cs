@@ -86,7 +86,7 @@ public static partial class Process<RT>
     /// Internal use: Access to the request that caused the current inbox process
     /// </summary>
     static readonly Eff<RT, ActorRequestContext> Request;
-    
+
     /// <summary>
     /// Current system
     /// </summary>

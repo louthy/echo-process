@@ -1,8 +1,5 @@
-using LanguageExt;
 using System;
-using System.Linq;
-using System.Threading.Tasks;
-using LanguageExt.Effects.Traits;
+using LanguageExt;
 using static LanguageExt.Prelude;
 
 namespace Echo;
@@ -40,11 +37,11 @@ public static partial class Process<RT>
     /// <returns>A ProcessId that identifies the child</returns>
     public static Eff<RT, ProcessId> spawn<T>(
         ProcessName Name,
-        Func<T, Aff<RT, Unit>> Inbox,
+        Func<T, Eff<RT, Unit>> Inbox,
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<ProcessId, Aff<RT, Unit>> Terminated = null) =>
+        Func<ProcessId, Eff<RT, Unit>> Terminated = null) =>
         from ibx in Effect.Inbox(Inbox)
         from trm in Effect.Inbox(Terminated)
         select Process.spawn(Name, () => unit, ibx, Flags, Strategy, MaxMailboxSize, trm);
@@ -65,11 +62,11 @@ public static partial class Process<RT>
     /// <returns>A ProcessId that identifies the child</returns>
     public static Eff<RT, ProcessId> spawnUnit<T>(
         ProcessName Name,
-        Func<T, Aff<RT, Unit>> Inbox,
+        Func<T, Eff<RT, Unit>> Inbox,
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<ProcessId, Aff<RT, Unit>> Terminated = null) =>
+        Func<ProcessId, Eff<RT, Unit>> Terminated = null) =>
         from ibx in Effect.Inbox(Inbox)
         from trm in Effect.Inbox(Terminated)
         select Process.spawn(Name, () => unit, ibx, Flags, Strategy, MaxMailboxSize, trm);
@@ -95,13 +92,13 @@ public static partial class Process<RT>
     /// <returns>A ProcessId that identifies the child</returns>
     public static Eff<RT, ProcessId> spawn<S, T>(
         ProcessName Name,
-        Aff<RT, S> Setup,
-        Func<S, T, Aff<RT, S>> Inbox,
+        Eff<RT, S> Setup,
+        Func<S, T, Eff<RT, S>> Inbox,
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<S, ProcessId, Aff<RT, S>> Terminated = null,
-        Func<S, Aff<RT, Unit>> Shutdown = null,
+        Func<S, ProcessId, Eff<RT, S>> Terminated = null,
+        Func<S, Eff<RT, Unit>> Shutdown = null,
         bool Lazy = false) =>
         from sup in Effect.Setup(Setup)
         from ibx in Effect.Inbox(Inbox)
@@ -129,11 +126,11 @@ public static partial class Process<RT>
     public static Eff<RT, Seq<ProcessId>> spawnMany<T>(
         int Count, 
         ProcessName Name, 
-        Func<T, Aff<RT, Unit>> Inbox, 
+        Func<T, Eff<RT, Unit>> Inbox, 
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<ProcessId, Aff<RT, Unit>> Terminated = null) =>
+        Func<ProcessId, Eff<RT, Unit>> Terminated = null) =>
         from ibx in Effect.Inbox(Inbox)
         from trm in Effect.Inbox(Terminated)
         select Process.spawnMany(Count, Name, () => unit, ibx, Flags, Strategy, MaxMailboxSize, null, trm).ToSeq();
@@ -160,13 +157,13 @@ public static partial class Process<RT>
     public static Eff<RT, Seq<ProcessId>> spawnMany<S, T>(
         int Count, 
         ProcessName Name, 
-        Aff<RT, S> Setup, 
-        Func<S, T, Aff<RT, S>> Inbox, 
+        Eff<RT, S> Setup, 
+        Func<S, T, Eff<RT, S>> Inbox, 
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<S, Aff<RT, Unit>> Shutdown = null,
-        Func<S, ProcessId, Aff<RT, S>> Terminated = null) =>
+        Func<S, Eff<RT, Unit>> Shutdown = null,
+        Func<S, ProcessId, Eff<RT, S>> Terminated = null) =>
         from sup in Effect.Setup(Setup)
         from ibx in Effect.Inbox(Inbox)
         from sdn in Effect.Shutdown(Shutdown)
@@ -194,13 +191,13 @@ public static partial class Process<RT>
     /// <returns>ProcessId IEnumerable</returns>
     public static Eff<RT, Seq<ProcessId>> spawnMany<S, T>(
         ProcessName Name,
-        HashMap<int, Aff<RT, S>> Spec, 
-        Func<S, T, Aff<RT, S>> Inbox, 
+        HashMap<int, Eff<RT, S>> Spec, 
+        Func<S, T, Eff<RT, S>> Inbox, 
         ProcessFlags Flags = ProcessFlags.Default,
         State<StrategyContext, Unit> Strategy = null,
         int MaxMailboxSize = ProcessSetting.DefaultMailboxSize,
-        Func<S, Aff<RT, Unit>> Shutdown = null,
-        Func<S, ProcessId, Aff<RT, S>> Terminated = null) =>
+        Func<S, Eff<RT, Unit>> Shutdown = null,
+        Func<S, ProcessId, Eff<RT, S>> Terminated = null) =>
         from rt in runtime<RT>()
         from ibx in Effect.Inbox(Inbox)
         from sdn in Effect.Shutdown(Shutdown)
