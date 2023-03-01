@@ -26,6 +26,7 @@
     <Use64BitIISExpress />
     <TargetFrameworkProfile />
     <LangVersion>default</LangVersion>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
