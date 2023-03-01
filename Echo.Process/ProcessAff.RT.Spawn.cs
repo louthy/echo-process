@@ -22,7 +22,7 @@ namespace Echo;
 /// </para>
 /// </summary>
 public static partial class Process<RT>
-    where RT : struct, HasCancel<RT>
+    where RT : struct, HasEcho<RT>
 {
     /// <summary>
     /// Create a new process by name.  
