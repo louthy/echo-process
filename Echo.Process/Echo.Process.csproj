@@ -52,8 +52,8 @@
     <None Remove="SupplementarySessionId.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="4.2.9" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.2.9" />
+    <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="System.Reactive" Version="5.0.0" />
   </ItemGroup>
