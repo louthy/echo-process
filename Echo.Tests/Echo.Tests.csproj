@@ -21,8 +21,8 @@
         </PackageReference>
         <PackageReference Include="System.Dynamic.Runtime" Version="[4.3.0,)" />
         <PackageReference Include="Microsoft.CSharp" Version="[4.7.0,)" />
-        <PackageReference Include="LanguageExt.Core" Version="4.2.9" />
-        <PackageReference Include="LanguageExt.Parsec" Version="4.2.9" />
+        <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
+        <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Echo.Process\Echo.Process.csproj" />
