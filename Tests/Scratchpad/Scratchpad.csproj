@@ -83,6 +83,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AsyncInboxExample.cs" />
     <Compile Include="BlockingQueueTests.cs" />
     <Compile Include="PausableBlockingQueue.cs" />
     <Compile Include="Program.cs" />
