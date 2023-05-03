@@ -80,6 +80,13 @@ public static partial class Process<RT>
         Request = Eff<RT, ActorRequestContext>(_ => ActorContext.Request);
         killSelf = Request.Bind(_ => FailEff<Unit>(new ProcessKillException()));
         shutdownSelf = Self.Bind(shutdown);
+        shutdownAll = Eff<RT, Unit>(_ => Process.shutdownAll());
+        isTell = Eff<RT, bool>(_ => Process.isTell);
+        isAsk = isTell.Map(not);
+        assertTell = isTell.Bind(x => x ? unitEff : FailEff<Unit>(Error.New("Tell expected")));
+        assertAsk = isAsk.Bind(x => x ? unitEff : FailEff<Unit>(Error.New("Ask expected")));
+        ClusterNodes = System.Map(Process.ClusterNodes);
+        Systems = Eff<RT, Seq<SystemName>>(_ => ActorContext.Systems.ToSeq());
     }
     
     /// <summary>
@@ -258,8 +265,7 @@ public static partial class Process<RT>
     /// <summary>
     /// Shutdown all processes on all process-systems
     /// </summary>
-    public static Eff<RT, Unit> shutdownAll =>
-        Eff<RT, Unit>(_ => Process.shutdownAll());
+    public static readonly Eff<RT, Unit> shutdownAll;
 
     /// <summary>
     /// Forces a running process to restart.  This will reset its state and drop
@@ -370,8 +376,7 @@ public static partial class Process<RT>
     /// <remarks>
     /// This should be used from within a process' message loop only
     /// </remarks>
-    public static Eff<RT, bool> isTell =>
-        Eff<RT, bool>(_ => Process.isTell);
+    public static readonly Eff<RT, bool> isTell;
 
     /// <summary>
     /// Assert that the current request is a tell
@@ -380,20 +385,17 @@ public static partial class Process<RT>
     /// Fails with 'Tell expected' if the current request isn't a tell
     /// Fails with 'Not in a message loop' if we're not in a Process
     /// </remarks>
-    public static Eff<RT, Unit> assertTell =>
-        isTell.Bind(x => x ? unitEff : FailEff<Unit>(Error.New("Tell expected"))); 
+    public static readonly Eff<RT, Unit> assertTell; 
 
     /// <summary>
     /// Get a list of cluster nodes that are online
     /// </summary>
-    public static Eff<RT, HashMap<ProcessName, ClusterNode>> ClusterNodes =>
-        System.Map(Process.ClusterNodes);
+    public static readonly Eff<RT, HashMap<ProcessName, ClusterNode>> ClusterNodes;
 
     /// <summary>
     /// List of system names running on this node
     /// </summary>
-    public static Eff<RT, Seq<SystemName>> Systems =>
-        Eff<RT, Seq<SystemName>>(_ => ActorContext.Systems.ToSeq());
+    public static readonly Eff<RT, Seq<SystemName>> Systems;
 
     /// <summary>
     /// Return True if the message sent is an Ask and not a Tell
@@ -401,8 +403,7 @@ public static partial class Process<RT>
     /// <remarks>
     /// This should be used from within a process' message loop only
     /// </remarks>
-    public static Eff<RT, bool> isAsk => 
-        isTell.Map(not);
+    public static readonly Eff<RT, bool> isAsk;
 
     /// <summary>
     /// Assert that the current request is an ask
@@ -411,8 +412,7 @@ public static partial class Process<RT>
     /// Fails with 'Ask expected' if the current request isn't a ask
     /// Fails with 'Not in a message loop' if we're not in a Process
     /// </remarks>
-    public static Eff<RT, Unit> assertAsk =>
-        isAsk.Bind(x => x ? unitEff : FailEff<Unit>(Error.New("Ask expected"))); 
+    public static readonly Eff<RT, Unit> assertAsk; 
 
     /// <summary>
     /// Resolves a ProcessId into the absolute ProcessIds that it represents
