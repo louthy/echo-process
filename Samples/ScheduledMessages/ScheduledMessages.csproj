@@ -16,8 +16,8 @@
     <ProjectReference Include="..\..\Echo.Process.Redis\Echo.Process.Redis.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
+    <PackageReference Include="LanguageExt.Core" Version="4.4.3" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.4.3" />
   </ItemGroup>
 
 </Project>

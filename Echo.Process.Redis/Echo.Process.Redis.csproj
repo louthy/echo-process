@@ -6,7 +6,7 @@
     <NoWarn>1701;1702;1705;IDE1006</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFrameworks>net461;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net48;netstandard2.0</TargetFrameworks>
     <PackageVersion>2.2.0-beta</PackageVersion>
     <PackageId>Echo.Process.Redis</PackageId>
     <Title>echo-process Redis Extensions</Title>
@@ -27,7 +27,6 @@
   <ItemGroup>
       <None Include="..\Images\echo icon small.png">
           <Pack>True</Pack>
-          <PackagePath></PackagePath>
       </None>
   </ItemGroup>
   <ItemGroup>
@@ -39,8 +38,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
+    <PackageReference Include="LanguageExt.Core" Version="4.4.3" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.4.3" />
     <PackageReference Include="StackExchange.Redis" Version="[2.0.601,)" />
   </ItemGroup>
   <ItemGroup>

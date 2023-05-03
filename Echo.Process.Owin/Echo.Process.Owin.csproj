@@ -35,8 +35,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
+    <PackageReference Include="LanguageExt.Core" Version="4.4.3" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.4.3" />
     <PackageReference Include="Owin.WebSocket" Version="[1.7.0,)" />
   </ItemGroup>
   <ItemGroup>
