@@ -4,7 +4,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <PackageVersion>2.1.35-beta</PackageVersion>
+    <PackageVersion>2.2.1-beta</PackageVersion>
     <PackageId>Echo.Process.Owin</PackageId>
     <Title>echo-process Owin Extensions</Title>
     <Authors>Paul Louth</Authors>
@@ -35,8 +35,8 @@
     <EmbeddedResource Remove="obj\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="LanguageExt.Core" Version="4.4.2" />
-    <PackageReference Include="LanguageExt.Parsec" Version="4.4.2" />
+    <PackageReference Include="LanguageExt.Core" Version="4.4.3" />
+    <PackageReference Include="LanguageExt.Parsec" Version="4.4.3" />
     <PackageReference Include="Owin.WebSocket" Version="[1.7.0,)" />
   </ItemGroup>
   <ItemGroup>
