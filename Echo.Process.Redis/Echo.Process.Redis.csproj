@@ -15,7 +15,7 @@
     <Copyright>Copyright (c) Paul Louth. All rights reserved.</Copyright>
     <Description>Actor library component that works with LanguageExt.Core and Echo.Process: A library that uses and abuses the features of C# 6 to provide a functional 'Base class library', that, if you squint, can look like extensions to the language itself. It also includes an 'Erlang like' process system (actors) that can optionally persist messages and state to Redis (note you can use it without Redis for in-app messaging). The process system additionally supports Rx streams of messages and state allowing for a complete system of reactive events and message dispatch.</Description>
     <PackageTags>Echo, Process, C#, Functional, Language Extension, Monad, Option, Either, Reader, Writer, State, List, Set, Map, Queue, Memo, Memoization, Immutable, Lambda, Pattern Matching, Tuple, Actor, Process, Akka, Redis</PackageTags>
-      <PackageIcon>echo icon small.png</PackageIcon>
+    <PackageIcon>echo icon small.png</PackageIcon>
     <PackageProjectUrl>https://github.com/louthy/echo-process</PackageProjectUrl>
       <License>https://github.com/louthy/echo-process/blob/master/LICENSE.md</License>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -25,9 +25,7 @@
 
 </PropertyGroup>
   <ItemGroup>
-      <None Include="..\Images\echo icon small.png">
-          <Pack>True</Pack>
-      </None>
+      <None Include="..\Images\echo icon small.png" PackagePath="" Pack="true"/>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" />

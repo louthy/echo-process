@@ -23,9 +23,7 @@
     <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-      <None Include="..\Images\echo icon small.png">
-          <Pack>True</Pack>
-      </None>
+    <None Include="..\Images\echo icon small.png" PackagePath="" Pack="true"/>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" />
